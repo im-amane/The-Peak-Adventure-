@@ -67,3 +67,8 @@ button:disabled{cursor:not-allowed}
 .save-appearance{margin-top:12px;width:100%;background:#72502d;border-color:#c69a5b;color:#fff2d4}
 #appearance-status{min-height:16px;margin:8px 0 0}
 @media(max-width:520px){.appearance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.section-heading{align-items:flex-start;flex-direction:column}}
+
+.topbar-actions{display:flex;align-items:center;gap:8px}
+.sound-toggle{min-height:36px;padding:6px 10px;background:#263748;border-color:#58758b;color:#e7f0f3;font-size:12px}
+.sound-toggle[aria-pressed="false"]{opacity:.68}
+@media(max-width:360px){.topbar-actions{gap:5px}.sound-toggle{padding:5px 7px;font-size:11px}}
