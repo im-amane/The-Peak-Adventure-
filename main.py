@@ -3394,6 +3394,7 @@ async def miniapp_state(user: dict):
         "skill_cd": p["skill_cd"],
         "coins": p["coins"],
         "premium_gems": await get_premium_balance(db, user_id),
+        "premium_shop": [{"item_id":key,**value} for key,value in PREMIUM_SHOP_ITEMS.items()],
         "world_id": world_id,
         "worlds": await get_world_choices(db, user_id, p["level"]),
         "landmark": await get_world_landmark(db, user_id, world_id),
@@ -3715,6 +3716,31 @@ async def api_story(request: web.Request):
     except StoryError as exc:
         return web.json_response({"error":str(exc)},status=400)
     return web.json_response({"message":message,"result":result,"state":state})
+
+
+async def api_premium_shop(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Premium shop request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Premium shop payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or set(payload) != {"item_id"} or not isinstance(payload["item_id"], str):
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid premium shop payload", 2)
+        return web.json_response({"error": "A valid premium item_id is required."}, status=400)
+    try:
+        async with db_lock:
+            async with player_locks[user["id"]]:
+                purchase = await buy_premium_item(db, user["id"], payload["item_id"])
+                state = await miniapp_state(user)
+    except PremiumError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({"message": f"Purchased {purchase['title']}.", "purchase": purchase, "state": state})
 
 
 async def api_social(request: web.Request):
@@ -4135,6 +4161,7 @@ async def start_web_server():
     app.router.add_post("/api/weekly-quest/claim", api_weekly_quest_claim)
     app.router.add_post("/api/world", api_world)
     app.router.add_post("/api/social", api_social)
+    app.router.add_post("/api/premium-shop", api_premium_shop)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
