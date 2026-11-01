@@ -1,5 +1,6 @@
 """The Peak Adventure - Telegram turn-based RPG bot."""
 import asyncio
+import time
 from html import escape
 import json
 import logging
