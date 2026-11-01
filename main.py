@@ -364,7 +364,7 @@ async def battle_action(call: CallbackQuery):
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu())
         return
-    await send_battle(call.message, user_id, f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.")
+    await send_battle(call.message, user_id, f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.", edit=True)
 
 
 async def main():
