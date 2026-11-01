@@ -41,6 +41,8 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
         await attack_roaming_event(self.db, event["event_id"], 2, 100, now=1000)
         reward = await claim_roaming_event_reward(self.db, event["event_id"], 1)
         self.assertGreater(reward["coins"], 0)
+        cur = await self.db.execute("SELECT coins,level,xp,max_hp,hp FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await cur.fetchone()), (136, 2, 25, 160, 120))
         with self.assertRaisesRegex(RoamingEventError, "already been claimed"):
             await claim_roaming_event_reward(self.db, event["event_id"], 1)
         with self.assertRaisesRegex(RoamingEventError, "contributed"):
