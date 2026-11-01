@@ -453,7 +453,10 @@
       parent.appendChild(button);
     };
     const friendsCard=addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
-    (social.friends||[]).forEach(friend=>addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id}));
+    (social.friends||[]).forEach(friend=>{
+      addAction(friendsCard,"Trade with "+friend.username,"trade_create",{targetId:friend.user_id});
+      addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id});
+    });
     const requests=social.friend_requests||[];
     if(requests.length){
       const card=addCard("Incoming friend requests",requests.map(x=>x.username+" · Lv."+x.level));
@@ -1357,6 +1360,7 @@
     const action=button.dataset.socialAction;
     const payload={action};
     if(action==="friend_request")payload.target_id=Number(button.dataset.targetId);
+    if(action==="trade_create")payload.target_id=Number(button.dataset.targetId);
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
     if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
