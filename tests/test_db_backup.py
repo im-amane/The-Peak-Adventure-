@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from db_backup import create_backup, verify_backup
+from db_backup import create_backup, restore_backup, verify_backup
 
 
 class DatabaseBackupTests(unittest.TestCase):
@@ -42,6 +42,22 @@ class DatabaseBackupTests(unittest.TestCase):
         corrupt = self.root / "broken.sqlite3"
         corrupt.write_text("not a sqlite database", encoding="utf-8")
         self.assertFalse(verify_backup(corrupt))
+
+    def test_restore_replaces_database_with_verified_snapshot(self):
+        backup = create_backup(self.database, self.root / "backups")
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("UPDATE players SET coins=0 WHERE user_id=7")
+        restore_backup(backup, self.database)
+        with sqlite3.connect(self.database) as connection:
+            self.assertEqual(connection.execute("SELECT coins FROM players WHERE user_id=7").fetchone()[0], 1234)
+
+    def test_restore_rejects_corrupt_backup_without_changing_database(self):
+        corrupt = self.root / "broken.sqlite3"
+        corrupt.write_text("not a sqlite database", encoding="utf-8")
+        with self.assertRaises(sqlite3.DatabaseError):
+            restore_backup(corrupt, self.database)
+        with sqlite3.connect(self.database) as connection:
+            self.assertEqual(connection.execute("SELECT coins FROM players WHERE user_id=7").fetchone()[0], 1234)
 
 
 if __name__ == "__main__":
