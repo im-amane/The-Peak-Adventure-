@@ -10,12 +10,12 @@
     "speed": 10,
     "hp": 77,
     "element": "Nature",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Storm",
-    "story": "A harmless little slime trembles beside a broken trail. It carries a tiny blue spark, the same light seen in an old legend."
+    "special_move": "Baby Slime's Piercing Moonlit Pounce · 1",
+    "unique_power": "Baby Slime: Adaptive Hide · 1",
+    "advantage": "Baby Slime gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Baby Slime is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The meadow's smallest creatures have begun gathering around a blue spark that fell from the sky."
   },
   {
     "level": 2,
@@ -28,12 +28,12 @@
     "speed": 12,
     "hp": 99,
     "element": "Nature",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Meadow Moth's Blazing Thornbound Snare · 2",
+    "unique_power": "Meadow Moth: Echo Memory · 2",
+    "advantage": "Meadow Moth gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Meadow Moth is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] A lost field mouse leaves crumbs beside the trail, hoping the frightened creature will follow them home."
   },
   {
     "level": 3,
@@ -46,12 +46,12 @@
     "speed": 13,
     "hp": 121,
     "element": "Nature",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Nature",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Dewdrop Sprite's Phantom Crystal Pulse · 3",
+    "unique_power": "Dewdrop Sprite: Ancient Instinct · 3",
+    "advantage": "Dewdrop Sprite gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Dewdrop Sprite is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The village children recognize this creature's glow from a lullaby their grandparents stopped singing."
   },
   {
     "level": 4,
@@ -64,12 +64,12 @@
     "speed": 15,
     "hp": 143,
     "element": "Nature",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Mossling's Runebound Echoing Roar · 4",
+    "unique_power": "Mossling: Corruption Pulse · 4",
+    "advantage": "Mossling gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Mossling is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] A tiny guardian carries a broken bell; each time it rings, one missing villager remembers the way home."
   },
   {
     "level": 5,
@@ -82,12 +82,12 @@
     "speed": 17,
     "hp": 165,
     "element": "Nature",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Pebble Toad's Soulbreaking Rift Dash · 5",
+    "unique_power": "Pebble Toad: Guardian's Oath · 5",
+    "advantage": "Pebble Toad gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Pebble Toad is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The forest's old paths rearrange themselves whenever this creature cries out."
   },
   {
     "level": 6,
@@ -100,12 +100,12 @@
     "speed": 19,
     "hp": 187,
     "element": "Nature",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Nature",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Bramble Fox's Tempest Solar Lance · 6",
+    "unique_power": "Bramble Fox: Predator's Focus · 6",
+    "advantage": "Bramble Fox gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Bramble Fox is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] A wounded fox refuses to flee, guarding a nest that is not its own."
   },
   {
     "level": 7,
@@ -118,12 +118,12 @@
     "speed": 21,
     "hp": 209,
     "element": "Nature",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Glowcap Mushroom's Thorned Phantom Waltz · 7",
+    "unique_power": "Glowcap Mushroom: Elemental Heart · 7",
+    "advantage": "Glowcap Mushroom gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Glowcap Mushroom is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The mushrooms whisper a name no living villager remembers, then go silent as you approach."
   },
   {
     "level": 8,
@@ -136,12 +136,12 @@
     "speed": 22,
     "hp": 231,
     "element": "Nature",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Bark Beetle's Frostbitten Comet Breaker · 8",
+    "unique_power": "Bark Beetle: Last Stand · 8",
+    "advantage": "Bark Beetle gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Bark Beetle is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] A gentle beast has been marked by a dark thread that seems to pull toward the northern hills."
   },
   {
     "level": 9,
@@ -154,12 +154,12 @@
     "speed": 24,
     "hp": 253,
     "element": "Nature",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Nature",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Storm",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Whisper Wolf's Abyssal Gravewind Howl · 9",
+    "unique_power": "Whisper Wolf: Worldroot Bond · 9",
+    "advantage": "Whisper Wolf gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Whisper Wolf is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The forest guardian asks you to spare its corrupted kin, even as the corruption takes its voice."
   },
   {
     "level": 10,
@@ -172,12 +172,12 @@
     "speed": 36,
     "hp": 555,
     "element": "Nature",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Storm",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Stone Golem's Starfall Worldroot Slam · 10",
+    "unique_power": "Stone Golem: Eternal Hunger · 10",
+    "advantage": "Stone Golem gains an edge in Whispering Meadow terrain and against unprepared foes.",
+    "disadvantage": "Stone Golem is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[1/10 · Whispering Meadow] The first seal is hidden beneath the roots. Its guardian knows the spark chose you, but will not say why."
   },
   {
     "level": 11,
@@ -190,12 +190,12 @@
     "speed": 28,
     "hp": 297,
     "element": "Earth",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Dust Scorpion's Piercing Moonlit Pounce · 11",
+    "unique_power": "Dust Scorpion: Adaptive Hide · 11",
+    "advantage": "Dust Scorpion gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Dust Scorpion is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] Beyond the meadow, the sand remembers a river that vanished overnight."
   },
   {
     "level": 12,
@@ -208,12 +208,12 @@
     "speed": 30,
     "hp": 319,
     "element": "Earth",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Earth",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Dune Stalker's Blazing Thornbound Snare · 12",
+    "unique_power": "Dune Stalker: Echo Memory · 12",
+    "advantage": "Dune Stalker gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Dune Stalker is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] A small desert wanderer trades its last drop of water for a child's lost toy."
   },
   {
     "level": 13,
@@ -226,12 +226,12 @@
     "speed": 31,
     "hp": 341,
     "element": "Earth",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Glasswing Viper's Phantom Crystal Pulse · 13",
+    "unique_power": "Glasswing Viper: Ancient Instinct · 13",
+    "advantage": "Glasswing Viper gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Glasswing Viper is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] The dunes shift into the shape of a map whenever this creature closes its eyes."
   },
   {
     "level": 14,
@@ -244,12 +244,12 @@
     "speed": 33,
     "hp": 363,
     "element": "Earth",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Sand Wraith's Runebound Echoing Roar · 14",
+    "unique_power": "Sand Wraith: Corruption Pulse · 14",
+    "advantage": "Sand Wraith gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Sand Wraith is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] A glass-scaled hunter protects a buried well from creatures that drink memories."
   },
   {
     "level": 15,
@@ -262,12 +262,12 @@
     "speed": 35,
     "hp": 385,
     "element": "Earth",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Earth",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Canyon Brute's Soulbreaking Rift Dash · 15",
+    "unique_power": "Canyon Brute: Guardian's Oath · 15",
+    "advantage": "Canyon Brute gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Canyon Brute is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] The desert wind repeats the voice of someone you have not met yet."
   },
   {
     "level": 16,
@@ -280,12 +280,12 @@
     "speed": 37,
     "hp": 407,
     "element": "Earth",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Sunscale Lizard's Tempest Solar Lance · 16",
+    "unique_power": "Sunscale Lizard: Predator's Focus · 16",
+    "advantage": "Sunscale Lizard gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Sunscale Lizard is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] A stone sentinel bears the names of a thousand travelers who never reached the oasis."
   },
   {
     "level": 17,
@@ -298,12 +298,12 @@
     "speed": 39,
     "hp": 429,
     "element": "Earth",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Mirage Djinn's Thorned Phantom Waltz · 17",
+    "unique_power": "Mirage Djinn: Elemental Heart · 17",
+    "advantage": "Mirage Djinn gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Mirage Djinn is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] The mirage shows a green valley, but every step toward it makes the real world drier."
   },
   {
     "level": 18,
@@ -316,12 +316,12 @@
     "speed": 40,
     "hp": 451,
     "element": "Earth",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Earth",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Buried Sentinel's Frostbitten Comet Breaker · 18",
+    "unique_power": "Buried Sentinel: Last Stand · 18",
+    "advantage": "Buried Sentinel gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Buried Sentinel is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] A djinn offers to reveal the truth in exchange for one memory you cannot afford to lose."
   },
   {
     "level": 19,
@@ -334,12 +334,12 @@
     "speed": 42,
     "hp": 473,
     "element": "Earth",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Shadow",
-    "story": "Once gentle, this creature now bears a strange mark. It watches you as if it recognizes something you have forgotten."
+    "special_move": "Minotaur Warden's Abyssal Gravewind Howl · 19",
+    "unique_power": "Minotaur Warden: Worldroot Bond · 19",
+    "advantage": "Minotaur Warden gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Minotaur Warden is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] The buried guardian breaks its chains and begs you not to open the tomb below."
   },
   {
     "level": 20,
@@ -352,12 +352,12 @@
     "speed": 64,
     "hp": 1055,
     "element": "Earth",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Shadow",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Ancient Minotaur's Starfall Worldroot Slam · 20",
+    "unique_power": "Ancient Minotaur: Eternal Hunger · 20",
+    "advantage": "Ancient Minotaur gains an edge in Ashen Desert terrain and against unprepared foes.",
+    "disadvantage": "Ancient Minotaur is vulnerable to disciplined counters and Storm-aligned attacks.",
+    "weakness": "Storm",
+    "story": "[2/10 · Ashen Desert] The second seal cracks. Beneath the sand, something answers with a thunderous heartbeat."
   },
   {
     "level": 21,
@@ -370,12 +370,12 @@
     "speed": 46,
     "hp": 517,
     "element": "Sand",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Sand",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Storm Harpy's Piercing Moonlit Pounce · 21",
+    "unique_power": "Storm Harpy: Adaptive Hide · 21",
+    "advantage": "Storm Harpy gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Storm Harpy is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] Storm clouds gather even though the sky above the highlands has been clear for a hundred years."
   },
   {
     "level": 22,
@@ -388,12 +388,12 @@
     "speed": 48,
     "hp": 539,
     "element": "Sand",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Volt Hound's Blazing Thornbound Snare · 22",
+    "unique_power": "Volt Hound: Echo Memory · 22",
+    "advantage": "Volt Hound gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Volt Hound is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] A little spark-beast follows your footsteps, mistaking your shadow for its missing parent."
   },
   {
     "level": 23,
@@ -406,12 +406,12 @@
     "speed": 49,
     "hp": 561,
     "element": "Sand",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Cloud Serpent's Phantom Crystal Pulse · 23",
+    "unique_power": "Cloud Serpent: Ancient Instinct · 23",
+    "advantage": "Cloud Serpent gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Cloud Serpent is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The mountain birds fly in circles around a tower that no map records."
   },
   {
     "level": 24,
@@ -424,12 +424,12 @@
     "speed": 51,
     "hp": 583,
     "element": "Sand",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Sand",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Tempest Wisp's Runebound Echoing Roar · 24",
+    "unique_power": "Tempest Wisp: Corruption Pulse · 24",
+    "advantage": "Tempest Wisp gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Tempest Wisp is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] A cloud serpent carries a message sealed inside a feather made of lightning."
   },
   {
     "level": 25,
@@ -442,12 +442,12 @@
     "speed": 53,
     "hp": 605,
     "element": "Sand",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Skybreaker Roc's Soulbreaking Rift Dash · 25",
+    "unique_power": "Skybreaker Roc: Guardian's Oath · 25",
+    "advantage": "Skybreaker Roc gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Skybreaker Roc is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The storm wraith remembers a kingdom that was erased between two heartbeats."
   },
   {
     "level": 26,
@@ -460,12 +460,12 @@
     "speed": 55,
     "hp": 627,
     "element": "Sand",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Lightning Ogre's Tempest Solar Lance · 26",
+    "unique_power": "Lightning Ogre: Predator's Focus · 26",
+    "advantage": "Lightning Ogre gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Lightning Ogre is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] A giant refuses to strike first; it is waiting for the thunder to stop calling its name."
   },
   {
     "level": 27,
@@ -478,12 +478,12 @@
     "speed": 57,
     "hp": 649,
     "element": "Sand",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Sand",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Stormcaller Witch's Thorned Phantom Waltz · 27",
+    "unique_power": "Stormcaller Witch: Elemental Heart · 27",
+    "advantage": "Stormcaller Witch gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Stormcaller Witch is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The harpy's song reveals that the storms are being summoned from underground."
   },
   {
     "level": 28,
@@ -496,12 +496,12 @@
     "speed": 58,
     "hp": 671,
     "element": "Sand",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Thunder Colossus's Frostbitten Comet Breaker · 28",
+    "unique_power": "Thunder Colossus: Last Stand · 28",
+    "advantage": "Thunder Colossus gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Thunder Colossus is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The witch has been collecting the final words of every creature lost to the storm."
   },
   {
     "level": 29,
@@ -514,12 +514,12 @@
     "speed": 60,
     "hp": 693,
     "element": "Sand",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Fire",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Storm Wyrm's Abyssal Gravewind Howl · 29",
+    "unique_power": "Storm Wyrm: Worldroot Bond · 29",
+    "advantage": "Storm Wyrm gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Storm Wyrm is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The colossus falls, and the clouds briefly reveal a second moon hanging beneath the world."
   },
   {
     "level": 30,
@@ -532,12 +532,12 @@
     "speed": 92,
     "hp": 1555,
     "element": "Sand",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Sand",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Fire",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Thunder Dragon's Starfall Worldroot Slam · 30",
+    "unique_power": "Thunder Dragon: Eternal Hunger · 30",
+    "advantage": "Thunder Dragon gains an edge in Stormglass Highlands terrain and against unprepared foes.",
+    "disadvantage": "Thunder Dragon is vulnerable to disciplined counters and Nature-aligned attacks.",
+    "weakness": "Nature",
+    "story": "[3/10 · Stormglass Highlands] The thunder seal breaks. A voice in the lightning calls you the heir of a forgotten promise."
   },
   {
     "level": 31,
@@ -550,12 +550,12 @@
     "speed": 64,
     "hp": 737,
     "element": "Storm",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Grave Lantern's Piercing Moonlit Pounce · 31",
+    "unique_power": "Grave Lantern: Adaptive Hide · 31",
+    "advantage": "Grave Lantern gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Grave Lantern is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The road into the Hollow Kingdom is lined with lanterns that burn without flame."
   },
   {
     "level": 32,
@@ -568,12 +568,12 @@
     "speed": 66,
     "hp": 759,
     "element": "Storm",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Hollow Knight's Blazing Thornbound Snare · 32",
+    "unique_power": "Hollow Knight: Echo Memory · 32",
+    "advantage": "Hollow Knight gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Hollow Knight is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] A grave-lantern lights the way for spirits who cannot remember their own deaths."
   },
   {
     "level": 33,
@@ -586,12 +586,12 @@
     "speed": 67,
     "hp": 781,
     "element": "Storm",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Storm",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Ashen Banshee's Phantom Crystal Pulse · 33",
+    "unique_power": "Ashen Banshee: Ancient Instinct · 33",
+    "advantage": "Ashen Banshee gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Ashen Banshee is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The hollow knight kneels before you, though its armor bears the crest of your village."
   },
   {
     "level": 34,
@@ -604,12 +604,12 @@
     "speed": 69,
     "hp": 803,
     "element": "Storm",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Crypt Spider's Runebound Echoing Roar · 34",
+    "unique_power": "Crypt Spider: Corruption Pulse · 34",
+    "advantage": "Crypt Spider gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Crypt Spider is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] A banshee sings a lullaby that matches the melody from the meadow's first bell."
   },
   {
     "level": 35,
@@ -622,12 +622,12 @@
     "speed": 71,
     "hp": 825,
     "element": "Storm",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Dread Hound's Soulbreaking Rift Dash · 35",
+    "unique_power": "Dread Hound: Guardian's Oath · 35",
+    "advantage": "Dread Hound gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Dread Hound is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The crypt spider has woven a tapestry showing every battle you have fought, including one that has not happened."
   },
   {
     "level": 36,
@@ -640,12 +640,12 @@
     "speed": 73,
     "hp": 847,
     "element": "Storm",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Storm",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Soul Leech's Tempest Solar Lance · 36",
+    "unique_power": "Soul Leech: Predator's Focus · 36",
+    "advantage": "Soul Leech gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Soul Leech is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The dread hound guards a doorway and whimpers whenever the darkness behind it moves."
   },
   {
     "level": 37,
@@ -658,12 +658,12 @@
     "speed": 75,
     "hp": 869,
     "element": "Storm",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Blackthorn Reaper's Thorned Phantom Waltz · 37",
+    "unique_power": "Blackthorn Reaper: Elemental Heart · 37",
+    "advantage": "Blackthorn Reaper gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Blackthorn Reaper is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] A soul leech feeds on sorrow, but leaves one memory untouched: the face of its old friend."
   },
   {
     "level": 38,
@@ -676,12 +676,12 @@
     "speed": 76,
     "hp": 891,
     "element": "Storm",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Moonless Horror's Frostbitten Comet Breaker · 38",
+    "unique_power": "Moonless Horror: Last Stand · 38",
+    "advantage": "Moonless Horror gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Moonless Horror is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The reaper reveals that the monsters are not invading the world; they are fleeing something."
   },
   {
     "level": 39,
@@ -694,12 +694,12 @@
     "speed": 78,
     "hp": 913,
     "element": "Storm",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Storm",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Ice",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Shadow Wyrm's Abyssal Gravewind Howl · 39",
+    "unique_power": "Shadow Wyrm: Worldroot Bond · 39",
+    "advantage": "Shadow Wyrm gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Shadow Wyrm is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The moonless horror wears the shadow of a child who vanished before the first seal was made."
   },
   {
     "level": 40,
@@ -712,12 +712,12 @@
     "speed": 120,
     "hp": 2055,
     "element": "Storm",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Ice",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Ancient Shadow Dragon's Starfall Worldroot Slam · 40",
+    "unique_power": "Ancient Shadow Dragon: Eternal Hunger · 40",
+    "advantage": "Ancient Shadow Dragon gains an edge in Hollow Kingdom terrain and against unprepared foes.",
+    "disadvantage": "Ancient Shadow Dragon is vulnerable to disciplined counters and Earth-aligned attacks.",
+    "weakness": "Earth",
+    "story": "[4/10 · Hollow Kingdom] The fourth seal opens. The kingdom's dead speak together: the true enemy was once its protector."
   },
   {
     "level": 41,
@@ -730,12 +730,12 @@
     "speed": 82,
     "hp": 957,
     "element": "Shadow",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Cinder Beetle's Piercing Moonlit Pounce · 41",
+    "unique_power": "Cinder Beetle: Adaptive Hide · 41",
+    "advantage": "Cinder Beetle gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Cinder Beetle is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] Heat rises from cracks in the earth, and the stars above the volcano begin to turn red."
   },
   {
     "level": 42,
@@ -748,12 +748,12 @@
     "speed": 84,
     "hp": 979,
     "element": "Shadow",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Shadow",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Magma Serpent's Blazing Thornbound Snare · 42",
+    "unique_power": "Magma Serpent: Echo Memory · 42",
+    "advantage": "Magma Serpent gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Magma Serpent is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The ember imp steals a coal to keep a cold nest warm."
   },
   {
     "level": 43,
@@ -766,12 +766,12 @@
     "speed": 85,
     "hp": 1001,
     "element": "Shadow",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Ashen Brute's Phantom Crystal Pulse · 43",
+    "unique_power": "Ashen Brute: Ancient Instinct · 43",
+    "advantage": "Ashen Brute gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Ashen Brute is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] A magma serpent coils around a bridge, protecting the only path away from the eruption."
   },
   {
     "level": 44,
@@ -784,12 +784,12 @@
     "speed": 87,
     "hp": 1023,
     "element": "Shadow",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Flame Revenant's Runebound Echoing Roar · 44",
+    "unique_power": "Flame Revenant: Corruption Pulse · 44",
+    "advantage": "Flame Revenant gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Flame Revenant is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The ash brute carries a melted crown and calls it the last gift from its queen."
   },
   {
     "level": 45,
@@ -802,12 +802,12 @@
     "speed": 89,
     "hp": 1045,
     "element": "Shadow",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Shadow",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Lava Warden's Soulbreaking Rift Dash · 45",
+    "unique_power": "Lava Warden: Guardian's Oath · 45",
+    "advantage": "Lava Warden gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Lava Warden is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The flame revenant recognizes the blue spark and bows before attacking."
   },
   {
     "level": 46,
@@ -820,12 +820,12 @@
     "speed": 91,
     "hp": 1067,
     "element": "Shadow",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Inferno Witch's Tempest Solar Lance · 46",
+    "unique_power": "Inferno Witch: Predator's Focus · 46",
+    "advantage": "Inferno Witch gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Inferno Witch is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The lava warden has held the gate shut for centuries, keeping a sleeping fire from waking."
   },
   {
     "level": 47,
@@ -838,12 +838,12 @@
     "speed": 93,
     "hp": 1089,
     "element": "Shadow",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Obsidian Behemoth's Thorned Phantom Waltz · 47",
+    "unique_power": "Obsidian Behemoth: Elemental Heart · 47",
+    "advantage": "Obsidian Behemoth gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Obsidian Behemoth is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The inferno witch offers to extinguish the volcano, but the price is the memory of your first victory."
   },
   {
     "level": 48,
@@ -856,12 +856,12 @@
     "speed": 94,
     "hp": 1111,
     "element": "Shadow",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Shadow",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Caldera Tyrant's Frostbitten Comet Breaker · 48",
+    "unique_power": "Caldera Tyrant: Last Stand · 48",
+    "advantage": "Caldera Tyrant gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Caldera Tyrant is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The obsidian behemoth is made from the broken armor of guardians who failed before you."
   },
   {
     "level": 49,
@@ -874,12 +874,12 @@
     "speed": 96,
     "hp": 1133,
     "element": "Shadow",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Void",
-    "story": "The corruption has spread. Beneath its rage is a fading memory of the home it once protected."
+    "special_move": "Obsidian Titan's Abyssal Gravewind Howl · 49",
+    "unique_power": "Obsidian Titan: Worldroot Bond · 49",
+    "advantage": "Obsidian Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "Obsidian Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The caldera tyrant reveals that each seal is also a lock on the world's heart."
   },
   {
     "level": 50,
@@ -892,12 +892,12 @@
     "speed": 148,
     "hp": 2555,
     "element": "Shadow",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Void",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "World Destroyer Titan's Starfall Worldroot Slam · 50",
+    "unique_power": "World Destroyer Titan: Eternal Hunger · 50",
+    "advantage": "World Destroyer Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
+    "disadvantage": "World Destroyer Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
+    "weakness": "Astral",
+    "story": "[5/10 · Ember Abyss] The fifth seal breaks. A warm voice from inside the fire calls you by a name you have never heard."
   },
   {
     "level": 51,
@@ -910,12 +910,12 @@
     "speed": 100,
     "hp": 1177,
     "element": "Fire",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Fire",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Icebound Stag's Piercing Moonlit Pounce · 51",
+    "unique_power": "Icebound Stag: Adaptive Hide · 51",
+    "advantage": "Icebound Stag gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Icebound Stag is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The snow begins falling upward, drawing every footprint toward the highest peak."
   },
   {
     "level": 52,
@@ -928,12 +928,12 @@
     "speed": 102,
     "hp": 1199,
     "element": "Fire",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Snow Wraith's Blazing Thornbound Snare · 52",
+    "unique_power": "Snow Wraith: Echo Memory · 52",
+    "advantage": "Snow Wraith gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Snow Wraith is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] A frostling keeps a tiny frozen flower alive inside its chest."
   },
   {
     "level": 53,
@@ -946,12 +946,12 @@
     "speed": 103,
     "hp": 1221,
     "element": "Fire",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Glacier Troll's Phantom Crystal Pulse · 53",
+    "unique_power": "Glacier Troll: Ancient Instinct · 53",
+    "advantage": "Glacier Troll gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Glacier Troll is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The icebound stag leads lost travelers to shelter, even after the blizzard blinds it."
   },
   {
     "level": 54,
@@ -964,12 +964,12 @@
     "speed": 105,
     "hp": 1243,
     "element": "Fire",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Fire",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Rimefang's Runebound Echoing Roar · 54",
+    "unique_power": "Rimefang: Corruption Pulse · 54",
+    "advantage": "Rimefang gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Rimefang is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] A snow wraith preserves the last winter song of a kingdom erased by the thaw."
   },
   {
     "level": 55,
@@ -982,12 +982,12 @@
     "speed": 107,
     "hp": 1265,
     "element": "Fire",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Whiteout Harpy's Soulbreaking Rift Dash · 55",
+    "unique_power": "Whiteout Harpy: Guardian's Oath · 55",
+    "advantage": "Whiteout Harpy gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Whiteout Harpy is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The glacier troll carries a cracked mirror that shows the world before the corruption."
   },
   {
     "level": 56,
@@ -1000,12 +1000,12 @@
     "speed": 109,
     "hp": 1287,
     "element": "Fire",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Frost Revenant's Tempest Solar Lance · 56",
+    "unique_power": "Frost Revenant: Predator's Focus · 56",
+    "advantage": "Frost Revenant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Frost Revenant is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The whiteout harpy guards a nest of eggs that will hatch only when the sky is healed."
   },
   {
     "level": 57,
@@ -1018,12 +1018,12 @@
     "speed": 111,
     "hp": 1309,
     "element": "Fire",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Fire",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Permafrost Giant's Thorned Phantom Waltz · 57",
+    "unique_power": "Permafrost Giant: Elemental Heart · 57",
+    "advantage": "Permafrost Giant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Permafrost Giant is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The frost revenant remembers the face of the one who sealed the mountain gates."
   },
   {
     "level": 58,
@@ -1036,12 +1036,12 @@
     "speed": 112,
     "hp": 1331,
     "element": "Fire",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Winter'S Maw's Frostbitten Comet Breaker · 58",
+    "unique_power": "Winter'S Maw: Last Stand · 58",
+    "advantage": "Winter'S Maw gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Winter'S Maw is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The permafrost giant has been holding back an avalanche with its own frozen body."
   },
   {
     "level": 59,
@@ -1054,12 +1054,12 @@
     "speed": 114,
     "hp": 1353,
     "element": "Fire",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Astral",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Astral Wyrm's Abyssal Gravewind Howl · 59",
+    "unique_power": "Astral Wyrm: Worldroot Bond · 59",
+    "advantage": "Astral Wyrm gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Astral Wyrm is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] Winter's Maw asks you to end its endless watch; it has guarded the sixth seal for too long."
   },
   {
     "level": 60,
@@ -1072,12 +1072,12 @@
     "speed": 176,
     "hp": 3055,
     "element": "Fire",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Fire",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Astral",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Celestial Dragon God's Starfall Worldroot Slam · 60",
+    "unique_power": "Celestial Dragon God: Eternal Hunger · 60",
+    "advantage": "Celestial Dragon God gains an edge in Frostfang Peaks terrain and against unprepared foes.",
+    "disadvantage": "Celestial Dragon God is vulnerable to disciplined counters and Water-aligned attacks.",
+    "weakness": "Water",
+    "story": "[6/10 · Frostfang Peaks] The sixth seal opens. Under the ice, a heartbeat answers yours in perfect rhythm."
   },
   {
     "level": 61,
@@ -1090,12 +1090,12 @@
     "speed": 118,
     "hp": 1397,
     "element": "Ice",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Rift Stalker's Piercing Moonlit Pounce · 61",
+    "unique_power": "Rift Stalker: Adaptive Hide · 61",
+    "advantage": "Rift Stalker gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Rift Stalker is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The Primordial Rift does not lead to another place; it leads to the moment before places existed."
   },
   {
     "level": 62,
@@ -1108,12 +1108,12 @@
     "speed": 120,
     "hp": 1419,
     "element": "Ice",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Abyssal Hound's Blazing Thornbound Snare · 62",
+    "unique_power": "Abyssal Hound: Echo Memory · 62",
+    "advantage": "Abyssal Hound gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Abyssal Hound is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] A voidling follows you without a shadow, repeating the words you have not yet spoken."
   },
   {
     "level": 63,
@@ -1126,12 +1126,12 @@
     "speed": 121,
     "hp": 1441,
     "element": "Ice",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Ice",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Null Siren's Phantom Crystal Pulse · 63",
+    "unique_power": "Null Siren: Ancient Instinct · 63",
+    "advantage": "Null Siren gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Null Siren is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The rift stalker appears only in reflections, always standing closer than before."
   },
   {
     "level": 64,
@@ -1144,12 +1144,12 @@
     "speed": 123,
     "hp": 1463,
     "element": "Ice",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Starved Horror's Runebound Echoing Roar · 64",
+    "unique_power": "Starved Horror: Corruption Pulse · 64",
+    "advantage": "Starved Horror gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Starved Horror is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The abyssal hound guards a path made from abandoned possibilities."
   },
   {
     "level": 65,
@@ -1162,12 +1162,12 @@
     "speed": 125,
     "hp": 1485,
     "element": "Ice",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Eclipse Knight's Soulbreaking Rift Dash · 65",
+    "unique_power": "Eclipse Knight: Guardian's Oath · 65",
+    "advantage": "Eclipse Knight gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Eclipse Knight is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The null siren sings of a world where none of the monsters were ever born."
   },
   {
     "level": 66,
@@ -1180,12 +1180,12 @@
     "speed": 127,
     "hp": 1507,
     "element": "Ice",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Ice",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Void Devourer's Tempest Solar Lance · 66",
+    "unique_power": "Void Devourer: Predator's Focus · 66",
+    "advantage": "Void Devourer gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Void Devourer is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The starved horror wears the faces of creatures you saved, asking why you left them behind."
   },
   {
     "level": 67,
@@ -1198,12 +1198,12 @@
     "speed": 129,
     "hp": 1529,
     "element": "Ice",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Rift Colossus's Thorned Phantom Waltz · 67",
+    "unique_power": "Rift Colossus: Elemental Heart · 67",
+    "advantage": "Rift Colossus gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Rift Colossus is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The eclipse knight challenges you to prove that strength can protect rather than consume."
   },
   {
     "level": 68,
@@ -1216,12 +1216,12 @@
     "speed": 130,
     "hp": 1551,
     "element": "Ice",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Abyss Monarch's Frostbitten Comet Breaker · 68",
+    "unique_power": "Abyss Monarch: Last Stand · 68",
+    "advantage": "Abyss Monarch gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Abyss Monarch is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The void devourer swallows the light of the seventh seal and discovers it cannot digest hope."
   },
   {
     "level": 69,
@@ -1234,12 +1234,12 @@
     "speed": 132,
     "hp": 1573,
     "element": "Ice",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Ice",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Chaos",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Abyssal Deity's Abyssal Gravewind Howl · 69",
+    "unique_power": "Abyssal Deity: Worldroot Bond · 69",
+    "advantage": "Abyssal Deity gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "Abyssal Deity is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The abyss monarch reveals that the corruption is a wound, not a weapon."
   },
   {
     "level": 70,
@@ -1252,12 +1252,12 @@
     "speed": 204,
     "hp": 3555,
     "element": "Ice",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Chaos",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "God Of Destruction's Starfall Worldroot Slam · 70",
+    "unique_power": "God Of Destruction: Eternal Hunger · 70",
+    "advantage": "God Of Destruction gains an edge in Primordial Rift terrain and against unprepared foes.",
+    "disadvantage": "God Of Destruction is vulnerable to disciplined counters and Fire-aligned attacks.",
+    "weakness": "Fire",
+    "story": "[7/10 · Primordial Rift] The seventh seal opens. For the first time, the darkness sounds afraid."
   },
   {
     "level": 71,
@@ -1270,12 +1270,12 @@
     "speed": 136,
     "hp": 1617,
     "element": "Void",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Astral Chimera's Piercing Moonlit Pounce · 71",
+    "unique_power": "Astral Chimera: Adaptive Hide · 71",
+    "advantage": "Astral Chimera gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Astral Chimera is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The Celestial Ruins drift above the world, connected by bridges made of forgotten wishes."
   },
   {
     "level": 72,
@@ -1288,12 +1288,12 @@
     "speed": 138,
     "hp": 1639,
     "element": "Void",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Void",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Comet Wyrm's Blazing Thornbound Snare · 72",
+    "unique_power": "Comet Wyrm: Echo Memory · 72",
+    "advantage": "Comet Wyrm gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Comet Wyrm is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] A fallen seraph hides a broken wing beneath a cloak woven from starlight."
   },
   {
     "level": 73,
@@ -1306,12 +1306,12 @@
     "speed": 139,
     "hp": 1661,
     "element": "Void",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Nebula Witch's Phantom Crystal Pulse · 73",
+    "unique_power": "Nebula Witch: Ancient Instinct · 73",
+    "advantage": "Nebula Witch gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Nebula Witch is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The astral chimera carries three memories that belong to the same person."
   },
   {
     "level": 74,
@@ -1324,12 +1324,12 @@
     "speed": 141,
     "hp": 1683,
     "element": "Void",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Star Eater's Runebound Echoing Roar · 74",
+    "unique_power": "Star Eater: Corruption Pulse · 74",
+    "advantage": "Star Eater gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Star Eater is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The comet wyrm draws a trail across the sky, marking the route to the first dawn."
   },
   {
     "level": 75,
@@ -1342,12 +1342,12 @@
     "speed": 143,
     "hp": 1705,
     "element": "Void",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Void",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Cosmic Behemoth's Soulbreaking Rift Dash · 75",
+    "unique_power": "Cosmic Behemoth: Guardian's Oath · 75",
+    "advantage": "Cosmic Behemoth gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Cosmic Behemoth is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The nebula witch has mapped every possible ending and crossed out the ones where you survive."
   },
   {
     "level": 76,
@@ -1360,12 +1360,12 @@
     "speed": 145,
     "hp": 1727,
     "element": "Void",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Astral Reaper's Tempest Solar Lance · 76",
+    "unique_power": "Astral Reaper: Predator's Focus · 76",
+    "advantage": "Astral Reaper gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Astral Reaper is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The star eater consumes constellations to keep a sleeping world from waking too soon."
   },
   {
     "level": 77,
@@ -1378,12 +1378,12 @@
     "speed": 147,
     "hp": 1749,
     "element": "Void",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Nova Titan's Thorned Phantom Waltz · 77",
+    "unique_power": "Nova Titan: Elemental Heart · 77",
+    "advantage": "Nova Titan gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Nova Titan is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The cosmic behemoth is chained by promises made by heroes whose names have been erased."
   },
   {
     "level": 78,
@@ -1396,12 +1396,12 @@
     "speed": 148,
     "hp": 1771,
     "element": "Void",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Void",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Eternity Maw's Frostbitten Comet Breaker · 78",
+    "unique_power": "Eternity Maw: Last Stand · 78",
+    "advantage": "Eternity Maw gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Eternity Maw is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The astral reaper offers to trade its immortality for one more chance to see the sunrise."
   },
   {
     "level": 79,
@@ -1414,12 +1414,12 @@
     "speed": 150,
     "hp": 1793,
     "element": "Void",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Nature",
-    "story": "A fragment of the world's heart pulses inside this creature. It fights not from hatred, but from fear of what waits beyond."
+    "special_move": "Void Dragon's Abyssal Gravewind Howl · 79",
+    "unique_power": "Void Dragon: Worldroot Bond · 79",
+    "advantage": "Void Dragon gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Void Dragon is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] Eternity's Maw speaks with the voice of every guardian you have defeated."
   },
   {
     "level": 80,
@@ -1432,12 +1432,12 @@
     "speed": 232,
     "hp": 4055,
     "element": "Void",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Nature",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Primordial Dragon God's Starfall Worldroot Slam · 80",
+    "unique_power": "Primordial Dragon God: Eternal Hunger · 80",
+    "advantage": "Primordial Dragon God gains an edge in Celestial Ruins terrain and against unprepared foes.",
+    "disadvantage": "Primordial Dragon God is vulnerable to disciplined counters and Light-aligned attacks.",
+    "weakness": "Light",
+    "story": "[8/10 · Celestial Ruins] The eighth seal breaks. The stars rearrange into a portrait of the one who created the seals."
   },
   {
     "level": 81,
@@ -1450,12 +1450,12 @@
     "speed": 154,
     "hp": 1837,
     "element": "Astral",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Astral",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Doom Herald's Piercing Moonlit Pounce · 81",
+    "unique_power": "Doom Herald: Adaptive Hide · 81",
+    "advantage": "Doom Herald gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Doom Herald is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] Time fractures around the Eternal Hour, and yesterday's rain falls from tomorrow's clouds."
   },
   {
     "level": 82,
@@ -1468,12 +1468,12 @@
     "speed": 156,
     "hp": 1859,
     "element": "Astral",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Eternal Shade's Blazing Thornbound Snare · 82",
+    "unique_power": "Eternal Shade: Echo Memory · 82",
+    "advantage": "Eternal Shade gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Eternal Shade is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The time wraith appears as a younger version of a monster you once spared."
   },
   {
     "level": 83,
@@ -1486,12 +1486,12 @@
     "speed": 157,
     "hp": 1881,
     "element": "Astral",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Fate Breaker's Phantom Crystal Pulse · 83",
+    "unique_power": "Fate Breaker: Ancient Instinct · 83",
+    "advantage": "Fate Breaker gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Fate Breaker is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The doom herald announces a defeat that has not happened, then begs you to change it."
   },
   {
     "level": 84,
@@ -1504,12 +1504,12 @@
     "speed": 159,
     "hp": 1903,
     "element": "Astral",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Astral",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Chrono Hydra's Runebound Echoing Roar · 84",
+    "unique_power": "Chrono Hydra: Corruption Pulse · 84",
+    "advantage": "Chrono Hydra gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Chrono Hydra is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The eternal shade steals seconds from your life to replay a forgotten conversation."
   },
   {
     "level": 85,
@@ -1522,12 +1522,12 @@
     "speed": 161,
     "hp": 1925,
     "element": "Astral",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Oblivion Knight's Soulbreaking Rift Dash · 85",
+    "unique_power": "Oblivion Knight: Guardian's Oath · 85",
+    "advantage": "Oblivion Knight gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Oblivion Knight is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The fate breaker cuts the thread connecting each monster to the corruption."
   },
   {
     "level": 86,
@@ -1540,12 +1540,12 @@
     "speed": 163,
     "hp": 1947,
     "element": "Astral",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Ruin Emperor's Tempest Solar Lance · 86",
+    "unique_power": "Ruin Emperor: Predator's Focus · 86",
+    "advantage": "Ruin Emperor gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Ruin Emperor is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The chrono hydra grows a new head for every future it has already witnessed."
   },
   {
     "level": 87,
@@ -1558,12 +1558,12 @@
     "speed": 165,
     "hp": 1969,
     "element": "Astral",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Opponents weak to Astral",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Endless Devourer's Thorned Phantom Waltz · 87",
+    "unique_power": "Endless Devourer: Elemental Heart · 87",
+    "advantage": "Endless Devourer gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Endless Devourer is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The oblivion knight remembers a timeline where you became the final enemy."
   },
   {
     "level": 88,
@@ -1576,12 +1576,12 @@
     "speed": 166,
     "hp": 1991,
     "element": "Astral",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Eternal Sovereign's Frostbitten Comet Breaker · 88",
+    "unique_power": "Eternal Sovereign: Last Stand · 88",
+    "advantage": "Eternal Sovereign gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Eternal Sovereign is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The ruin emperor has ruled a thousand endings and fears this one most of all."
   },
   {
     "level": 89,
@@ -1594,12 +1594,12 @@
     "speed": 168,
     "hp": 2013,
     "element": "Astral",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Earth",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Eternal Tyrant's Abyssal Gravewind Howl · 89",
+    "unique_power": "Eternal Tyrant: Worldroot Bond · 89",
+    "advantage": "Eternal Tyrant gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Eternal Tyrant is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The endless devourer reveals that every loop began with a single act of mercy."
   },
   {
     "level": 90,
@@ -1612,12 +1612,12 @@
     "speed": 260,
     "hp": 4555,
     "element": "Astral",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Opponents weak to Astral",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Earth",
-    "story": "The land falls silent. This guardian remembers the world before it began to fracture, and its defeat may reveal another piece of the truth."
+    "special_move": "Eternal Overlord's Starfall Worldroot Slam · 90",
+    "unique_power": "Eternal Overlord: Eternal Hunger · 90",
+    "advantage": "Eternal Overlord gains an edge in Eternal Hour terrain and against unprepared foes.",
+    "disadvantage": "Eternal Overlord is vulnerable to disciplined counters and Void-aligned attacks.",
+    "weakness": "Void",
+    "story": "[9/10 · Eternal Hour] The ninth seal opens. Time stops, and every creature you met turns toward the same distant light."
   },
   {
     "level": 91,
@@ -1630,12 +1630,12 @@
     "speed": 172,
     "hp": 2057,
     "element": "Chaos",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Worldroot Horror's Piercing Moonlit Pounce · 91",
+    "unique_power": "Worldroot Horror: Adaptive Hide · 91",
+    "advantage": "Worldroot Horror gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Worldroot Horror is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The Origin Realm is silent; even the wind waits for the first word to be spoken."
   },
   {
     "level": 92,
@@ -1648,12 +1648,12 @@
     "speed": 174,
     "hp": 2079,
     "element": "Chaos",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Firstborn Titan's Blazing Thornbound Snare · 92",
+    "unique_power": "Firstborn Titan: Echo Memory · 92",
+    "advantage": "Firstborn Titan gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Firstborn Titan is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The origin spark recognizes the tiny blue light from the meadow and returns it to your hand."
   },
   {
     "level": 93,
@@ -1666,12 +1666,12 @@
     "speed": 175,
     "hp": 2101,
     "element": "Chaos",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Opponents weak to Chaos",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Chaos Architect's Phantom Crystal Pulse · 93",
+    "unique_power": "Chaos Architect: Ancient Instinct · 93",
+    "advantage": "Chaos Architect gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Chaos Architect is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The worldroot horror is made of every path the world refused to take."
   },
   {
     "level": 94,
@@ -1684,12 +1684,12 @@
     "speed": 177,
     "hp": 2123,
     "element": "Chaos",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Genesis Eater's Runebound Echoing Roar · 94",
+    "unique_power": "Genesis Eater: Corruption Pulse · 94",
+    "advantage": "Genesis Eater gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Genesis Eater is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The firstborn titan kneels, admitting that it was built to protect the creator from loneliness."
   },
   {
     "level": 95,
@@ -1702,12 +1702,12 @@
     "speed": 179,
     "hp": 2145,
     "element": "Chaos",
-    "special_move": "Soul Rend",
-    "unique_power": "Worldbreaker Aura",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Omega Seraph's Soulbreaking Rift Dash · 95",
+    "unique_power": "Omega Seraph: Guardian's Oath · 95",
+    "advantage": "Omega Seraph gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Omega Seraph is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The chaos architect reveals the seals were made to hold back a grief too large for the world."
   },
   {
     "level": 96,
@@ -1720,12 +1720,12 @@
     "speed": 181,
     "hp": 2167,
     "element": "Chaos",
-    "special_move": "Wild Surge",
-    "unique_power": "Adaptive Hide",
-    "advantage": "Opponents weak to Chaos",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Reality Shatterer's Tempest Solar Lance · 96",
+    "unique_power": "Reality Shatterer: Predator's Focus · 96",
+    "advantage": "Reality Shatterer gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Reality Shatterer is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The genesis eater consumes the last false memory and exposes the truth beneath the story."
   },
   {
     "level": 97,
@@ -1738,12 +1738,12 @@
     "speed": 183,
     "hp": 2189,
     "element": "Chaos",
-    "special_move": "Crushing Roar",
-    "unique_power": "Ancient Instinct",
-    "advantage": "Unprepared adventurers",
-    "disadvantage": "Focused elemental attacks",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "Apex Behemoth's Thorned Phantom Waltz · 97",
+    "unique_power": "Apex Behemoth: Elemental Heart · 97",
+    "advantage": "Apex Behemoth gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "Apex Behemoth is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The omega seraph offers its wings to mend the sky, knowing it will never fly again."
   },
   {
     "level": 98,
@@ -1756,12 +1756,12 @@
     "speed": 184,
     "hp": 2211,
     "element": "Chaos",
-    "special_move": "Phantom Rush",
-    "unique_power": "Echo of the Fallen",
-    "advantage": "Slow heavy fighters",
-    "disadvantage": "Quick evasive fighters",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "The Void Emperor's Frostbitten Comet Breaker · 98",
+    "unique_power": "The Void Emperor: Last Stand · 98",
+    "advantage": "The Void Emperor gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "The Void Emperor is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The reality shatterer breaks the final barrier and shows you the world before fear existed."
   },
   {
     "level": 99,
@@ -1774,12 +1774,12 @@
     "speed": 186,
     "hp": 2233,
     "element": "Chaos",
-    "special_move": "Elemental Burst",
-    "unique_power": "Corruption Pulse",
-    "advantage": "Opponents weak to Chaos",
-    "disadvantage": "Its own elemental weakness",
-    "weakness": "Sand",
-    "story": "The creature speaks in a voice older than the stars. It knows why the world is ending, but the truth comes at a terrible cost."
+    "special_move": "The Last Silence's Abyssal Gravewind Howl · 99",
+    "unique_power": "The Last Silence: Worldroot Bond · 99",
+    "advantage": "The Last Silence gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "The Last Silence is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The apex behemoth falls, but instead of vanishing it becomes a bridge toward the final throne."
   },
   {
     "level": 100,
@@ -1792,11 +1792,11 @@
     "speed": 288,
     "hp": 5055,
     "element": "Chaos",
-    "special_move": "Alpha Oblivion",
-    "unique_power": "Primordial Rewrite",
-    "advantage": "All corrupted and unprepared enemies",
-    "disadvantage": "The three ancient seals can suppress its aura",
-    "weakness": "None known",
-    "story": "At the edge of the first dawn, THE ALPHA GOD opens its eyes. Every monster you fought was a fragment of its lost dream. The final truth is not whether you can defeat it, but whether the world can survive what happens next."
+    "special_move": "The Alpha God's Starfall Worldroot Slam · 100",
+    "unique_power": "The Alpha God: Eternal Hunger · 100",
+    "advantage": "The Alpha God gains an edge in Origin Realm terrain and against unprepared foes.",
+    "disadvantage": "The Alpha God is vulnerable to disciplined counters and Order-aligned attacks.",
+    "weakness": "Order",
+    "story": "[10/10 · Origin Realm] The Alpha God awakens. Every creature was a fragment of its dream, and the last battle will decide whether that dream ends or begins again."
   }
 ]
