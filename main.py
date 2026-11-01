@@ -2201,7 +2201,8 @@ async def admin_command(message: Message):
             f"Players: {stats['players']}\nActive monster battles: {stats['active_battles']}\n"
             f"Guilds: {stats['guilds']}\nRegistered groups: {stats['registered_groups']}\n"
             f"Active PvP duels: {stats['active_duels']}\n"
-            f"Suspicious events (24h): {stats['security_events_24h']}\n\n"
+            f"Suspicious events (24h): {stats['security_events_24h']}\n"
+            f"Telegram Stars received: {stats['stars_received']} · Gems issued: {stats['premium_gems_issued']}\n\n"
             "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin security [PLAYER_ID], /admin announce MESSAGE."
         )
         return
