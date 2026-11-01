@@ -209,7 +209,7 @@ The-Peak-Adventure/
 - [x] Player coin/potion trade offer
 - [x] Dual trade confirmation
 - [x] Trade cancellation
-- [ ] Equipment/item trading
+- [x] Secure two-party trading of coins, potions, equipped weapons and armor with revalidation at confirmation
 - [ ] Auction house and market listings
 - [x] Monster material drops, unique recipes and weapon/armor crafting
 - [~] Item rarity and economy balancing
