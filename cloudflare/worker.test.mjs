@@ -139,3 +139,18 @@ test("quest claim API is POST-only", async () => {
   assert.equal(response.status, 405);
   assert.equal(response.headers.get("allow"), "POST");
 });
+
+test("settings API allows GET and POST only", async () => {
+  for (const method of ["GET", "POST"]) {
+    const response = await worker.fetch(
+      new Request("https://edge.example/api/settings", { method }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(response.status, 502);
+  }
+  const response = await worker.fetch(
+    new Request("https://edge.example/api/settings", { method: "DELETE" }),
+    { BACKEND_ORIGIN: "https://game.example" },
+  );
+  assert.equal(response.status, 405);
+});
