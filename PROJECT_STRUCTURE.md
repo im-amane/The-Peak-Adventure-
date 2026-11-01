@@ -223,9 +223,9 @@ The-Peak-Adventure/
 - [x] Daily reward loop
 - [x] NPC region dialogue
 - [x] Quest journal with progress bars and claimable rewards in Mini App
-- [ ] Branching NPC dialogue
-- [ ] Cinematic story chapters
-- [ ] World and group quest chains
+- [x] Branching NPC dialogue with persistent player choices
+- [~] Ten narrative chapters with scene text; cinematic animations pending
+- [~] World story chain and party-gated chapter; extended group quest chains pending
 - [ ] 100-monster story editorial rewrite
 
 ### 13. Admin, Security and Operations
