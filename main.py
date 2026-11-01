@@ -1625,6 +1625,7 @@ async def miniapp_state(user: dict):
         "hp": p["hp"],
         "max_hp": p["max_hp"],
         "potions": p["potions"],
+        "skill_cd": p["skill_cd"],
         "coins": p["coins"],
         "region": region_names[region_index],
         "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
