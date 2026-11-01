@@ -74,3 +74,10 @@ def scale_evolved_monster(monster):
     evolved["unique_power"]=str(monster.get("unique_power",""))+" · Evolved Form"
     evolved["special_move"]=str(monster.get("special_move",""))+" · Ascended"
     return evolved
+
+
+def is_evolved_spawn(mastered, roll):
+    """A mastered species has a 25% chance to appear in its evolved form."""
+    if not isinstance(roll,int) or isinstance(roll,bool) or not 1<=roll<=100:
+        raise ValueError("roll must be an integer from 1 to 100")
+    return bool(mastered) and roll<=25
