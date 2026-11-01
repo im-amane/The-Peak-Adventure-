@@ -41,6 +41,33 @@
   let nearNpc = false;
   let requestInFlight = false;
   let phaserGame = null;
+  let soundEnabled = true;
+  let audioContext = null;
+
+
+  function playSound(kind) {
+    if (!soundEnabled) return;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      audioContext = audioContext || new AudioContextClass();
+      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+      const notes = {encounter:[260,390],attack:[180,110],skill:[330,660,880],potion:[440,620],victory:[523,659,784],error:[140]};
+      const sequence = notes[kind] || [300];
+      const start = audioContext.currentTime;
+      sequence.forEach((frequency,index) => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = kind === "skill" ? "triangle" : "sine";
+        oscillator.frequency.setValueAtTime(frequency,start+index*0.075);
+        gain.gain.setValueAtTime(0.0001,start+index*0.075);
+        gain.gain.exponentialRampToValueAtTime(0.07,start+index*0.075+0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001,start+index*0.075+0.16);
+        oscillator.connect(gain); gain.connect(audioContext.destination);
+        oscillator.start(start+index*0.075); oscillator.stop(start+index*0.075+0.17);
+      });
+    } catch (_) { /* Audio is optional; gameplay must never depend on it. */ }
+  }
 
   function applyState(data, message) {
     const previousRegion = gameState ? gameState.region : null;
@@ -127,6 +154,7 @@
     ui.encounter.disabled = true;
     try {
       const result = await postApi("/api/explore", {monster_level: monsterLevel});
+      playSound("encounter");
       applyState(result.state, result.message);
     } catch (error) {
       ui.status.textContent = error.message;
@@ -143,6 +171,7 @@
     document.querySelectorAll("[data-action]").forEach(button => button.disabled = true);
     try {
       const result = await postApi("/api/action", {action});
+      playSound(action === "skill" ? "skill" : action === "potion" ? "potion" : action === "attack" ? "attack" : "error");
       applyState(result.state, result.message);
     } catch (error) {
       ui.battleMessage.textContent = error.message;
@@ -161,6 +190,13 @@
     g.fillStyle(cloak,1); g.fillRoundedRect(-15,-5,30,29,8);
     g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
     g.fillStyle(skin,1); g.fillCircle(0,-15,11);
+    if (appearance.race === "Elf") {
+      g.fillStyle(skin,1); g.fillTriangle(-8,-17,-22,-27,-12,-10); g.fillTriangle(8,-17,22,-27,12,-10);
+    } else if (appearance.race === "Orc") {
+      g.fillStyle(0xf0e4c8,1); g.fillTriangle(-6,-8,-3,-1,-1,-9); g.fillTriangle(6,-8,3,-1,1,-9);
+    } else if (appearance.race === "Dwarf") {
+      g.fillStyle(0x68452f,1); g.fillTriangle(-9,-9,0,4,9,-9);
+    }
     g.fillStyle(0x382b2b,1);
     if (appearance.hair === "shaved") g.fillEllipse(0,-23,18,5);
     else if (appearance.hair === "long") { g.fillEllipse(0,-23,22,12); g.fillRoundedRect(-11,-20,5,17,3); g.fillRoundedRect(6,-20,5,17,3); }
@@ -306,6 +342,29 @@
     }
     update(_,delta){
       if(!this.hero)return;
+      this.cycleTime = (this.cycleTime + delta) % 90000;
+      const daylight = (Math.sin((this.cycleTime / 90000) * Math.PI * 2 - Math.PI / 2) + 1) / 2;
+      this.timeOverlay.setAlpha(0.28 * (1 - daylight));
+      this.weatherGraphics.clear();
+      const elapsed = this.time.now;
+      if (this.weatherMode === "rain" || this.weatherMode === "sand" || this.weatherMode === "ash" || this.weatherMode === "snow") {
+        const weatherColor = this.weatherMode === "snow" ? 0xeaf5ff : this.weatherMode === "sand" ? 0xe9c27a : this.weatherMode === "ash" ? 0xdaa08a : 0xa9d4e8;
+        for (let i=0;i<26;i++) {
+          const x=(i*71+elapsed*0.11*(this.weatherMode==="sand"?1.8:1))%this.scale.width;
+          const y=(i*43+elapsed*0.24)%this.scale.height;
+          this.weatherGraphics.lineStyle(this.weatherMode==="snow"?2:1,weatherColor,this.weatherMode==="ash"?0.45:0.6);
+          if (this.weatherMode==="snow") this.weatherGraphics.fillStyle(weatherColor,0.65),this.weatherGraphics.fillCircle(x,y,1.5+(i%2));
+          else this.weatherGraphics.lineBetween(x,y,x+(this.weatherMode==="sand"?8:3),y+(this.weatherMode==="rain"?10:5));
+        }
+      } else {
+        const moteColor = this.weatherMode==="embers" ? 0xffa05b : this.weatherMode==="stardust" ? 0xe4d6ff : this.weatherMode==="falling-light" ? 0xffe8a4 : 0xb4b4e0;
+        for (let i=0;i<14;i++) {
+          const x=(i*83+Math.sin(elapsed/1300+i)*22)%this.scale.width;
+          const y=(i*47+elapsed*(this.weatherMode==="embers"?-0.025:0.035))%this.scale.height;
+          this.weatherGraphics.fillStyle(moteColor,0.35+(i%3)*0.15);
+          this.weatherGraphics.fillCircle(x,y,1+(i%3));
+        }
+      }
       if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
       const speed=0.18*delta;
       let dx=0,dy=0;
@@ -344,6 +403,13 @@
     if (phaserGame) phaserGame.destroy(true);
     phaserGame = new Phaser.Game(config);
   }
+
+  document.getElementById("sound-toggle").addEventListener("click", event => {
+    soundEnabled = !soundEnabled;
+    event.currentTarget.setAttribute("aria-pressed", String(soundEnabled));
+    event.currentTarget.textContent = soundEnabled ? "🔊 Sound" : "🔇 Muted";
+    if (soundEnabled) playSound("potion");
+  });
 
   document.getElementById("save-appearance").addEventListener("click", async () => {
     if (requestInFlight || !gameState) return;
