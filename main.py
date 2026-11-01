@@ -1081,6 +1081,21 @@ async def decline_party_callback(call: CallbackQuery):
 
 
 @dp.message(Command("group"))
+
+async def verify_live_group_admin(message: Message) -> bool:
+    chat_id = message.chat.id
+    user_id = message.from_user.id
+    try:
+        member = await message.bot.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    if member.status not in {"creator", "administrator"}:
+        await db.execute("DELETE FROM group_admins WHERE chat_id=? AND user_id=?", (chat_id, user_id))
+        await db.commit()
+        return False
+    return True
+
+
 async def group_command(message: Message):
     args=(message.text or "").split(maxsplit=2)
     action=args[1].lower() if len(args)>1 else "info"
@@ -1132,6 +1147,7 @@ async def group_command(message: Message):
     if action=="claim":
         if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
         try:
+            if not await verify_live_group_admin(message): raise GroupError("Your Telegram administrator role is no longer active.")
             coins,xp=await claim_group_mission(db,cid,uid,args[2].lower())
             await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(coins,uid)); await db.commit()
             await message.answer(f"🎁 Claimed {coins} coins and {xp} group XP.")
@@ -1141,7 +1157,7 @@ async def group_command(message: Message):
         parts=(message.text or "").split(); sub=parts[2].lower() if len(parts)>2 else "status"
         if sub=="start":
             try:
-                if not await is_group_admin(db,cid,uid): raise GroupError("Only verified group admins can start a raid.")
+                if not await verify_live_group_admin(message) or not await is_group_admin(db,cid,uid): raise GroupError("Only current, verified Telegram group admins can start a raid.")
                 level=min(100,max(10,((profile["group_level"]+9)//10)*10)); boss=MONSTER_BY_LEVEL[level]
                 rid=await start_group_raid(db,cid,uid,level,boss["name"],boss["hp"]*5)
                 await message.answer(f"🐉 <b>GROUP RAID #{rid}</b>\n{escape(boss['name'])} · Lv.{level} · {boss['hp']*5} HP\nUse /group raid attack.")
@@ -1161,6 +1177,7 @@ async def group_command(message: Message):
         if len(args)<3 or not args[2].isdigit():
             await message.answer("Usage: /group ban|unban player_id [reason]"); return
         try:
+            if not await verify_live_group_admin(message): raise GroupError("Only current Telegram group admins can moderate players.")
             await set_group_ban(db,cid,uid,int(args[2]),action=="ban"," ".join(args[3:]))
             await message.answer("Player blocked from group game features." if action=="ban" else "Player unblocked.")
         except GroupError as exc: await message.answer(escape(str(exc)))
