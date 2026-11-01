@@ -311,7 +311,7 @@
     {
       "id": "06",
       "name": "Monster and Boss System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "100 monster records and ordered levels",
@@ -359,11 +359,11 @@
         },
         {
           "name": "Monster evolution and variants",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Elite and roaming events",
-          "status": "pending"
+          "status": "complete"
         }
       ]
     },
@@ -402,7 +402,7 @@
         },
         {
           "name": "Co-op exploration",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Co-op PvE battles",
