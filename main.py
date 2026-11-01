@@ -1938,8 +1938,8 @@ async def map_cmd(message: Message):
     worlds = ["🌱 Whispering Meadow", "🏜️ Ashen Desert", "🌩️ Stormglass Highlands", "🏰 Hollow Kingdom",
               "🌋 Ember Abyss", "❄️ Frostfang Peaks", "🕳️ Primordial Rift", "🌌 Celestial Ruins",
               "⌛ Eternal Hour", "🌠 Origin Realm"]
-    idx = min(9, (p["level"] - 1) // 10)
-    await message.answer(f"🗺️ <b>World Map</b>\nCurrent region: <b>{worlds[idx]}</b>\nProgress: Level {p['level']}/100\nBoss gates: levels 10, 20, 30 ... 100.")
+    world_id = await get_current_world(db, message.from_user.id, p["level"])
+    await message.answer("🗺️ <b>World Map</b>\nCurrent region: <b>" + worlds[world_id-1] + "</b>\nProgress: Level " + str(p["level"]) + "/100\nUse /travel to view unlocked regions and fast travel.")
 
 
 @dp.message(Command("monster"))
