@@ -28,6 +28,7 @@ from group_system import GroupError, attack_group_raid, award_group_xp, claim_gr
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
+from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -197,6 +198,7 @@ async def init_db():
     await init_group_tables(db)
     await init_character_tables(db)
     await init_account_tables(db)
+    await init_guild_features(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -1184,6 +1186,17 @@ async def group_command(message: Message):
         return
     await message.answer("Commands: /group register, info, members, missions, claim ID, raid start|status|attack, ban|unban ID, top.")
 
+
+async def record_player_guild_activity(user_id: int, kind: str):
+    cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
+    membership = await cur.fetchone()
+    if membership:
+        try:
+            await record_guild_activity(db, membership["guild_id"], user_id, kind)
+        except GuildFeatureError:
+            pass
+
+
 async def guild_summary(guild_id: int):
     cur = await db.execute(
         "SELECT g.*, COUNT(m.user_id) AS member_count FROM guilds g "
@@ -1206,6 +1219,10 @@ async def guild_summary(guild_id: int):
     for member in members:
         icon = "👑" if member["role"] == "leader" else "•"
         lines.append(f"{icon} {escape(member['username'] or 'Adventurer')} · Lv.{member['level']}")
+
+    announcement = await get_guild_announcement(db, guild_id)
+    if announcement:
+        lines.append(f"📢 <b>Guild Announcement</b>\n{escape(announcement['message'])}")
     return "\n".join(lines)
 
 
@@ -1292,6 +1309,116 @@ async def guild_command(message: Message):
         await message.answer("🏰 Your guild has been disbanded.")
         return
 
+
+    if action == "invite":
+        if not membership or len(args) < 3 or not args[2].isdigit():
+            await message.answer("Usage: /guild invite player_id")
+            return
+        try:
+            invite_id = await create_guild_invite(db, membership["guild_id"], user_id, int(args[2]))
+            await message.answer(f"✉️ Guild invitation #{invite_id} sent to player {args[2]}. They can use /guild accept {invite_id}.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action in {"accept", "decline"}:
+        if len(args) < 3 or not args[2].isdigit():
+            await message.answer("Usage: /guild accept|decline invite_id")
+            return
+        try:
+            guild_id = await respond_guild_invite(db, int(args[2]), user_id, action == "accept")
+            await message.answer("✅ You joined the guild." if action == "accept" else "Guild invitation declined.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "role":
+        if not membership or len(args) < 3:
+            await message.answer("Usage: /guild role player_id officer|member")
+            return
+        parts = args[2].split()
+        if len(parts) != 2 or not parts[0].isdigit():
+            await message.answer("Usage: /guild role player_id officer|member")
+            return
+        try:
+            await set_guild_role(db, membership["guild_id"], user_id, int(parts[0]), parts[1].lower())
+            await message.answer("Guild role updated.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "announce":
+        if not membership or len(args) < 3:
+            await message.answer("Usage: /guild announce your message")
+            return
+        try:
+            text_value = await set_guild_announcement(db, membership["guild_id"], user_id, args[2])
+            cur = await db.execute("SELECT user_id FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
+            recipients = [row["user_id"] for row in await cur.fetchall()]
+            delivered = 0
+            for recipient in recipients:
+                if recipient == user_id:
+                    continue
+                try:
+                    await message.bot.send_message(recipient, "📢 <b>Guild Announcement</b>\n" + escape(text_value))
+                    delivered += 1
+                except Exception:
+                    pass
+            await message.answer(f"📢 Announcement saved and delivered to {delivered} guild members.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "missions":
+        if not membership:
+            await message.answer("Join a guild first.")
+            return
+        missions = await get_guild_missions(db, membership["guild_id"])
+        lines = ["📜 <b>Daily Guild Missions</b>"]
+        for mission in missions:
+            marker = "✅" if mission["completed"] else "▫️"
+            lines.append(f"{marker} {mission['title']}: {mission['progress']}/{mission['target']} · {mission['xp']} guild XP")
+        await message.answer("\n".join(lines))
+        return
+
+    if action == "claim":
+        if not membership or len(args) < 3:
+            await message.answer("Usage: /guild claim battles|boss|trades")
+            return
+        try:
+            xp = await claim_guild_mission(db, membership["guild_id"], user_id, args[2].lower())
+            await message.answer(f"🎁 Guild mission claimed. +{xp} guild XP.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "raid":
+        if not membership:
+            await message.answer("Join a guild first.")
+            return
+        parts = (message.text or "").split()
+        sub = parts[2].lower() if len(parts) > 2 else "status"
+        if sub == "start":
+            try:
+                level = min(100, max(10, ((profile_level := (await db.execute("SELECT guild_level FROM guilds WHERE guild_id=?", (membership["guild_id"],))).fetchone())["guild_level"] + 9) // 10 * 10))
+                boss = MONSTER_BY_LEVEL[level]
+                raid_id = await start_guild_raid(db, membership["guild_id"], user_id, level, boss["name"], boss["hp"] * 5)
+                await message.answer(f"🐉 <b>GUILD RAID #{raid_id}</b>\n{escape(boss['name'])} · Lv.{level} · {boss['hp']*5} HP")
+            except GuildFeatureError as exc:
+                await message.answer(escape(str(exc)))
+            return
+        if sub == "attack":
+            try:
+                result = await attack_guild_raid(db, membership["guild_id"], user_id, max(1, p["level"] * 5 + p["weapon_attack"]))
+                await record_guild_activity(db, membership["guild_id"], user_id, "boss" if result["status"] == "won" else "battle")
+                await message.answer(f"⚔️ You deal {result['damage']} damage.\n{escape(result['boss_name'])}: {result['hp']}/{result['max_hp']} HP\n" + ("🏆 GUILD RAID CLEARED!" if result["status"] == "won" else "The raid continues."))
+            except GuildFeatureError as exc:
+                await message.answer(escape(str(exc)))
+            return
+        raid = await guild_raid_status(db, membership["guild_id"])
+        await message.answer("No guild raid is active." if not raid else f"🐉 {escape(raid['boss_name'])}: {raid['hp']}/{raid['max_hp']} HP · {raid['status'].upper()}")
+        return
+
     if action == "top":
         cur = await db.execute(
             "SELECT g.guild_id, g.name, g.guild_level, g.guild_xp, COUNT(m.user_id) AS members "
@@ -1312,7 +1439,7 @@ async def guild_command(message: Message):
     if action == "info":
         await message.answer("You are not in a guild. Use <code>/guild create Name</code> or <code>/guild join ID</code>.")
         return
-    await message.answer("Guild commands: /guild create Name, /guild join ID, /guild leave, /guild info, /guild top, /guild disband.")
+    await message.answer("Guild commands: /guild create|join|leave|info|top|disband, invite|accept|decline, role, announce, missions|claim, raid start|status|attack.")
 
 
 @dp.callback_query(F.data == "guild_info")
