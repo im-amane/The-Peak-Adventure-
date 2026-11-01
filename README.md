@@ -17,6 +17,8 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - One-time boss clears, player XP/levels, coins, HP and leaderboards
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
+- Four-player parties with leader-only invitations, accept/decline controls, roster view, leave, disband and automatic leadership handoff
+- Persistent friend requests, friend list, removal, duplicate-request protection and pending-request anti-spam limits
 - Player trading for coins and health potions with dual confirmation
 - Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, camera-follow scrolling, keyboard/touch movement, obstacle collision and a solid Wanderer NPC
 - Multiple level-appropriate monster locations that can be selected directly on the map, with server-side encounter validation
@@ -92,6 +94,8 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/friend request|accept|decline|list|remove` - Friend requests and friend list (request by replying to a player in a group)
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
+- `/party create|invite|accept|decline|info|leave|disband` - Four-player party management
+- `/friend request|accept|decline|list|remove` - Friend system (request by replying to a player in a group)
 - `/guild create|join|leave|info|top|disband` - Guild management
 - `/trade` - Start a trade by replying to a player in a group
 - `/offer trade_id coins potions` - Set your offer
