@@ -68,6 +68,14 @@
         <button id="party-leave" type="button" hidden>Leave party</button>
       </div>
       <div id="social-overview" class="social-overview"><p class="small">Loading your social circle...</p></div>
+      <section class="guild-chat-panel" aria-labelledby="guild-chat-title">
+        <div class="section-heading"><h3 id="guild-chat-title">Guild Chat</h3><button id="guild-chat-load" type="button">Load messages</button></div>
+        <div id="guild-chat-messages" class="guild-chat-messages" aria-live="polite"><p class="small">Join a guild to access its private chat.</p></div>
+        <form id="guild-chat-form" class="guild-chat-form">
+          <label for="guild-chat-input">Send a guild message</label>
+          <div><input id="guild-chat-input" type="text" maxlength="500" placeholder="Write to your guild..." autocomplete="off" required><button type="submit">Send</button></div>
+        </form>
+      </section>
     </section>
     <section class="story-panel" aria-labelledby="story-title">
       <div class="section-heading"><div><span class="eyebrow">YOUR CHOICES SHAPE THE PEAK</span><h2 id="story-title">The Peak Chronicle</h2></div></div>
