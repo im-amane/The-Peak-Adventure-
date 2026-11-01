@@ -13,6 +13,7 @@
     monster: document.getElementById("monster-label"),
     status: document.getElementById("status"),
     encounter: document.getElementById("encounter"),
+    interact: document.getElementById("interact-npc"),
     battlePanel: document.getElementById("battle-panel"),
     battleName: document.getElementById("battle-name"),
     battleHp: document.getElementById("battle-hp"),
@@ -37,6 +38,7 @@
   let sceneRef = null;
   const pressedDirections = new Set();
   let nearMonster = false;
+  let nearNpc = false;
   let requestInFlight = false;
   let phaserGame = null;
 
@@ -69,6 +71,7 @@
       : data.class_selected ? "The wilds are waiting. Find the creature on the map."
       : "Choose a hero class in the Telegram chat before exploring.");
     ui.encounter.disabled = !nearMonster || !data.class_selected || data.battle_active;
+    ui.interact.disabled = !nearNpc || data.battle_active;
     ui.encounter.textContent = data.battle_active ? "⚔️ Battle in progress" : nearMonster ? "⚔️ Challenge Monster" : "⚔️ Find the monster";
     if (sceneRef && previousRegion && (previousRegion !== data.region || previousMonster !== data.monster.level)) {
       sceneRef.scene.restart();
@@ -212,7 +215,41 @@
       }else{
         for(let i=0;i<8;i++){const x=i*120+30;scenery.lineStyle(8,0x725c69,0.9);scenery.beginPath();scenery.moveTo(x,h*0.95);scenery.lineTo(x+20,h*0.65);scenery.lineTo(x-12,h*0.45);scenery.lineTo(x+18,h*0.25);scenery.strokePath();scenery.fillStyle(0xe2c17c,0.7);scenery.fillCircle(x+18,h*0.25,5);}
       }
+      this.obstacles = [
+        {x:w*0.39,y:h*0.61,width:42,height:58},
+        {x:w*0.57,y:h*0.77,width:58,height:34},
+        {x:w*0.68,y:h*0.51,width:46,height:54},
+        {x:w*0.31,y:h*0.84,width:50,height:28}
+      ];
+      this.obstacleGraphics = this.add.graphics();
+      this.obstacles.forEach((obstacle,index)=>{
+        const color = index % 2 ? 0x514b48 : 0x3b5140;
+        this.obstacleGraphics.fillStyle(color,1);
+        this.obstacleGraphics.fillEllipse(obstacle.x,obstacle.y,obstacle.width,obstacle.height);
+        this.obstacleGraphics.lineStyle(3,0x1d2928,0.8);
+        this.obstacleGraphics.strokeEllipse(obstacle.x,obstacle.y,obstacle.width,obstacle.height);
+        if(index % 2 === 0){
+          this.obstacleGraphics.fillStyle(palette.accent,0.65);
+          this.obstacleGraphics.fillCircle(obstacle.x-7,obstacle.y-8,4);
+          this.obstacleGraphics.fillCircle(obstacle.x+8,obstacle.y-5,3);
+        }
+      });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
+      this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
+      this.npc.setScale(0.9);
+      this.npcLabel = this.add.text(w*0.49,h*0.7-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
+      this.npcDialog = [
+        "The blue spark you carry once guided the first guardian home.",
+        "The desert swallowed a city to hide a promise beneath its oldest dune.",
+        "Stormglass remembers every name spoken during the great collapse.",
+        "The Hollow Kingdom fell because its king tried to defeat grief itself.",
+        "The Ember Abyss burns brighter whenever someone refuses to forget.",
+        "A lost child left these footprints before the frost covered the peaks.",
+        "The rift is not a wound in the world. It is a door someone locked.",
+        "The stars above these ruins are memories, not distant suns.",
+        "Time repeats the final hour because one voice has not been heard.",
+        "The Alpha God began as a lonely light, not a monster."
+      ];
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
       this.monster=makeMonster(this,w*0.77,h*0.68,gameState.monster.level,monsterColor);
       this.heroIdle = this.tweens.add({
@@ -224,13 +261,28 @@
       this.add.text(w*0.77,h*0.68-54,gameState.monster.name,{fontFamily:"Georgia",fontSize:"13px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
       this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
       this.cursors=this.input.keyboard.createCursorKeys();
-      this.keys=this.input.keyboard.addKeys("W,A,S,D");
+      this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
       this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
-      this.input.on("pointerdown",pointer=>{if(nearMonster)this.challenge();});
+      this.input.on("pointerdown",()=>{
+        if(nearMonster)this.challenge();
+        else if(nearNpc)this.talkToNpc();
+      });
       this.physics=null;
     }
     challenge(){
       startEncounter();
+    }
+    talkToNpc(){
+      if(!nearNpc || (gameState && gameState.battle_active))return;
+      const idx=Math.max(0,Math.min(9,Math.floor((gameState.level-1)/10)));
+      ui.status.textContent="Wanderer: "+this.npcDialog[idx];
+    }
+    blockedAt(x,y){
+      const radius=13;
+      return this.obstacles.some(o=>
+        x+radius>o.x-o.width/2 && x-radius<o.x+o.width/2 &&
+        y+radius>o.y-o.height/2 && y-radius<o.y+o.height/2
+      );
     }
     update(_,delta){
       if(!this.hero)return;
@@ -242,10 +294,16 @@
       if(this.cursors.up.isDown||this.keys.W.isDown||pressedDirections.has("up"))dy=-1;
       if(this.cursors.down.isDown||this.keys.S.isDown||pressedDirections.has("down"))dy=1;
       if(dx&&dy){dx*=0.707;dy*=0.707;}
-      this.hero.x=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.scale.width-24);
-      this.hero.y=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
+      const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.scale.width-24);
+      if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
+      const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
+      if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
       const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.monster.x,this.monster.y);
       nearMonster=distance<88;
+      nearNpc=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.npc.x,this.npc.y)<72;
+      ui.interact.disabled=!nearNpc;
+      ui.interact.textContent=nearNpc?"💬 Talk to Wanderer":"💬 Find Wanderer";
+      if(Phaser.Input.Keyboard.JustDown(this.keys.E))this.talkToNpc();
       ui.encounter.disabled=!nearMonster||!gameState.class_selected||gameState.battle_active;
       ui.encounter.textContent=nearMonster?"⚔️ Challenge Monster":"⚔️ Find the monster";
       if(nearMonster)ui.status.textContent="The creature has noticed you. Prepare for battle.";
@@ -259,6 +317,7 @@
     phaserGame = new Phaser.Game(config);
   }
   document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
+  document.getElementById("interact-npc").addEventListener("click",()=>{if(sceneRef)sceneRef.talkToNpc();});
   document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
   document.querySelectorAll("[data-dir]").forEach(button=>{
     const dir=button.dataset.dir;
