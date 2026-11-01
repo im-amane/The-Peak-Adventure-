@@ -6,6 +6,30 @@ class AdminError(ValueError):
     pass
 
 
+async def init_admin_tables(db: aiosqlite.Connection):
+    await db.execute("""CREATE TABLE IF NOT EXISTS admin_audit_log(
+      log_id INTEGER PRIMARY KEY AUTOINCREMENT,actor_id INTEGER NOT NULL,
+      action TEXT NOT NULL,target_id INTEGER,details TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
+    await db.commit()
+
+
+async def record_admin_action(db,actor_id,action,target_id=None,details=""):
+    if not isinstance(actor_id,int) or isinstance(actor_id,bool) or actor_id<=0:
+        raise AdminError("Invalid administrator ID.")
+    await db.execute("INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES(?,?,?,?)",
+      (actor_id,str(action)[:64],target_id," ".join(str(details or "").split())[:500]))
+    await db.commit()
+
+
+async def recent_admin_actions(db,limit=20):
+    if not isinstance(limit,int) or isinstance(limit,bool) or not 1<=limit<=100:
+        raise AdminError("Invalid audit log limit.")
+    cur=await db.execute("SELECT log_id,actor_id,action,target_id,details,created_at FROM admin_audit_log ORDER BY log_id DESC LIMIT ?",(limit,))
+    return await cur.fetchall()
+
+
 def parse_admin_ids(raw: str) -> set[int]:
     result=set()
     for part in (raw or "").split(","):
@@ -15,7 +39,7 @@ def parse_admin_ids(raw: str) -> set[int]:
     return result
 
 
-async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int) -> int:
+async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int, actor_id: int | None = None) -> int:
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
         raise AdminError("Invalid player ID.")
     if not isinstance(delta,int) or isinstance(delta,bool) or delta==0 or abs(delta)>100000:
@@ -29,6 +53,8 @@ async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int
         if not await cur.fetchone(): raise AdminError("Player account not found.")
         raise AdminError("Adjustment would make the player's coin balance negative.")
     await db.commit()
+    if actor_id is not None:
+        await record_admin_action(db,actor_id,"coin_adjustment",user_id,"delta="+str(delta))
     cur=await db.execute("SELECT coins FROM players WHERE user_id=?",(user_id,))
     return (await cur.fetchone())["coins"]
 
