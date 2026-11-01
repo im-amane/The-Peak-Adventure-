@@ -1769,6 +1769,13 @@ async def admin_command(message: Message):
             "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE."
         )
         return
+    if action=="logs":
+        logs=await recent_admin_actions(db,20)
+        lines=["🧾 <b>Recent Admin Actions</b>"]
+        for row in logs:
+            lines.append("#"+str(row["log_id"])+" · "+row["action"]+" · actor "+str(row["actor_id"])+" · target "+str(row["target_id"] or "-")+" · "+row["details"])
+        await message.answer("\n".join(lines) if len(lines)>1 else "No admin actions have been recorded.")
+        return
     if action=="player":
         if len(args)<3 or not args[2].isdigit():
             await message.answer("Usage: /admin player player_id"); return
@@ -1807,6 +1814,7 @@ async def admin_command(message: Message):
             except Exception:
                 failed+=1
             if index%20==0: await asyncio.sleep(1)
+        await record_admin_action(db,message.from_user.id,"broadcast",None,"sent="+str(sent)+", failed="+str(failed))
         await message.answer(f"📢 Broadcast finished. Sent: {sent}. Failed: {failed}.")
         return
     await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE.")
