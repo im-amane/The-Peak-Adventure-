@@ -3239,7 +3239,9 @@ async def api_action(request: web.Request):
         if not battle:
             return web.json_response({"error": "There is no active battle."}, status=409)
         p = await get_player(user_id, user.get("username"))
-        monster = MONSTER_BY_LEVEL[battle["monster_level"]]
+        monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
+        if battle["is_elite"]:
+            monster = scale_elite_monster(monster)
         class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
         if action == "flee":
             message = await finish_battle(user_id, False, escaped=True)
