@@ -22,6 +22,10 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE friend_requests(user_low INTEGER,user_high INTEGER);
   CREATE TABLE party_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
   CREATE TABLE parties(party_id INTEGER PRIMARY KEY,leader_id INTEGER);
+  CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER);
+  CREATE TABLE party_battle_contributions(battle_id INTEGER,user_id INTEGER);
+  CREATE TABLE party_battle_cooldowns(battle_id INTEGER,user_id INTEGER);
+  CREATE TABLE party_battle_rewards(battle_id INTEGER,user_id INTEGER);
   CREATE TABLE party_members(user_id INTEGER PRIMARY KEY,party_id INTEGER,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE group_raid_contributions(raid_id INTEGER,user_id INTEGER);
   CREATE TABLE group_raid_cooldowns(raid_id INTEGER,user_id INTEGER,last_attack_at TEXT);
