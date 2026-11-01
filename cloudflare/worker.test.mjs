@@ -443,3 +443,15 @@ test("A-star rejects blocked goals and invalid world bounds", () => {
   assert.deepEqual(blockedGoal, []);
   assert.deepEqual(invalidBounds, []);
 });
+
+
+test("hero workshop persists face and body customization controls", () => {
+  const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(html, /id="appearance-face"/);
+  assert.match(html, /id="appearance-body"/);
+  assert.match(game, /appearance\.face==="angular"/);
+  assert.match(game, /appearance\.face==="scarred"/);
+  assert.match(game, /bodyScale/);
+  assert.match(game, /\["race","skin","hair","face","body","outfit"\]/);
+});
