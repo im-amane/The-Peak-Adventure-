@@ -346,6 +346,14 @@
     }
     const guild=social.guild;
     addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
+    const guildInvites=social.pending_guild_invites||[];
+    if(guildInvites.length){
+      const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
+      guildInvites.forEach(invite=>{
+        addAction(card,"Accept","guild_accept",{inviteId:invite.invite_id});
+        addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
+      });
+    }
     if(social.pending_trades){
       const note=document.createElement("p");note.className="small";note.textContent="🤝 Pending trades: "+social.pending_trades;
       ui.socialOverview.appendChild(note);
@@ -960,7 +968,7 @@
     if(action==="friend_request")payload.target_id=Number(button.dataset.targetId);
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
-    if(action==="party_accept"||action==="party_decline")payload.invite_id=Number(button.dataset.inviteId);
+    if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
   });
