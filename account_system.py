@@ -135,6 +135,7 @@ async def _delete_player_account_unlocked(db,user_id):
         ("player_weekly_quests","user_id=?",(user_id,)),
         ("player_daily_missions","user_id=?",(user_id,)),
         ("player_monster_mastery","user_id=?",(user_id,)),
+        ("player_secret_areas","user_id=?",(user_id,)),
         ("roaming_event_participants","user_id=?",(user_id,)),
         ("player_stamina","user_id=?",(user_id,)),
         ("player_mana","user_id=?",(user_id,)),
