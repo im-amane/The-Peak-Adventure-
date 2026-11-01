@@ -20,6 +20,15 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         main.DB_PATH = self.previous_path
         self.temp_dir.cleanup()
 
+    async def test_database_healthcheck_detects_unavailable_database(self):
+        self.assertTrue(await main.database_healthcheck())
+        active_db = main.db
+        main.db = None
+        try:
+            self.assertFalse(await main.database_healthcheck())
+        finally:
+            main.db = active_db
+
     async def test_player_defaults_and_profile(self):
         player = await main.get_player(987654321, "TestHero")
         self.assertEqual(player["level"], 1)
