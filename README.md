@@ -153,7 +153,7 @@ node --test cloudflare/worker.test.mjs
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
 ## Remaining development and launch readiness
-Implemented in the repository: ten world biomes, level-gated travel with walk-up portals and landmarks, three-room dungeons with Mini App controls, daily and weekly missions, party co-op encounters, guild chat/raids/wars, player search, equipment auctions, monster evolution and elite encounters, suspicious-activity telemetry with admin review, procedural combat animations, ambient music with saved sound preferences, and the authenticated Mini App HUD. An opt-in Telegram Stars wallet and idempotent premium-gem crediting flow are also implemented.
+Implemented in the repository: ten world biomes, level-gated travel with walk-up portals and landmarks, A-star tap-to-move navigation around obstacles, three-room dungeons with Mini App controls, daily and weekly missions, party co-op encounters, guild chat/raids/wars, player search, equipment auctions, monster evolution and elite encounters, face/body/hair/outfit customization, suspicious-activity telemetry with admin review, procedural combat animations, ambient music with saved sound preferences, and the authenticated Mini App HUD. The Peak Gems wallet, Telegram Stars invoices, idempotent payment crediting, gem shop consumables and XP boosts are implemented.
 
 Work still needed before calling the game production-ready:
 - Expand portal-linked biomes into larger connected zones with secret areas and richer traversal.
@@ -164,9 +164,9 @@ Work still needed before calling the game production-ready:
 - Complete live Telegram bot, production backup-restore, security and load testing.
 - Give the 100-monster narrative catalogue a final editorial pass so every entry feels individually authored.
 
-Telegram Stars purchases are disabled by default. Enable them only after setting the package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true.
+Telegram Stars purchases are disabled by default. Enable them only after setting package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true. The in-game gem shop can still spend gems already in a player wallet.
 
-The latest verified GitHub Actions run passed 295 Python tests and 18 Cloudflare Worker tests, including JavaScript syntax and portal gating checks.
+The latest verified GitHub Actions run passed 311 Python tests and 25 Cloudflare Worker tests, including JavaScript syntax, portal gating, A-star pathfinding and hero appearance checks.
 
 The Cloudflare Worker and Render deployment configuration are present, but a configured live Python backend and full production end-to-end launch have not been verified. The included Render blueprint provisions paid resources, so create it only after choosing and authorizing the hosting plan.
 
