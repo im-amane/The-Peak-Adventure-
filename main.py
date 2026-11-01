@@ -28,7 +28,7 @@ from group_system import GroupError, attack_group_raid, award_group_xp, claim_gr
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
+from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
@@ -1446,6 +1446,40 @@ async def guild_command(message: Message):
         try:
             await set_guild_role(db, membership["guild_id"], user_id, int(parts[0]), parts[1].lower())
             await message.answer("Guild role updated.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "chat":
+        if not membership or len(args) < 3:
+            await message.answer("Usage: /guild chat your message")
+            return
+        try:
+            text_value = " ".join(args[2].split())
+            message_id = await send_guild_message(db, membership["guild_id"], user_id, text_value)
+            cur = await db.execute("SELECT user_id FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
+            recipients = [row["user_id"] for row in await cur.fetchall() if row["user_id"] != user_id]
+            delivered = 0
+            for recipient in recipients:
+                try:
+                    await message.bot.send_message(recipient, "💬 <b>Guild Chat</b>\n" + escape(p["username"] or "Adventurer") + ": " + escape(text_value))
+                    delivered += 1
+                except Exception:
+                    pass
+            await message.answer(f"💬 Message #{message_id} saved. Delivered to {delivered} guild members.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
+    if action == "history":
+        if not membership:
+            await message.answer("Join a guild first.")
+            return
+        try:
+            rows = await get_guild_chat(db, membership["guild_id"], user_id, 10)
+            lines = ["💬 <b>Recent Guild Chat</b>"]
+            lines.extend(f"{escape(row['username'] or 'Adventurer')}: {escape(row['message'])}" for row in rows)
+            await message.answer("\n".join(lines) if rows else "No guild chat messages yet.")
         except GuildFeatureError as exc:
             await message.answer(escape(str(exc)))
         return
