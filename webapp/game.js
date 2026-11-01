@@ -65,6 +65,7 @@
   let sceneRef = null;
   let pendingSceneEffects = [];
   const pressedDirections = new Set();
+  let sprintTouchHeld = false;
   let nearMonster = false;
   let nearNpc = false;
   let nearPortal = false;
@@ -1065,7 +1066,7 @@
       }
       if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
       const baseSpeed=0.18*delta;
-      const sprintHeld=Boolean(this.sprintKey&&this.sprintKey.isDown);
+      const sprintHeld=Boolean((this.sprintKey&&this.sprintKey.isDown)||sprintTouchHeld);
       const speed=baseSpeed*(sprintHeld?1.45:1);
       let dx=0,dy=0;
       if(this.cursors.left.isDown||this.keys.A.isDown||pressedDirections.has("left"))dx=-1;
@@ -1303,6 +1304,23 @@
   document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
   document.getElementById("interact-npc").addEventListener("click",()=>{if(sceneRef)sceneRef.talkToNpc();});
   document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
+  const sprintControl=document.getElementById("sprint-control");
+  if(sprintControl){
+    const setSprint=(active,event)=>{
+      if(event)event.preventDefault();
+      sprintTouchHeld=active;
+      sprintControl.setAttribute("aria-pressed",String(active));
+    };
+    sprintControl.addEventListener("pointerdown",event=>{
+      setSprint(true,event);
+      if(sprintControl.setPointerCapture&&event.pointerId!==undefined){try{sprintControl.setPointerCapture(event.pointerId);}catch(_){}}
+    });
+    ["pointerup","pointercancel","lostpointercapture"].forEach(type=>sprintControl.addEventListener(type,event=>setSprint(false,event)));
+    sprintControl.addEventListener("contextmenu",event=>event.preventDefault());
+    sprintControl.addEventListener("keydown",event=>{if(event.key===" "||event.key==="Enter"){event.preventDefault();setSprint(true,event);}});
+    sprintControl.addEventListener("keyup",event=>{if(event.key===" "||event.key==="Enter")setSprint(false,event);});
+    sprintControl.addEventListener("blur",()=>setSprint(false));
+  }
   document.querySelectorAll("[data-dir]").forEach(button=>{
     const dir=button.dataset.dir;
     const start=event=>{
