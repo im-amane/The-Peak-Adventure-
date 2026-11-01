@@ -292,7 +292,7 @@
         },
         {
           "name": "Portals and landmarks",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Dungeons and secret areas",
@@ -791,15 +791,15 @@
   "progress_summary": {
     "total_items": 170,
     "complete_items": 126,
-    "partial_items": 18,
-    "pending_items": 26,
+    "partial_items": 19,
+    "pending_items": 25,
     "fully_implemented_percent": 74,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
     "complete": 126,
-    "partial": 18,
-    "pending": 26,
+    "partial": 19,
+    "pending": 25,
     "total": 170,
     "percentage": 74
   }
