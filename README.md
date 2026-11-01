@@ -204,3 +204,9 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - `/event attack` contributes damage, with a 30-second per-player cooldown.
 - Players who contributed damage can claim a one-time reward with `/event claim EVENT_ID`.
 - Events are shared by all players in a world and expire after one hour.
+
+
+## Monster evolution
+- Defeating the same monster five times unlocks its evolved form for that player.
+- Mastery is tracked separately for each player and monster.
+- Evolved forms have increased HP, attack, defence and speed; they appear in Telegram and Mini App encounters.
