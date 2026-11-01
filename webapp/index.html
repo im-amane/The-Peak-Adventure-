@@ -32,6 +32,18 @@
         <button id="encounter" class="encounter-button" disabled>⚔️ Find the monster</button>
       </div>
     </section>
+    <section id="battle-panel" class="battle-panel" hidden>
+      <div class="battle-heading"><div><span class="eyebrow">ENCOUNTER</span><h2 id="battle-name">Monster</h2></div><span id="battle-hp">❤️ -- / --</span></div>
+      <div class="enemy-hp-track"><div id="battle-hp-fill"></div></div>
+      <p id="battle-message">The monster blocks your path.</p>
+      <div class="battle-actions">
+        <button data-action="attack">⚔️ Attack</button>
+        <button data-action="skill">✨ Skill</button>
+        <button data-action="potion">🧪 Potion</button>
+        <button data-action="flee">🏃 Escape</button>
+      </div>
+      <p id="potion-count" class="small"></p>
+    </section>
     <section class="bottom-note">
       <p id="status">Connecting to Telegram...</p>
       <p class="small">Battles, quests, gear and saved progress are handled by the Telegram bot.</p>
