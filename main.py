@@ -1436,6 +1436,8 @@ async def api_action(request: web.Request):
         payload = await request.json()
     except (json.JSONDecodeError, ValueError):
         return web.json_response({"error": "Invalid JSON body."}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "JSON body must be an object."}, status=400)
     action = payload.get("action")
     if action not in {"attack", "skill", "potion", "flee"}:
         return web.json_response({"error": "Unknown battle action."}, status=400)
