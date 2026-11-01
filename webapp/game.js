@@ -165,8 +165,12 @@
       const choices=document.createElement("div");choices.className="story-choices";
       if (chapter.completed) {
         const selected=document.createElement("p");selected.textContent="Your choice: "+chapter.choices[chapter.choice];card.appendChild(selected);
-        const claim=document.createElement("button");claim.className="story-choice";claim.textContent="Claim "+chapter.reward+" coins";
-        claim.addEventListener("click",()=>storyAction({action:"claim",chapter_id:chapter.id}));choices.appendChild(claim);
+        if (chapter.reward_claimed) {
+          const claimed=document.createElement("p");claimed.textContent="Reward claimed.";card.appendChild(claimed);
+        } else {
+          const claim=document.createElement("button");claim.className="story-choice";claim.textContent="Claim "+chapter.reward+" coins";
+          claim.addEventListener("click",()=>storyAction({action:"claim",chapter_id:chapter.id}));choices.appendChild(claim);
+        }
       } else if (chapter.unlocked) {
         Object.entries(chapter.choices).forEach(([choiceId,description])=>{
           const button=document.createElement("button");button.className="story-choice";button.textContent=description;
