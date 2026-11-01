@@ -116,3 +116,6 @@ button:disabled{cursor:not-allowed}
 .story-choices{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .story-choice{font-size:11px;padding:7px 9px;background:#3d3153;border-color:#76648d;color:#f2e9ff}
 .story-choice:disabled{opacity:.55}
+
+
+.stamina-line{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.9rem;color:#d7e4f4}.stamina-track{height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px}.stamina-track>div{height:100%;width:100%;background:#e5b84b;transition:width .2s ease}
