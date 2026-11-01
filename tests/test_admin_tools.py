@@ -55,6 +55,8 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   data=await export_player_data(self.db,101)
   self.assertEqual(data["data"]["profile"][0]["coins"],50)
   self.assertEqual(data["data"]["security_events"],[])
+  self.assertEqual(data["data"]["premium_wallet"],[])
+  self.assertEqual(data["data"]["premium_transactions"],[])
   with self.assertRaises(AdminError): await export_player_data(self.db,202)
 
 if __name__=="__main__": unittest.main()
