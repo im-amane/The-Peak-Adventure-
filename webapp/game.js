@@ -1065,6 +1065,8 @@
       }
       if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
       const baseSpeed=0.18*delta;
+      const sprintHeld=Boolean(this.sprintKey&&this.sprintKey.isDown);
+      const speed=baseSpeed*(sprintHeld?1.45:1);
       let dx=0,dy=0;
       if(this.cursors.left.isDown||this.keys.A.isDown||pressedDirections.has("left"))dx=-1;
       if(this.cursors.right.isDown||this.keys.D.isDown||pressedDirections.has("right"))dx=1;
@@ -1090,8 +1092,7 @@
       }
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       const moving=dx!==0||dy!==0;
-      const sprinting=moving&&Boolean(this.sprintKey&&this.sprintKey.isDown);
-      const speed=baseSpeed*(sprinting?1.45:1);
+      const sprinting=moving&&sprintHeld;
       if(moving){
         if(!this.heroWalkTween){
           this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
