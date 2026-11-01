@@ -357,6 +357,20 @@ async def player_text(p):
             f"⚔️ PvP Record: <b>{p['pvp_wins']}W / {p['pvp_losses']}L</b>")
 
 
+async def build_battle_monster(user_id: int, battle):
+    """Build the correct per-player monster variant without mutating the catalogue."""
+    monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
+    if battle["is_elite"]:
+        monster = scale_elite_monster(monster)
+    evolution = await get_evolution_state(db, user_id, battle["monster_level"])
+    if evolution["evolved"]:
+        monster = scale_evolved_monster(monster)
+        monster["is_evolved"] = True
+    else:
+        monster["is_evolved"] = False
+    return monster
+
+
 async def send_battle(target, user_id: int, intro: str = "", edit: bool = False):
     assert db is not None
     cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
@@ -662,6 +676,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     evolution = await record_monster_defeat(db, user_id, b["monster_level"])
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
+    await record_monster_defeat(db, user_id, m["level"])
     await record_weekly_progress(db, user_id, "wins")
     await record_daily_progress(db, user_id, "wins")
     if m["boss"]:
@@ -2937,9 +2952,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text("This battle has ended. Use /explore to find another monster.")
         return
     p = await get_player(user_id, call.from_user.username)
-    m = dict(MONSTER_BY_LEVEL[b["monster_level"]])
-    if b["is_elite"]:
-        m = scale_elite_monster(m)
+    m = await build_battle_monster(user_id, b)
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     action = call.data.split(":", 1)[1]
     if action not in {"attack", "skill", "potion", "flee"}:
