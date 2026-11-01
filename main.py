@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import validate_monster_catalogue
+from game_rules import calculate_enemy_damage, validate_monster_catalogue
 from telegram_auth import validate_init_data
 
 load_dotenv()
@@ -1508,7 +1508,12 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     p = await get_player(user_id)
-    enemy_damage = max(3, m["attack_power"] - p["level"] * 2 - p["armor_defense"] + class_stats["defense"] + m["speed"] // 12 + random.randint(-3, 6))
+    enemy_damage = calculate_enemy_damage(
+        m["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
+        m["speed"], random.randint(-3, 6),
+        fury=m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3),
+        special=turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0,
+    )
     if m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3):
         enemy_damage = int(enemy_damage * 1.25)
     special_turn = turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0
@@ -1719,16 +1724,13 @@ async def api_action(request: web.Request):
             message = await finish_battle(user_id, True)
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
-        enemy_damage = max(
-            3,
-            monster["attack_power"] - p["level"] * 2 - p["armor_defense"]
-            + class_stats["defense"] + monster["speed"] // 12 + random.randint(-3, 6),
-        )
-        if monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3):
-            enemy_damage = int(enemy_damage * 1.25)
         special_turn = turn_count % (2 if monster["trait_effect"] == "swift" else 3) == 0
-        if special_turn:
-            enemy_damage = int(enemy_damage * 1.5)
+        enemy_damage = calculate_enemy_damage(
+            monster["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
+            monster["speed"], random.randint(-3, 6),
+            fury=monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3),
+            special=special_turn,
+        )
         new_hp = max(0, p["hp"] - enemy_damage)
         if monster["trait_effect"] == "drain":
             new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
