@@ -2599,6 +2599,7 @@ async def miniapp_state(user: dict):
         "dungeon": dungeon_state,
         "materials": material_state,
         "online_count": await count_online_players(db),
+        "settings": await get_settings(db, user_id),
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
@@ -2694,6 +2695,36 @@ async def api_quest_claim(request: web.Request):
         result = await claim_quest_reward(user["id"], payload["quest_id"])
         state = await miniapp_state(user)
     return web.json_response({"message": result, "state": state})
+
+
+
+async def api_settings(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.method == "GET":
+        async with db_lock:
+            return web.json_response(await get_settings(db, user["id"]))
+    if request.content_length is not None and request.content_length > 4096:
+        return web.json_response({"error": "Settings request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Settings payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or set(payload)-{"notifications_enabled","profile_visibility"}:
+        return web.json_response({"error": "Unsupported settings fields."}, status=400)
+    try:
+        async with db_lock:
+            settings = await update_settings(
+                db,user["id"],
+                notifications_enabled=payload.get("notifications_enabled"),
+                profile_visibility=payload.get("profile_visibility"),
+            )
+            state = await miniapp_state(user)
+    except AccountError as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+    return web.json_response({"message":"Settings saved.","settings":settings,"state":state})
 
 
 async def api_appearance(request: web.Request):
@@ -2882,6 +2913,7 @@ async def start_web_server():
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/appearance", api_appearance)
+    app.router.add_route("*", "/api/settings", api_settings)
     app.router.add_post("/api/quest/claim", api_quest_claim)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
