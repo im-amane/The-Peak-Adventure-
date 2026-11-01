@@ -580,6 +580,10 @@
         {
           "name": "Polished responsive visual design and accessibility audit",
           "status": "partial"
+        },
+        {
+          "name": "Privacy and notification settings screen",
+          "status": "complete"
         }
       ]
     },
@@ -789,18 +793,18 @@
     }
   ],
   "progress_summary": {
-    "total_items": 170,
-    "complete_items": 126,
+    "total_items": 171,
+    "complete_items": 127,
     "partial_items": 19,
     "pending_items": 25,
     "fully_implemented_percent": 74,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 126,
+    "complete": 127,
     "partial": 19,
     "pending": 25,
-    "total": 170,
+    "total": 171,
     "percentage": 74
   }
 }
