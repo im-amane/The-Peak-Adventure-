@@ -3197,11 +3197,12 @@ async def main():
     if WEBAPP_URL and not WEBAPP_URL.startswith("https://"):
         raise RuntimeError("WEBAPP_URL must use public HTTPS for Telegram Mini Apps.")
     await init_db()
-    backup_task = asyncio.create_task(database_backup_loop(), name="database-backups")
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    runner = await start_web_server()
-    log.info("Starting The Peak Adventure bot")
+    backup_task = asyncio.create_task(database_backup_loop(), name="database-backups")
+    runner = None
     try:
+        runner = await start_web_server()
+        log.info("Starting The Peak Adventure bot")
         await dp.start_polling(bot)
     finally:
         backup_task.cancel()
@@ -3209,7 +3210,8 @@ async def main():
             await backup_task
         except asyncio.CancelledError:
             pass
-        await runner.cleanup()
+        if runner is not None:
+            await runner.cleanup()
         await bot.session.close()
         if db:
             await db.close()
