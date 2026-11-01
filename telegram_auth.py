@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import json
+import re
 import time
 from urllib.parse import parse_qsl
 
@@ -18,6 +19,8 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> 
     received_hash = data.pop("hash", None)
     if not received_hash:
         raise ValueError("Missing initData hash")
+    if not re.fullmatch(r"[0-9a-f]{64}", received_hash):
+        raise ValueError("Malformed Telegram initData hash")
     check_string = "\n".join(f"{key}={value}" for key, value in sorted(data.items()))
     secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
     calculated_hash = hmac.new(secret_key, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
