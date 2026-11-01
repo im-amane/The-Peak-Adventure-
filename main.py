@@ -49,6 +49,7 @@ from elite_system import is_elite_spawn, scale_elite_monster
 from security_system import get_security_events, get_suspicious_players, init_security_tables, record_security_event
 from premium_system import PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase, get_premium_balance, get_premium_packages, init_premium_tables, make_invoice_payload, parse_invoice_payload
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
+from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -271,6 +272,7 @@ async def init_db():
     await init_daily_mission_tables(db)
     await init_roaming_event_tables(db)
     await init_evolution_tables(db)
+    await init_secret_area_tables(db)
     await init_security_tables(db)
     await init_premium_tables(db)
     await init_moderation_tables(db)
@@ -3395,6 +3397,7 @@ async def miniapp_state(user: dict):
         "world_id": world_id,
         "worlds": await get_world_choices(db, user_id, p["level"]),
         "landmark": await get_world_landmark(db, user_id, world_id),
+        "secret_area": await get_secret_area_state(db, user_id, p["level"], world_id),
         "region": region_names[region_index],
         "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
         "nearby_monsters": nearby_monsters,
@@ -3634,7 +3637,7 @@ async def api_world(request: web.Request):
     if not isinstance(payload, dict):
         return web.json_response({"error": "World payload must be a JSON object."}, status=400)
     action = payload.get("action")
-    if not isinstance(action, str) or action not in {"travel", "discover"}:
+    if not isinstance(action, str) or action not in {"travel", "discover", "secret"}:
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_world_action", "unsupported action", 2)
         return web.json_response({"error": "Unsupported world action."}, status=400)
@@ -3654,7 +3657,7 @@ async def api_world(request: web.Request):
                         return web.json_response({"error": "Finish or escape your active battle before travelling."}, status=409)
                     world = await travel_to_world(db, user_id, player["level"], world_id)
                     message = "Fast travel complete. You are now in " + world["name"] + "."
-                else:
+                elif action == "discover":
                     if set(payload) != {"action"}:
                         return web.json_response({"error": "Unexpected fields in landmark request."}, status=400)
                     world_id = await get_current_world(db, user_id, player["level"])
@@ -3662,8 +3665,14 @@ async def api_world(request: web.Request):
                     await record_weekly_progress(db, user_id, "landmarks")
                     await record_daily_progress(db, user_id, "landmarks")
                     message = f"Landmark discovered: {reward['landmark']}. +{reward['coins']} coins and +{reward['potions']} potions."
+                else:
+                    if set(payload) != {"action"}:
+                        return web.json_response({"error": "Unexpected fields in secret area request."}, status=400)
+                    world_id = await get_current_world(db, user_id, player["level"])
+                    reward = await discover_secret_area(db, user_id, player["level"], world_id)
+                    message = f"Hidden area discovered: {reward['name']}. +{reward['coins']} coins and +{reward['potions']} potions."
                 state = await miniapp_state(user)
-    except WorldError as exc:
+    except (WorldError, SecretAreaError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response({"message": message, "state": state})
 
