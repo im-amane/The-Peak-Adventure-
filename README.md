@@ -1,8 +1,8 @@
 # The Peak Adventure 🎮
 
-A Telegram turn-based dark-fantasy RPG bot. This project replaces the original music-bot starter code.
+A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project replaces the original music-bot starter code.
 
-## Current bot features
+## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
 - 100-level monster catalogue, 10 boss milestones and the original power curve
 - 100 distinct monster names, signature moves, unique-power labels and connected story entries
@@ -13,20 +13,24 @@ A Telegram turn-based dark-fantasy RPG bot. This project replaces the original m
 - Persistent story quests with one-time rewards
 - Daily rewards with a UTC 24-hour claim cooldown
 - One-time boss clears, player XP/levels, coins, HP and leaderboard
-- SQLite persistence and automated catalogue/game-rule tests
+- Phaser 3 Mini App with a custom-drawn 2D map, keyboard/touch movement and monster encounter handoff to Telegram chat
+- Telegram initData HMAC authentication for the Mini App API
+- SQLite persistence and automated catalogue/authentication tests
 
 ## Tech stack
 - Python 3.11+
 - aiogram 3
+- aiohttp
 - aiosqlite / SQLite
 - python-dotenv
-- JSON game data
+- Phaser 3 (loaded by the Mini App)
 
 ## Setup
 1. Create a Telegram bot with @BotFather.
-2. Copy `.env.example` to `.env` and set your real `BOT_TOKEN`.
-3. Install Python 3.11+.
-4. Install dependencies and start the bot:
+2. Copy `.env.example` to `.env`.
+3. Set `BOT_TOKEN` and `WEBAPP_URL`. The Mini App URL must be a public HTTPS address pointing to this server.
+4. Install Python 3.11+.
+5. Install dependencies and start the combined bot + web server:
 
 ```bash
 python -m venv .venv
@@ -34,6 +38,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 python main.py
 ```
+
+The server listens on `0.0.0.0:$PORT` when `PORT` is supplied, otherwise `WEB_PORT` (default 8080). Configure your hosting provider to route HTTPS traffic to that port. The bot's private-chat menu displays the 2D Mini App button when `WEBAPP_URL` is set.
 
 On Windows, activate with `.venv\\Scripts\\activate`.
 
@@ -64,7 +70,7 @@ python -m unittest discover -s tests -v
 
 GitHub Actions runs these checks on pushes and pull requests to `main`.
 
-## Not yet implemented
-The bot is not yet the full graphical 2D game. The Phaser 3 Telegram Mini App, real-time map movement, hand-drawn-style character/monster sprite sheets, multiplayer parties/PvP/guilds/trading, expanded quest chapters, sound/animation assets, deployment configuration and live Telegram testing remain future phases.
+## Remaining development
+The Mini App currently provides the 2D map, hero movement and encounter handoff; battles are still played using Telegram buttons. Full in-Mini-App combat animations, polished hand-drawn sprite sheets, multiple explorable maps, multiplayer parties/PvP/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
 
 Never commit your real `.env` or bot token.
