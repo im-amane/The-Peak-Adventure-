@@ -81,6 +81,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
  async def test_invalid_settings_rejected(self):
   with self.assertRaises(AccountError): await update_settings(self.db,1,"off",None)
   with self.assertRaises(AccountError): await update_settings(self.db,1,None,"private")
+  with self.assertRaises(AccountError): await update_settings(self.db,1,None,[])
  async def test_invalid_account_rejected(self):
   with self.assertRaises(AccountError): await get_settings(self.db,True)
 
