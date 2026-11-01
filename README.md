@@ -50,6 +50,18 @@ The server listens on `0.0.0.0:$PORT` when `PORT` is supplied, otherwise `WEB_PO
 
 On Windows, activate with `.venv\\Scripts\\activate`.
 
+## Cloudflare edge gateway
+
+The repository includes a Cloudflare Worker gateway in `cloudflare/worker.mjs`. It forwards only the game's known routes to the Python/Aiohttp origin, preserves Telegram Mini App authentication headers, rejects unsupported methods and oversized bodies, disables caching for authenticated API responses, and enables Worker observability. The Worker does not replace the Python game server or its SQLite database.
+
+1. Install Wrangler: `npm install --save-dev wrangler`.
+2. Authenticate: `npx wrangler login`.
+3. Set the deployed Python service URL as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (enter the HTTPS Render/VPS origin, without a path).
+4. Deploy from the repository root: `npx wrangler deploy`.
+5. Set Render's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
+
+Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Worker URL cannot be activated until a workers.dev subdomain is configured on the Cloudflare account.
+
 ## Deploy with Render
 1. Push this repository to GitHub and create a new Blueprint in Render.
 2. Select this repository so Render reads `render.yaml`.
@@ -77,6 +89,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/achievements` - View achievements
 - `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily reward
+- `/friend request|accept|decline|list|remove` - Friend requests and friend list (request by replying to a player in a group)
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
 - `/guild create|join|leave|info|top|disband` - Guild management
@@ -94,6 +107,7 @@ Run locally:
 python -m compileall -q .
 python -c "import main"
 python -m unittest discover -s tests -v
+node --test cloudflare/worker.test.mjs
 ```
 
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
