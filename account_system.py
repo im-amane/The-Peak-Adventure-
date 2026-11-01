@@ -144,12 +144,23 @@ async def _delete_player_account_unlocked(db,user_id):
     return True
 
 async def delete_player_account(db,user_id):
-    """Delete a player and all linked records as one atomic database operation."""
+    """Delete a player and linked records atomically, including inside an outer transaction."""
+    savepoint = db.in_transaction
     try:
-        await db.execute("BEGIN IMMEDIATE")
+        if savepoint:
+            await db.execute("SAVEPOINT delete_player_account")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
         result = await _delete_player_account_unlocked(db,user_id)
-        await db.commit()
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT delete_player_account")
+        else:
+            await db.commit()
         return result
     except Exception:
-        await db.rollback()
+        if savepoint:
+            await db.execute("ROLLBACK TO SAVEPOINT delete_player_account")
+            await db.execute("RELEASE SAVEPOINT delete_player_account")
+        else:
+            await db.rollback()
         raise
