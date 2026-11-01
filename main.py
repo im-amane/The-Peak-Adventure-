@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, class_evades, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 
 load_dotenv()
@@ -1477,7 +1477,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
             await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
             return
         damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
-        await db.execute("UPDATE players SET skill_cd=4 WHERE user_id=?", (user_id,))
+        await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
         action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
     else:
         damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
@@ -1520,10 +1520,15 @@ async def _battle_action_unlocked(call: CallbackQuery):
     )
     if m["trait_effect"] == "berserk" and new_enemy_hp <= int(m["hp"] * 0.5):
         enemy_damage = int(enemy_damage * 1.35)
+    evaded = class_evades(class_stats["speed"], random.randint(1, 100))
+    if evaded:
+        enemy_damage = 0
     reflect_damage = max(1, damage // 5) if m["trait_effect"] == "reflect" and action != "potion" else 0
     poison_damage = max(1, p["max_hp"] // 40) if m["trait_effect"] == "poison" else 0
     new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
     effect_notes = []
+    if evaded:
+        effect_notes.append(f"💨 Your {p['hero_class']} speed dodges the monster's strike.")
     if reflect_damage:
         effect_notes.append(f"🪞 Your strike is reflected for {reflect_damage} damage.")
     if poison_damage:
@@ -1542,7 +1547,13 @@ async def _battle_action_unlocked(call: CallbackQuery):
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
-    enemy_action = f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!" if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
+    enemy_action = (
+        f"💨 You evade {m['name']}'s attack with your {p['hero_class']} speed!"
+        if evaded else (
+            f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!"
+            if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
+        )
+    )
     enemy_action += effect_text
     await send_battle(call.message, user_id, f"{action_line}\n{enemy_action}", edit=True)
 
@@ -1706,7 +1717,7 @@ async def api_action(request: web.Request):
                 (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
                 - monster["defense"] // 2,
             ) * 2
-            await db.execute("UPDATE players SET skill_cd=4 WHERE user_id=?", (user_id,))
+            await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
             action_line = f"{class_stats['skill']} deals {damage} damage."
         else:
             damage = max(
@@ -1750,10 +1761,15 @@ async def api_action(request: web.Request):
         )
         if monster["trait_effect"] == "berserk" and new_enemy_hp <= int(monster["hp"] * 0.5):
             enemy_damage = int(enemy_damage * 1.35)
+        evaded = class_evades(class_stats["speed"], random.randint(1, 100))
+        if evaded:
+            enemy_damage = 0
         reflect_damage = max(1, damage // 5) if monster["trait_effect"] == "reflect" and action != "potion" else 0
         poison_damage = max(1, p["max_hp"] // 40) if monster["trait_effect"] == "poison" else 0
         new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
         effect_notes = []
+        if evaded:
+            effect_notes.append(f"Your {p['hero_class']} speed dodges the monster's strike.")
         if reflect_damage:
             effect_notes.append(f"Your strike is reflected for {reflect_damage} damage.")
         if poison_damage:
@@ -1781,8 +1797,11 @@ async def api_action(request: web.Request):
                 "state": await miniapp_state(user),
             })
         enemy_text = (
-            f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
-            if special_turn else f"{monster['name']} hits you for {enemy_damage}."
+            f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
+            if evaded else (
+                f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
+                if special_turn else f"{monster['name']} hits you for {enemy_damage}."
+            )
         )
         enemy_text += effect_text
         return web.json_response({
