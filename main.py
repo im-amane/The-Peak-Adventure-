@@ -4092,6 +4092,15 @@ async def database_healthcheck() -> bool:
 
 
 api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
+rate_limit_event_limiter = SlidingWindowRateLimiter(window_seconds=60)
+API_ROUTE_LIMITS = {
+    "/api/action": 20,
+    "/api/explore": 15,
+    "/api/social": 20,
+    "/api/premium-shop": 6,
+    "/api/world": 15,
+    "/api/dungeon": 15,
+}
 
 
 @web.middleware
@@ -4108,10 +4117,14 @@ async def miniapp_rate_limit(request: web.Request, handler):
             ban = await get_active_ban(db, user["id"])
         if ban:
             return web.json_response({"error": "Game account suspended.", "reason": ban["reason"]}, status=403)
-    limit = 120 if request.method == "GET" else 40
-    allowed, retry_after = api_rate_limiter.allow(f"telegram:{user['id']}", limit)
+    route_limit = API_ROUTE_LIMITS.get(request.path)
+    limit = route_limit if route_limit is not None else (120 if request.method == "GET" else 40)
+    scope = request.path if route_limit is not None else ("read" if request.method == "GET" else "write")
+    allowed, retry_after = api_rate_limiter.allow(f"telegram:{user['id']}:{scope}", limit)
     if not allowed:
-        if db is not None:
+        # Do not turn every blocked retry into another database write.
+        should_log, _ = rate_limit_event_limiter.allow(f"rate-event:{user['id']}", 1)
+        if should_log and db is not None:
             try:
                 async with db_lock:
                     await record_security_event(
