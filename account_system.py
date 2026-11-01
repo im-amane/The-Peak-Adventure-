@@ -69,6 +69,10 @@ async def delete_player_account(db,user_id):
             await db.execute("DELETE FROM group_raid_cooldowns WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
             for table in ("group_profiles","group_admins","group_players","group_missions","group_raids","group_bans"):
                 await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
+    await db.execute("DELETE FROM guild_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
+    await db.execute("DELETE FROM guild_announcements WHERE author_id=?",(user_id,))
+    await db.execute("DELETE FROM guild_raid_contributions WHERE user_id=?",(user_id,))
+    await db.execute("DELETE FROM guild_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id))
     await db.execute("DELETE FROM party_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
     cur=await db.execute("SELECT party_id FROM party_members WHERE user_id=?",(user_id,))
