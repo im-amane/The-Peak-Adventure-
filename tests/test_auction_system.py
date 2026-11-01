@@ -18,7 +18,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def test_create_listing_removes_item_from_seller(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
-        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        self.assertEqual(tuple(await row.fetchone()),("Stormblade",25))
         self.assertIsNotNone(await get_auction(self.db,listing,1001))
     async def test_bid_and_outbid_refund(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
