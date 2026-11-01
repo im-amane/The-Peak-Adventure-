@@ -153,3 +153,7 @@ Never commit your real `.env` or bot token.
 The bot creates a SQLite online backup immediately after startup and repeats it every 6 hours by default. Each snapshot is integrity-checked before publication, written atomically, and rotated to retain the newest 7 files. Configure `BACKUP_DIR`, `BACKUP_INTERVAL_SECONDS`, and `BACKUP_RETENTION` in the environment. Keep the backup directory on persistent storage and outside publicly served web assets.
 
 For recovery, stop the bot process first. Verify a snapshot with `python db_backup.py verify backups/<snapshot>.sqlite3`, then restore it with `python db_backup.py restore backups/<snapshot>.sqlite3 --database peak_adventure.db` (use your configured database path). Restore refuses unreadable snapshots and atomically replaces the database only after integrity verification. Restart the bot after verifying the recovered player data.
+
+## Mini App request protection
+
+Authenticated Mini App API requests use a per-Telegram-player sliding-window limiter: up to 120 read requests and 40 write requests per minute. Excess requests receive HTTP 429 with a `Retry-After` header. The limiter uses authenticated Telegram IDs rather than trusting forwarded client-IP headers, and its in-memory key table is bounded. This is an application-level safeguard, not a replacement for a full Cloudflare WAF/rate-limit policy or multi-instance distributed limiting.
