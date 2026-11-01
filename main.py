@@ -377,9 +377,13 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
     if not battle:
         return
     m = build_battle_monster(battle)
+    monster_flags = "👑 BOSS" if m["boss"] else " · ".join(
+        label for label, enabled in (("💀 ELITE", battle["is_elite"]), ("✨ EVOLVED", battle["is_evolved"]))
+        if enabled
+    )
     text = (f"{intro}\n\n" if intro else "") + (
         f"⚔️ <b>ENCOUNTER: {m['name']}</b>\n"
-        f"🏷️ Monster level: {m['level']} {'👑 BOSS' if m['boss'] else ('💀 ELITE' if battle['is_elite'] else ('✨ EVOLVED' if battle['is_evolved'] else ''))}\n"
+        f"🏷️ Monster level: {m['level']} {monster_flags}\\n"
         f"❤️ Enemy HP: <b>{max(0, battle['monster_hp'])}/{m['hp']}</b>\n"
         f"🧙 Your HP: <b>{p['hp']}/{p['max_hp']}</b>\n\n"
         f"<i>{m['story']}</i>\n"
