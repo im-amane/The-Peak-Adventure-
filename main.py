@@ -3343,6 +3343,7 @@ async def miniapp_state(user: dict):
         "potions": p["potions"],
         "skill_cd": p["skill_cd"],
         "coins": p["coins"],
+        "premium_gems": await get_premium_balance(db, user_id),
         "world_id": world_id,
         "worlds": await get_world_choices(db, user_id, p["level"]),
         "landmark": await get_world_landmark(db, user_id, world_id),
