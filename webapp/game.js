@@ -82,6 +82,8 @@
     ui.level.textContent = "Lv. " + data.level;
     ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
     ui.coins.textContent = data.coins;
+    const onlineCount = document.getElementById("online-count");
+    if (onlineCount) onlineCount.textContent = "🌐 " + (data.online_count || 0) + " online";
     const inventory = {
       "inventory-coins": data.coins,
       "inventory-potions": data.potions,
