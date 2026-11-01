@@ -18,6 +18,9 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE friend_requests(user_low INTEGER,user_high INTEGER,status TEXT);
   CREATE TABLE player_materials(user_id INTEGER,material_id TEXT,quantity INTEGER);
   CREATE TABLE crafted_items(user_id INTEGER,recipe_id TEXT);
+  CREATE TABLE player_worlds(user_id INTEGER,current_world INTEGER);
+  CREATE TABLE dungeon_runs(user_id INTEGER,dungeon_id INTEGER);
+  CREATE TABLE dungeon_rewards(user_id INTEGER,dungeon_id INTEGER);
   CREATE TABLE monster_discoveries(user_id INTEGER,monster_level INTEGER);
   CREATE TABLE boss_defeats(user_id INTEGER,monster_level INTEGER);
   INSERT INTO players VALUES(101,50);
