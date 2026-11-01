@@ -33,6 +33,23 @@ class WeeklyQuestTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(WeeklyQuestError):
             await claim_weekly_reward(self.db,1,"weekly_hunter",now=now)
 
+    async def test_failed_reward_rolls_back_claim_flag(self):
+        now=1790000000
+        await record_weekly_progress(self.db,1,"wins",15,now=now)
+        await self.db.execute("DELETE FROM players WHERE user_id=1")
+        await self.db.commit()
+        with self.assertRaisesRegex(WeeklyQuestError,"Player account not found"):
+            await claim_weekly_reward(self.db,1,"weekly_hunter",now=now)
+        cur=await self.db.execute(
+            "SELECT claimed FROM player_weekly_quests WHERE user_id=1 AND week_key=(SELECT week_key FROM player_weekly_quests WHERE user_id=1 LIMIT 1) AND quest_id='weekly_hunter'"
+        )
+        row=await cur.fetchone()
+        self.assertEqual(row["claimed"],0)
+
+    async def test_non_string_quest_id_is_rejected(self):
+        with self.assertRaises(WeeklyQuestError):
+            await claim_weekly_reward(self.db,1,[],now=1790000000)
+
     async def test_incomplete_quest_cannot_be_claimed(self):
         with self.assertRaises(WeeklyQuestError):
             await claim_weekly_reward(self.db,1,"weekly_hunter",now=1790000000)
