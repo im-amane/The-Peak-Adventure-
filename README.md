@@ -18,7 +18,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
 - Player trading for coins and health potions with dual confirmation
-- Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement, obstacle collision and a solid Wanderer NPC
+- Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, camera-follow scrolling, keyboard/touch movement, obstacle collision and a solid Wanderer NPC
 - Multiple level-appropriate monster locations that can be selected directly on the map, with server-side encounter validation
 - Per-world NPC dialogue and in-app boss phase display
 - Telegram initData HMAC authentication for the Mini App API
