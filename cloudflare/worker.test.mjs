@@ -69,3 +69,29 @@ test("rejects oversized POST bodies before forwarding", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("does not forward browser cookies or arbitrary authorization headers", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwarded;
+  globalThis.fetch = async (_url, init) => {
+    forwarded = new Headers(init.headers);
+    return new Response("ok", { status: 200 });
+  };
+  try {
+    await worker.fetch(
+      new Request("https://edge.example/api/state", {
+        headers: {
+          "X-Telegram-Init-Data": "safe-init-data",
+          "Cookie": "session=private",
+          "Authorization": "Bearer private",
+        },
+      }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(forwarded.get("x-telegram-init-data"), "safe-init-data");
+    assert.equal(forwarded.get("cookie"), null);
+    assert.equal(forwarded.get("authorization"), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
