@@ -1533,9 +1533,9 @@ async def _battle_action_unlocked(call: CallbackQuery):
         effect_notes.append(f"🪞 Your strike is reflected for {reflect_damage} damage.")
     if poison_damage:
         effect_notes.append(f"☠️ Poison deals {poison_damage} damage.")
-    if m["trait_effect"] == "drain":
+    if enemy_damage > 0 and m["trait_effect"] == "drain":
         new_enemy_hp = min(m["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-    elif m["trait_effect"] == "lifesteal":
+    elif enemy_damage > 0 and m["trait_effect"] == "lifesteal":
         stolen = max(1, enemy_damage // 4)
         new_enemy_hp = min(m["hp"], new_enemy_hp + stolen)
         effect_notes.append(f"🩸 The monster steals {stolen} HP.")
@@ -1774,9 +1774,9 @@ async def api_action(request: web.Request):
             effect_notes.append(f"Your strike is reflected for {reflect_damage} damage.")
         if poison_damage:
             effect_notes.append(f"Poison deals {poison_damage} damage.")
-        if monster["trait_effect"] == "drain":
+        if enemy_damage > 0 and monster["trait_effect"] == "drain":
             new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-        elif monster["trait_effect"] == "lifesteal":
+        elif enemy_damage > 0 and monster["trait_effect"] == "lifesteal":
             stolen = max(1, enemy_damage // 4)
             new_enemy_hp = min(monster["hp"], new_enemy_hp + stolen)
             effect_notes.append(f"The monster steals {stolen} HP.")
