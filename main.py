@@ -3920,11 +3920,13 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
                     result = {"trade_id":payload["trade_id"],"status":trade_status}
                 elif action == "trade_offer":
-                    if (set(payload) != {"action", "trade_id", "coins", "potions"}
+                    if (set(payload) != {"action", "trade_id", "coins", "potions", "offer_weapon", "offer_armor"}
                             or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0
                             or type(payload["coins"]) is not int or payload["coins"] < 0
-                            or type(payload["potions"]) is not int or payload["potions"] < 0):
-                        return web.json_response({"error": "A valid trade_id, non-negative coins and potions are required."}, status=400)
+                            or type(payload["potions"]) is not int or payload["potions"] < 0
+                            or type(payload["offer_weapon"]) is not bool
+                            or type(payload["offer_armor"]) is not bool):
+                        return web.json_response({"error": "A valid trade_id, non-negative balances and equipment choices are required."}, status=400)
                     trade_cur = await db.execute(
                         "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
                     )
@@ -3933,17 +3935,23 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
                     if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
                         return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
+                    weapon = player["weapon"] if payload["offer_weapon"] else None
+                    weapon_attack = player["weapon_attack"] if payload["offer_weapon"] else None
+                    armor = player["armor"] if payload["offer_armor"] else None
+                    armor_defense = player["armor_defense"] if payload["offer_armor"] else None
                     if user_id == trade["initiator_id"]:
                         await db.execute(
                             """UPDATE trades SET initiator_coins=?,initiator_potions=?,
+                               initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
                                initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
-                            (payload["coins"],payload["potions"],payload["trade_id"]),
+                            (payload["coins"],payload["potions"],weapon,weapon_attack,armor,armor_defense,payload["trade_id"]),
                         )
                     else:
                         await db.execute(
                             """UPDATE trades SET partner_coins=?,partner_potions=?,
+                               partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
                                initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
-                            (payload["coins"],payload["potions"],payload["trade_id"]),
+                            (payload["coins"],payload["potions"],weapon,weapon_attack,armor,armor_defense,payload["trade_id"]),
                         )
                     await db.commit()
                     result = {"trade_id":payload["trade_id"],"status":"open","offer_updated":True}
