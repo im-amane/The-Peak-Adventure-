@@ -61,6 +61,17 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(await get_settings(self.db,1),{"notifications_enabled":1,"profile_visibility":"public","sound_enabled":1})
  async def test_update_settings(self):
   self.assertEqual(await update_settings(self.db,1,False,"friends"),{"notifications_enabled":0,"profile_visibility":"friends","sound_enabled":1})
+ async def test_existing_settings_table_gets_sound_migration(self):
+  legacy=await aiosqlite.connect(":memory:")
+  legacy.row_factory=aiosqlite.Row
+  await legacy.execute("""CREATE TABLE player_settings(
+   user_id INTEGER PRIMARY KEY,notifications_enabled INTEGER NOT NULL DEFAULT 1,
+   profile_visibility TEXT NOT NULL DEFAULT 'public',updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )""")
+  await init_account_tables(legacy)
+  cur=await legacy.execute("PRAGMA table_info(player_settings)")
+  self.assertIn("sound_enabled",{row["name"] for row in await cur.fetchall()})
+  await legacy.close()
  async def test_sound_preference_is_persisted(self):
   self.assertEqual(await update_settings(self.db,1,sound_enabled=False),{"notifications_enabled":1,"profile_visibility":"public","sound_enabled":0})
   self.assertEqual((await get_settings(self.db,1))["sound_enabled"],0)
