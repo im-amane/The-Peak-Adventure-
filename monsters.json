@@ -1535,7 +1535,7 @@
     "advantage": "Doom Herald gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Doom Herald is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] Time fractures around the Eternal Hour, and yesterday's rain falls from tomorrow's clouds.",
+    "story": "[9/10 · Eternal Hour] DOOM HERALD announces a defeat that has not happened, then begs you to change it. Its hourglass contains the first memory of the creator, standing alone before the worlds existed and wishing for someone to answer its voice.",
     "trait_effect": "regenerate"
   },
   {
@@ -1554,7 +1554,7 @@
     "advantage": "Eternal Shade gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Shade is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The time wraith appears as a younger version of a monster you once spared.",
+    "story": "[9/10 · Eternal Hour] ETERNAL SHADE appears as a younger version of a monster you once spared. It remembers every choice erased by the loops and warns that the ninth seal is not breaking: time itself is being forced to repeat the moment the creator lost hope.",
     "trait_effect": "fury"
   },
   {
@@ -1573,7 +1573,7 @@
     "advantage": "Fate Breaker gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Fate Breaker is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The doom herald announces a defeat that has not happened, then begs you to change it.",
+    "story": "[9/10 · Eternal Hour] FATE BREAKER cuts the threads connecting each monster to the corruption. It gives you a severed thread bearing your own name, revealing that the creator has woven your journey into the final timeline as its last chance to be understood.",
     "trait_effect": "swift"
   },
   {
@@ -1592,7 +1592,7 @@
     "advantage": "Chrono Hydra gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Chrono Hydra is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The eternal shade steals seconds from your life to replay a forgotten conversation.",
+    "story": "[9/10 · Eternal Hour] CHRONO HYDRA grows a new head for every future it has witnessed. Each head speaks a different ending, but all fall silent when shown the memories restored by the eight previous seals.",
     "trait_effect": "armored"
   },
   {
@@ -1611,7 +1611,7 @@
     "advantage": "Oblivion Knight gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Oblivion Knight is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The fate breaker cuts the thread connecting each monster to the corruption.",
+    "story": "[9/10 · Eternal Hour] OBLIVION KNIGHT remembers a timeline where you became the final enemy and destroyed every world to end the creator's suffering. It challenges you to prove that mercy can be stronger than an ending.",
     "trait_effect": "drain"
   },
   {
@@ -1630,7 +1630,7 @@
     "advantage": "Ruin Emperor gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Ruin Emperor is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The chrono hydra grows a new head for every future it has already witnessed.",
+    "story": "[9/10 · Eternal Hour] RUIN EMPEROR has ruled a thousand endings and fears this one most of all. Its throne is built from abandoned timelines, and beneath it lies the ninth seal, ticking like a clock with one second remaining.",
     "trait_effect": "poison"
   },
   {
@@ -1649,7 +1649,7 @@
     "advantage": "Endless Devourer gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Endless Devourer is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The oblivion knight remembers a timeline where you became the final enemy.",
+    "story": "[9/10 · Eternal Hour] ENDLESS DEVOURER reveals that every loop began with a single act of mercy: the creator spared a dying world, then carried the grief of every life it could not save. It asks you to remember the victims, not just the power that caused their pain.",
     "trait_effect": "shield"
   },
   {
@@ -1668,7 +1668,7 @@
     "advantage": "Eternal Sovereign gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Sovereign is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The ruin emperor has ruled a thousand endings and fears this one most of all.",
+    "story": "[9/10 · Eternal Hour] ETERNAL SOVEREIGN holds the final second in place so the worlds do not collapse into their discarded futures. It offers to release time if you promise that the creator's story will be heard before judgment is passed.",
     "trait_effect": "reflect"
   },
   {
@@ -1687,7 +1687,7 @@
     "advantage": "Eternal Tyrant gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Tyrant is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The endless devourer reveals that every loop began with a single act of mercy.",
+    "story": "[9/10 · Eternal Hour] ETERNAL TYRANT guards the last ticking fragment of the ninth seal. When it falls, the loop ends and the fragment becomes a doorway to the Origin Realm, where the creator waits without armies or guards.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1706,7 +1706,7 @@
     "advantage": "Eternal Overlord gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Overlord is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The ninth seal opens. Time stops, and every creature you met turns toward the same distant light.",
+    "story": "[9/10 · Eternal Hour] Eternal Overlord opens the ninth seal and stops time across every world. The creatures you met turn toward the same distant light, and the memories of all nine guardians gather around you. They reveal the creator's true fear: not death, but being left alone again. The final path leads to the Origin Realm, where the first blue spark was born.",
     "trait_effect": "berserk"
   },
   {
