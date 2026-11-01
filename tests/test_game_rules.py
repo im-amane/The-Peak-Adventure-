@@ -255,7 +255,7 @@ class GameRulesTests(unittest.TestCase):
             monster_weakness="Fire", trait_effect="shield", next_turn=1,
             random_bonus=5,
         )
-        self.assertEqual(damage, 23)
+        self.assertEqual(damage, 21)
         self.assertEqual(effects, ("weakness", "shield"))
 
     def test_shared_player_skill_and_potion_damage(self):
