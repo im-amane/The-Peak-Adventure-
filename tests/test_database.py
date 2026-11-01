@@ -66,6 +66,7 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state["dungeon"])
         self.assertEqual(len(state["daily_missions"]), 3)
         self.assertTrue(all(item["progress"] == 0 for item in state["daily_missions"]))
+        self.assertEqual(state["premium_gems"], 0)
         self.assertEqual(state["social"]["friend_requests"], [])
         self.assertEqual(state["social"]["party_invites"], [])
         self.assertEqual(state["social"]["pending_guild_invites"], [])
