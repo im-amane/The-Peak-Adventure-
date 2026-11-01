@@ -17,7 +17,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE group_bans(chat_id INTEGER,user_id INTEGER,actor_id INTEGER);
   CREATE TABLE friend_requests(user_low INTEGER,user_high INTEGER);
   CREATE TABLE party_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
-  CREATE TABLE party_members(user_id INTEGER PRIMARY KEY,party_id INTEGER);
+  CREATE TABLE parties(party_id INTEGER PRIMARY KEY,leader_id INTEGER);
+  CREATE TABLE party_members(user_id INTEGER PRIMARY KEY,party_id INTEGER,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE group_raid_contributions(raid_id INTEGER,user_id INTEGER);
   CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER);
   CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER);
@@ -57,6 +58,12 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   for table in ("players","friend_requests","duels","trades"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
    self.assertEqual((await cur.fetchone())["n"],0)
+ async def test_delete_party_leader_transfers_leadership(self):
+  await self.db.execute("INSERT INTO parties VALUES(7,1)")
+  await self.db.execute("INSERT INTO party_members VALUES(1,7,CURRENT_TIMESTAMP),(2,7,CURRENT_TIMESTAMP)")
+  await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT leader_id FROM parties WHERE party_id=7")
+  self.assertEqual((await cur.fetchone())["leader_id"],2)
  async def test_delete_missing_account_rejected(self):
   with self.assertRaises(AccountError): await delete_player_account(self.db,999)
  async def test_delete_account_transfers_group_owner(self):
