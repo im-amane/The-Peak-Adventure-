@@ -34,6 +34,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE dungeon_rewards(user_id INTEGER,dungeon_id INTEGER);
   CREATE TABLE player_materials(user_id INTEGER,material_id TEXT,quantity INTEGER);
   CREATE TABLE crafted_items(user_id INTEGER,recipe_id TEXT);
+  CREATE TABLE player_worlds(user_id INTEGER,current_world INTEGER);
   INSERT INTO players VALUES(1,'leader',10,0),(2,'member',20,0);
   INSERT INTO guilds VALUES(5,1);
   INSERT INTO guild_members VALUES(1,5,'leader',CURRENT_TIMESTAMP),(2,5,'member',CURRENT_TIMESTAMP);
