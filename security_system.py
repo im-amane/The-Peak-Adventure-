@@ -1,6 +1,10 @@
 """Abuse telemetry for suspicious game actions; never auto-bans players."""
 import aiosqlite
 
+MAX_SECURITY_EVENTS = 50_000
+RETENTION_DAYS = 30
+CLEANUP_INTERVAL = 250
+
 EVENT_TYPES = {
     "invalid_battle_action",
     "invalid_monster_request",
@@ -39,10 +43,23 @@ async def record_security_event(db, user_id, event_type, details="", severity=1)
     if not isinstance(severity, int) or isinstance(severity, bool) or not 1 <= severity <= 5:
         raise SecurityEventError("Security severity must be between 1 and 5.")
     clean = " ".join(str(details or "").split())[:240]
-    await db.execute(
+    cur = await db.execute(
         "INSERT INTO security_events(user_id,event_type,severity,details) VALUES(?,?,?,?)",
         (user_id, event_type, severity, clean),
     )
+    if int(cur.lastrowid) % CLEANUP_INTERVAL == 0:
+        await db.execute(
+            "DELETE FROM security_events WHERE created_at < datetime('now', ?)",
+            (f"-{RETENTION_DAYS} days",),
+        )
+        await db.execute(
+            """DELETE FROM security_events
+               WHERE event_id <= (
+                 SELECT event_id FROM security_events
+                 ORDER BY event_id DESC LIMIT 1 OFFSET ?
+               )""",
+            (MAX_SECURITY_EVENTS - 1,),
+        )
     await db.commit()
 
 
