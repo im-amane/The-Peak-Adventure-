@@ -224,7 +224,7 @@ def resolve_enemy_turn(
         raise ValueError("combat turn values must be integers")
     if not 1 <= turn_count or not 0 <= monster_hp_after_action <= monster_max_hp:
         raise ValueError("invalid monster turn state")
-    if not 0 <= monster_hp_before <= monster_max_hp or not 0 <= player_hp <= player_max_hp:
+    if not 0 <= monster_hp_before <= monster_max_hp or player_hp < 0 or player_max_hp <= 0:
         raise ValueError("invalid combat health state")
     if type(is_boss) is not bool or not isinstance(boss_name, str) or not isinstance(hero_class, str):
         raise ValueError("invalid combat identity")
