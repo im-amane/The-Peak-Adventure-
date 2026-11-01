@@ -264,7 +264,7 @@
         },
         {
           "name": "Level-based world/region selection",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Camera scrolling and map bounds",
@@ -300,7 +300,7 @@
         },
         {
           "name": "World unlock and fast travel",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Weather and day/night cycle",
@@ -790,17 +790,17 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 119,
-    "partial_items": 17,
-    "pending_items": 34,
-    "fully_implemented_percent": 70,
+    "complete_items": 121,
+    "partial_items": 16,
+    "pending_items": 33,
+    "fully_implemented_percent": 71,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 119,
-    "partial": 17,
-    "pending": 34,
+    "complete": 121,
+    "partial": 16,
+    "pending": 33,
     "total": 170,
-    "percentage": 70
+    "percentage": 71
   }
 }
