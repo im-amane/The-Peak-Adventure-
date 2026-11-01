@@ -12,7 +12,8 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Equipment shop with level-gated weapons, armor and potions
 - Persistent story quests and achievements with one-time rewards
 - Daily rewards with a UTC 24-hour claim cooldown
-- One-time boss clears, player XP/levels, coins, HP and leaderboards\n- Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
+- One-time boss clears, player XP/levels, coins, HP and leaderboards
+- Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement and in-app battle controls
 - Telegram initData HMAC authentication for the Mini App API
 - SQLite persistence and automated catalogue/authentication tests
@@ -59,6 +60,8 @@ On Windows, activate with `.venv\\Scripts\\activate`.
 - `/achievements` - View achievements
 - `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily reward
+- `/duel` - Challenge a player by replying to their message in a group
+- `/pvprank` - PvP rankings
 - `/leaderboard` - Top adventurers
 - `/help` - Show commands
 
