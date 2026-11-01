@@ -46,6 +46,15 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         columns = {row["name"] for row in await cur.fetchall()}
         self.assertIn("is_elite", columns)
 
+    async def test_miniapp_state_exposes_unlocked_dungeon_choices(self):
+        user = {"id": 987654323, "first_name": "DungeonHero"}
+        state = await main.miniapp_state(user)
+        self.assertEqual(len(state["dungeons"]), 10)
+        self.assertTrue(state["dungeons"][0]["unlocked"])
+        self.assertFalse(state["dungeons"][1]["unlocked"])
+        self.assertFalse(state["dungeons"][0]["claimed"])
+        self.assertIsNone(state["dungeon"])
+
     async def test_multiplayer_tables_exist(self):
         for table in ("duels", "guilds", "guild_members", "trades", "quest_progress", "achievement_progress"):
             cur = await main.db.execute(
