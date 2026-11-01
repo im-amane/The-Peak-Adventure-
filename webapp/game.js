@@ -5,6 +5,8 @@
   const ui = {
     coins: document.getElementById("coins"),
     premiumGems: document.getElementById("premium-gems"),
+    premiumShopItems: document.getElementById("premium-shop-items"),
+    premiumGemBalance: document.getElementById("premium-gem-balance"),
     name: document.getElementById("hero-name"),
     heroClass: document.getElementById("hero-class"),
     level: document.getElementById("level"),
@@ -363,6 +365,21 @@
       requestInFlight=false;
       if(gameState) applyState(gameState);
     }
+  }
+
+  function renderPremiumShop(data) {
+    if(!ui.premiumShopItems)return;
+    ui.premiumShopItems.replaceChildren();
+    const balance=Number(data.premium_gems)||0;
+    if(ui.premiumGemBalance)ui.premiumGemBalance.textContent=balance+" gems";
+    (data.premium_shop||[]).forEach(item=>{
+      const card=document.createElement("article");card.className="premium-shop-item";
+      const title=document.createElement("strong");title.textContent=item.title+" · "+item.cost+" gems";
+      const description=document.createElement("p");description.textContent=item.description;
+      const button=document.createElement("button");button.type="button";button.textContent="Buy";
+      button.dataset.premiumItem=item.item_id;button.disabled=balance<item.cost;
+      card.append(title,description,button);ui.premiumShopItems.appendChild(card);
+    });
   }
 
   function renderSocial(social) {
@@ -1175,6 +1192,15 @@
     }catch(_){}
   });
 
+  if(ui.premiumShopItems)ui.premiumShopItems.addEventListener("click",async event=>{
+    const button=event.target.closest("[data-premium-item]");
+    if(!button||button.disabled||requestInFlight)return;
+    button.disabled=true;
+    try{
+      const result=await postApi("/api/premium-shop",{item_id:button.dataset.premiumItem});
+      applyState(result.state,result.message);
+    }catch(error){ui.status.textContent=error.message;button.disabled=false;}
+  });
   if(ui.socialSearchForm)ui.socialSearchForm.addEventListener("submit",async event=>{
     event.preventDefault();
     const query=ui.socialSearchInput.value.trim();
