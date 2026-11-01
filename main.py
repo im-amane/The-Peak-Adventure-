@@ -29,7 +29,7 @@ from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
 from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
-from world_system import WORLD_NAMES, WorldError, get_current_world, get_world_choices, init_world_tables, travel_to_world, world_encounter_levels
+from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
@@ -2060,6 +2060,33 @@ async def dungeon_command(message: Message):
         else:
             await message.answer("Commands: /dungeon enter ID, /dungeon status, /dungeon abandon, /dungeon claim.")
     except DungeonError as exc:
+        await message.answer(escape(str(exc)))
+
+
+
+@dp.message(Command("landmarks"))
+async def landmarks_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    worlds = await get_world_choices(db, message.from_user.id, player["level"])
+    lines = ["🗿 <b>World Landmarks</b>"]
+    for world in worlds:
+        if not world["unlocked"]:
+            continue
+        landmark = await get_world_landmark(db, message.from_user.id, world["id"])
+        marker = "✅" if landmark["discovered"] else "✨"
+        lines.append(marker + " " + str(world["id"]) + ". " + landmark["landmark"] + " · " + world["name"])
+    lines.append("Use /discover to explore the landmark in your current world.")
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("discover"))
+async def discover_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    world_id = await get_current_world(db, message.from_user.id, player["level"])
+    try:
+        reward = await discover_world_landmark(db, message.from_user.id, player["level"], world_id)
+        await message.answer("✨ <b>Landmark discovered!</b>\n" + escape(reward["landmark"]) + "\n🪙 +" + str(reward["coins"]) + " coins · 🧪 +" + str(reward["potions"]) + " potions.")
+    except WorldError as exc:
         await message.answer(escape(str(exc)))
 
 
