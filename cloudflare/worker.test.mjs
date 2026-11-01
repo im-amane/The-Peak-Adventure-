@@ -454,7 +454,7 @@ test("hero workshop persists face and body customization controls", () => {
   assert.match(game, /appearance\.face==="scarred"/);
   assert.match(game, /bodyScale/);
   assert.match(game, /this\.heroBaseScaleX=this\.hero\.scaleX/);
-  assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX,1\)/);
+  assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX\*this\.heroFacing,1\)/);
   assert.match(game, /\["race","skin","hair","face","body","outfit"\]/);
 });
 
