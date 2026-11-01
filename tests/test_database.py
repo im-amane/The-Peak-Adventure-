@@ -54,6 +54,8 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state["dungeons"][1]["unlocked"])
         self.assertFalse(state["dungeons"][0]["claimed"])
         self.assertIsNone(state["dungeon"])
+        self.assertEqual(len(state["daily_missions"]), 3)
+        self.assertTrue(all(item["progress"] == 0 for item in state["daily_missions"]))
 
     async def test_multiplayer_tables_exist(self):
         for table in ("duels", "guilds", "guild_members", "trades", "quest_progress", "achievement_progress"):
