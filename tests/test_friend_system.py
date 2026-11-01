@@ -57,6 +57,12 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(FriendError, "between 2 and 32"):
             await search_players(self.db, 101, "x")
 
+    async def test_pending_friend_requests_are_private_to_target(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        incoming = await list_pending_friend_requests(self.db, 202)
+        self.assertEqual([row["request_id"] for row in incoming], [request_id])
+        self.assertEqual(await list_pending_friend_requests(self.db, 101), [])
+
     async def test_self_request_is_rejected(self):
         with self.assertRaisesRegex(FriendError, "yourself"):
             await send_friend_request(self.db, 101, 101)
