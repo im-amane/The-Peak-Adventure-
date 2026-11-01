@@ -1,0 +1,48 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+import main
+
+
+class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.previous_path = main.DB_PATH
+        main.DB_PATH = str(Path(self.temp_dir.name) / "test-adventure.db")
+        main.db = None
+        await main.init_db()
+
+    async def asyncTearDown(self):
+        if main.db is not None:
+            await main.db.close()
+            main.db = None
+        main.DB_PATH = self.previous_path
+        self.temp_dir.cleanup()
+
+    async def test_player_defaults_and_profile(self):
+        player = await main.get_player(987654321, "TestHero")
+        self.assertEqual(player["level"], 1)
+        self.assertEqual(player["hp"], player["max_hp"])
+        self.assertEqual(player["class_selected"], 0)
+        self.assertEqual(player["weapon"], "Rusty Sword")
+        profile = await main.player_text(player)
+        self.assertIn("TestHero", profile)
+        self.assertIn("Guild: None", profile)
+
+    async def test_daily_reward_has_rolling_cooldown(self):
+        await main.get_player(987654322, "DailyHero")
+        self.assertTrue(await main.claim_daily_reward(987654322))
+        self.assertFalse(await main.claim_daily_reward(987654322))
+
+    async def test_multiplayer_tables_exist(self):
+        for table in ("duels", "guilds", "guild_members", "trades", "quest_progress", "achievement_progress"):
+            cur = await main.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            self.assertIsNotNone(await cur.fetchone(), table)
+
+
+if __name__ == "__main__":
+    unittest.main()
