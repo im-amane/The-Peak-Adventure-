@@ -157,3 +157,11 @@ For recovery, stop the bot process first. Verify a snapshot with `python db_back
 ## Mini App request protection
 
 Authenticated Mini App API requests use a per-Telegram-player sliding-window limiter: up to 120 read requests and 40 write requests per minute. Excess requests receive HTTP 429 with a `Retry-After` header. The limiter uses authenticated Telegram IDs rather than trusting forwarded client-IP headers, and its in-memory key table is bounded. This is an application-level safeguard, not a replacement for a full Cloudflare WAF/rate-limit policy or multi-instance distributed limiting.
+
+
+
+## Stamina
+- Every player starts with 100 stamina.
+- Exploring costs 10 stamina; stamina regenerates by 1 point every five minutes.
+- Stamina persists in SQLite and is exposed to the Mini App state API.
+- Use `/stamina` to inspect current stamina and regeneration timing.
