@@ -5,13 +5,13 @@ BOSS_LEVELS = frozenset(range(10, MAX_LEVEL + 1, 10))
 
 
 def xp_required(level: int) -> int:
-    if not 1 <= level <= MAX_LEVEL:
+    if type(level) is not int or not 1 <= level <= MAX_LEVEL:
         raise ValueError("level must be between 1 and 100")
     return level * 100
 
 
 def expected_monster_power(level: int) -> int:
-    if not 1 <= level <= MAX_LEVEL:
+    if type(level) is not int or not 1 <= level <= MAX_LEVEL:
         raise ValueError("level must be between 1 and 100")
     power = 100.0
     for current in range(2, level + 1):
@@ -119,7 +119,7 @@ def skill_cooldown_for_class(hero_class: str) -> int:
 
 def class_evades(class_speed: int, roll: int) -> bool:
     """Resolve a class speed dodge roll where speed is the percentage chance."""
-    if not 0 <= class_speed <= 100 or not 1 <= roll <= 100:
+    if type(class_speed) is not int or type(roll) is not int or not 0 <= class_speed <= 100 or not 1 <= roll <= 100:
         raise ValueError("speed must be 0..100 and roll must be 1..100")
     return roll <= class_speed
 
@@ -139,7 +139,7 @@ def nearby_monster_levels(level: int, boss_defeated: bool = False) -> tuple[int,
  
 def get_boss_phase(is_boss: bool, current_hp: int, max_hp: int) -> int:
     """Bosses escalate at 60% and 25% health; normal monsters stay in phase one."""
-    if max_hp <= 0 or current_hp < 0:
+    if type(is_boss) is not bool or type(current_hp) is not int or type(max_hp) is not int or max_hp <= 0 or current_hp < 0:
         raise ValueError("monster HP values must be non-negative and max_hp positive")
     if not is_boss:
         return 1
