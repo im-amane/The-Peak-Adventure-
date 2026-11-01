@@ -32,6 +32,7 @@ from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_missi
 from world_system import WORLD_NAMES, WorldError, get_current_world, get_world_choices, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
+from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -206,6 +207,7 @@ async def init_db():
     await init_world_tables(db)
     await init_dungeon_tables(db)
     await init_crafting_tables(db)
+    await init_presence_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -215,7 +217,9 @@ async def get_player(user_id: int, username: str | None = None):
         await db.execute("UPDATE players SET username=? WHERE user_id=?", (username, user_id))
     await db.commit()
     cur = await db.execute("SELECT * FROM players WHERE user_id=?", (user_id,))
-    return await cur.fetchone()
+    player = await cur.fetchone()
+    await touch_presence(db, user_id)
+    return player
 
 
 def menu(include_webapp: bool = False):
@@ -230,7 +234,7 @@ def menu(include_webapp: bool = False):
          InlineKeyboardButton(text="⚔️ PvP Rank", callback_data="pvprank")],
         [InlineKeyboardButton(text="👥 Friends", callback_data="friend_list"),
          InlineKeyboardButton(text="🛡️ Party", callback_data="party_info")],
-        [InlineKeyboardButton(text="🏰 Guild", callback_data="guild_info")],
+        [InlineKeyboardButton(text="🏰 Guild", callback_data="guild_info"), InlineKeyboardButton(text="🌐 Online", callback_data="online")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ]
@@ -1724,6 +1728,19 @@ async def start(message: Message):
 
 
 
+
+@dp.message(Command("online"))
+async def online_command(message: Message):
+    count = await count_online_players(db)
+    friends = await list_online_friends(db, message.from_user.id)
+    lines = ["🌐 <b>Adventure Presence</b>", "Active players in the last 5 minutes: " + str(count), "Your online friends:"]
+    if friends:
+        lines.extend([escape(row["username"] or "Adventurer") + " · Lv." + str(row["level"]) for row in friends])
+    else:
+        lines.append("No friends are currently online.")
+    await message.answer("\n".join(lines))
+
+
 @dp.message(Command("settings"))
 async def settings_command(message: Message):
     user_id = message.from_user.id
@@ -2543,6 +2560,7 @@ async def miniapp_state(user: dict):
         "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "dungeon": dungeon_state,
         "materials": material_state,
+        "online_count": await count_online_players(db),
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
