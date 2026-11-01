@@ -496,6 +496,7 @@
           const waiting=document.createElement("p");waiting.className="small";
           waiting.textContent="Waiting for "+trade.other_username+" to respond to trade #"+trade.trade_id+".";
           card.appendChild(waiting);
+          addAction(card,"Cancel invitation","trade_cancel",{tradeId:trade.trade_id});
         }
       });
     }else{
@@ -1359,7 +1360,7 @@
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
     if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
-    if(action==="trade_accept"||action==="trade_decline")payload.trade_id=Number(button.dataset.tradeId);
+    if(action==="trade_accept"||action==="trade_decline"||action==="trade_cancel")payload.trade_id=Number(button.dataset.tradeId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
   });
