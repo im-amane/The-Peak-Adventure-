@@ -30,6 +30,7 @@ from character_system import AppearanceError, get_appearance, init_character_tab
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
 from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
 from world_system import WORLD_NAMES, WorldError, get_current_world, get_world_choices, init_world_tables, travel_to_world, world_encounter_levels
+from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -201,6 +202,7 @@ async def init_db():
     await init_account_tables(db)
     await init_guild_features(db)
     await init_world_tables(db)
+    await init_dungeon_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
