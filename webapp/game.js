@@ -968,8 +968,9 @@
       this.selectedMonster=null;
       this.movePath=[];
       this.movePathIndex=0;
+      // Idle animation changes scale, not world position, so it cannot fight movement.
       this.heroIdle = this.tweens.add({
-        targets:this.hero, y:this.hero.y-3, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
+        targets:this.hero, scaleY:1.025, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
       });
       this.add.text(this.cameras.main.width*0.5,28,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5).setScrollFactor(0);
       this.cursors=this.input.keyboard.createCursorKeys();
@@ -1032,7 +1033,7 @@
       if(!this.hero)return;
       this.tweens.killTweensOf(this.hero);
       this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:this.heroBaseScaleX||1,scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
-      this.heroIdle=this.tweens.add({targets:this.hero,y:this.hero.y-3,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+      this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
     }
     playLevelUpAnimation(){
       if(!this.hero)return;
@@ -1115,15 +1116,25 @@
       const moving=dx!==0||dy!==0;
       const sprinting=moving&&sprintHeld;
       if(moving){
+        if(this.heroIdle){
+          this.heroIdle.stop();
+          this.heroIdle=null;
+        }
         if(!this.heroWalkTween){
+          this.hero.setScale(this.heroBaseScaleX,1);
           this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
         this.hero.setRotation(dx*0.045);
-      }else if(this.heroWalkTween){
-        this.heroWalkTween.stop();
-        this.heroWalkTween=null;
-        this.hero.setScale(this.heroBaseScaleX,1);
-        this.hero.setRotation(0);
+      }else{
+        if(this.heroWalkTween){
+          this.heroWalkTween.stop();
+          this.heroWalkTween=null;
+          this.hero.setScale(this.heroBaseScaleX,1);
+          this.hero.setRotation(0);
+        }
+        if(!this.heroIdle){
+          this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+        }
       }
       const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.worldWidth-24);
       if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
