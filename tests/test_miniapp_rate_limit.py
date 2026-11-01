@@ -18,14 +18,17 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.previous_api_limiter = main.api_rate_limiter
         self.previous_event_limiter = main.rate_limit_event_limiter
+        self.previous_route_limiter = main.api_route_rate_limiter
         self.previous_db = main.db
         main.api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
         main.rate_limit_event_limiter = SlidingWindowRateLimiter(window_seconds=60)
+        main.api_route_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
         main.db = None
 
     async def asyncTearDown(self):
         main.api_rate_limiter = self.previous_api_limiter
         main.rate_limit_event_limiter = self.previous_event_limiter
+        main.api_route_rate_limiter = self.previous_route_limiter
         main.db = self.previous_db
 
     async def call_middleware(self, path, method="POST"):
