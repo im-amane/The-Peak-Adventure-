@@ -55,7 +55,11 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await cur.fetchone())["role"],"leader")
  async def test_delete_account_removes_social_and_economy_data(self):
   await delete_player_account(self.db,1)
-  for table in ("players","friend_requests","duels","trades"):
+  cur=await self.db.execute("SELECT COUNT(*) n FROM players")
+  self.assertEqual((await cur.fetchone())["n"],1)
+  cur=await self.db.execute("SELECT user_id FROM players")
+  self.assertEqual((await cur.fetchone())["user_id"],2)
+  for table in ("friend_requests","duels","trades"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
    self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_party_leader_transfers_leadership(self):
