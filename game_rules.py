@@ -277,3 +277,62 @@ def resolve_enemy_turn(
         "boss_phase": current_phase,
         "effect_notes": notes,
     }
+
+
+def resolve_player_attack(
+    action: str,
+    *,
+    player_level: int,
+    class_attack: int,
+    weapon_attack: int,
+    monster_defense: int,
+    class_element: str,
+    monster_element: str,
+    monster_weakness: str,
+    trait_effect: str,
+    next_turn: int,
+    random_bonus: int,
+) -> tuple[int, tuple[str, ...]]:
+    """Calculate player attack damage and shared elemental/monster mitigation."""
+    numeric_values = (
+        player_level, class_attack, weapon_attack, monster_defense,
+        next_turn, random_bonus,
+    )
+    if any(type(value) is not int for value in numeric_values):
+        raise ValueError("player attack values must be integers")
+    if player_level < 1 or weapon_attack < 0 or monster_defense < 0 or next_turn < 1:
+        raise ValueError("invalid player attack state")
+    if action not in {"attack", "skill", "potion"}:
+        raise ValueError("unknown player combat action")
+    if not all(isinstance(value, str) and value for value in (
+        class_element, monster_element, monster_weakness, trait_effect,
+    )):
+        raise ValueError("invalid player attack elements or monster trait")
+    if action == "potion":
+        return 0, ()
+    if action == "skill":
+        damage = max(
+            25,
+            player_level * 13 + 30 + class_attack * 2 + weapon_attack * 2
+            - monster_defense // 2,
+        ) * 2
+    else:
+        damage = max(
+            8,
+            player_level * 10 + class_attack + weapon_attack
+            + random_bonus - monster_defense // 3,
+        )
+    effects = []
+    if class_element == monster_weakness:
+        damage = int(damage * 1.5)
+        effects.append("weakness")
+    elif class_element == monster_element:
+        damage = int(damage * 0.8)
+        effects.append("resisted")
+    if trait_effect == "armored":
+        damage = max(1, int(damage * 0.85))
+        effects.append("armored")
+    if trait_effect == "shield" and next_turn % 3 == 1:
+        damage = max(1, int(damage * 0.7))
+        effects.append("shield")
+    return max(1, damage), tuple(effects)
