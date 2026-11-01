@@ -47,7 +47,8 @@ async def init_db():
     );
     CREATE TABLE IF NOT EXISTS battles (
       user_id INTEGER PRIMARY KEY, monster_level INTEGER NOT NULL,
-      monster_hp INTEGER NOT NULL, message_id INTEGER
+      monster_hp INTEGER NOT NULL, message_id INTEGER,
+      turn_count INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS daily_claims (
       user_id INTEGER PRIMARY KEY, claimed_on TEXT NOT NULL
@@ -59,6 +60,10 @@ async def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
+    try:
+        await db.execute("ALTER TABLE battles ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0")
+    except aiosqlite.OperationalError:
+        pass
     await db.commit()
 
 
@@ -119,7 +124,9 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         f"❤️ Enemy HP: <b>{max(0, battle['monster_hp'])}/{m['hp']}</b>\n"
         f"🧙 Your HP: <b>{p['hp']}/{p['max_hp']}</b>\n\n"
         f"<i>{m['story']}</i>\n"
-        f"✨ Special: {m['special_move']}"
+        f"✨ Special: {m['special_move']}\n"
+        f"🧬 Trait: {m['unique_power']} ({m['trait_effect']})\n"
+        f"🎯 Weakness: {m['weakness']}"
     )
     if edit:
         await target.edit_text(text, reply_markup=battle_keyboard())
@@ -401,7 +408,14 @@ async def _battle_action_unlocked(call: CallbackQuery):
     else:
         damage = max(8, p["level"] * 10 + random.randint(5, 18) - m["defense"] // 3)
         action_line = f"⚔️ You strike for {damage} damage."
+    if m["trait_effect"] == "armored":
+        damage = max(1, int(damage * 0.85))
+        action_line += " 🛡️ Its armor absorbs part of the hit."
     new_enemy_hp = max(0, b["monster_hp"] - damage)
+    turn_count = b["turn_count"] + 1
+    if new_enemy_hp > 0 and m["trait_effect"] == "regenerate":
+        regen = max(1, m["hp"] // 50)
+        new_enemy_hp = min(m["hp"], new_enemy_hp + regen)
     if new_enemy_hp == 0:
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
         await db.commit()
@@ -409,16 +423,24 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu())
         return
     p = await get_player(user_id)
-    enemy_damage = max(3, m["attack_power"] - p["level"] * 2 + random.randint(-3, 6))
+    enemy_damage = max(3, m["attack_power"] - p["level"] * 2 + m["speed"] // 12 + random.randint(-3, 6))
+    if m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3):
+        enemy_damage = int(enemy_damage * 1.25)
+    special_turn = turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0
+    if special_turn:
+        enemy_damage = int(enemy_damage * 1.5)
     new_hp = max(0, p["hp"] - enemy_damage)
-    await db.execute("UPDATE battles SET monster_hp=? WHERE user_id=?", (new_enemy_hp, user_id))
+    if m["trait_effect"] == "drain":
+        new_enemy_hp = min(m["hp"], new_enemy_hp + max(1, enemy_damage // 10))
+    await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
     await db.commit()
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu())
         return
-    await send_battle(call.message, user_id, f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.", edit=True)
+    enemy_action = f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!" if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
+    await send_battle(call.message, user_id, f"{action_line}\n{enemy_action}", edit=True)
 
 
 @dp.callback_query(F.data.startswith("battle:"))
