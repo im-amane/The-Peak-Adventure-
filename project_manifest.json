@@ -716,7 +716,7 @@
         },
         {
           "name": "Anti-cheat and economy abuse detection",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Rate limiting and abuse protection audit",
@@ -732,7 +732,7 @@
         },
         {
           "name": "Production monitoring and alerting",
-          "status": "pending"
+          "status": "partial"
         }
       ]
     },
@@ -771,11 +771,11 @@
         },
         {
           "name": "Multiplayer concurrency testing",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Security and load testing",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Render/Docker deployment configuration",
