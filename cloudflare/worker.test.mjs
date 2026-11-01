@@ -160,3 +160,35 @@ test("settings API allows GET and POST only", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test("dungeon API is POST-only and forwards authenticated requests", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl;
+  let forwardedBody;
+  globalThis.fetch = async (url, init) => {
+    forwardedUrl = String(url);
+    forwardedBody = init.body;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  try {
+    const getResponse = await worker.fetch(
+      new Request("https://edge.example/api/dungeon", { method: "GET" }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(getResponse.status, 405);
+    assert.equal(getResponse.headers.get("allow"), "POST");
+    const postResponse = await worker.fetch(
+      new Request("https://edge.example/api/dungeon", {
+        method: "POST",
+        headers: { "X-Telegram-Init-Data": "signed-data", "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enter", dungeon_id: 1 }),
+      }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(postResponse.status, 200);
+    assert.equal(forwardedUrl, "https://game.example/api/dungeon");
+    assert.equal(forwardedBody, JSON.stringify({ action: "enter", dungeon_id: 1 }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
