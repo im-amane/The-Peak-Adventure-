@@ -102,6 +102,13 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "world_progress":("SELECT * FROM player_worlds WHERE user_id=?",(user_id,)),
         "presence":("SELECT * FROM player_presence WHERE user_id=?",(user_id,)),
         "world_discoveries":("SELECT * FROM world_discoveries WHERE user_id=?",(user_id,)),
+        "daily_missions":("SELECT * FROM player_daily_missions WHERE user_id=? ORDER BY day_key DESC",(user_id,)),
+        "weekly_quests":("SELECT * FROM player_weekly_quests WHERE user_id=? ORDER BY week_key DESC",(user_id,)),
+        "monster_mastery":("SELECT * FROM player_monster_mastery WHERE user_id=? ORDER BY monster_level",(user_id,)),
+        "secret_areas":("SELECT * FROM player_secret_areas WHERE user_id=? ORDER BY world_id",(user_id,)),
+        "roaming_event_participation":("SELECT * FROM roaming_event_participants WHERE user_id=? ORDER BY event_id DESC",(user_id,)),
+        "stamina":("SELECT * FROM player_stamina WHERE user_id=?",(user_id,)),
+        "mana":("SELECT * FROM player_mana WHERE user_id=?",(user_id,)),
         "story_progress":("SELECT * FROM player_story WHERE user_id=?",(user_id,)),
         "story_flags":("SELECT * FROM story_flags WHERE user_id=?",(user_id,)),
         "story_rewards":("SELECT * FROM story_reward_claims WHERE user_id=?",(user_id,)),
@@ -113,16 +120,23 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "premium_purchases":("SELECT item_id,gems_spent,created_at FROM premium_shop_purchases WHERE user_id=? ORDER BY purchase_id DESC",(user_id,)),
         "xp_boost":("SELECT remaining_wins FROM player_xp_boosts WHERE user_id=?",(user_id,)),
     }
+    optional_tables = {
+        "security_events":"security_events",
+        "premium_wallet":"premium_wallets",
+        "premium_transactions":"premium_transactions",
+        "premium_purchases":"premium_shop_purchases",
+        "xp_boost":"player_xp_boosts",
+        "daily_missions":"player_daily_missions",
+        "weekly_quests":"player_weekly_quests",
+        "monster_mastery":"player_monster_mastery",
+        "secret_areas":"player_secret_areas",
+        "roaming_event_participation":"roaming_event_participants",
+        "stamina":"player_stamina",
+        "mana":"player_mana",
+    }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
-        if key in {"security_events","premium_wallet","premium_transactions","premium_purchases","xp_boost"}:
-            optional_tables = {
-                "security_events":"security_events",
-                "premium_wallet":"premium_wallets",
-                "premium_transactions":"premium_transactions",
-                "premium_purchases":"premium_shop_purchases",
-                "xp_boost":"player_xp_boosts",
-            }
+        if key in optional_tables:
             cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(optional_tables[key],))
             if not await cur.fetchone():
                 result["data"][key]=[]
