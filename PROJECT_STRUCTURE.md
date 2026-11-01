@@ -210,7 +210,7 @@ The-Peak-Adventure/
 - [x] Trade cancellation
 - [ ] Equipment/item trading
 - [ ] Auction house and market listings
-- [ ] Crafting and materials
+- [x] Monster material drops, unique recipes and weapon/armor crafting
 - [~] Item rarity and economy balancing
 - [ ] Premium currency and payments
 
