@@ -537,3 +537,11 @@ test("hero HUD meters expose bounded accessible progress values", () => {
   assert.match(game, /Math\.max\(0, Math\.min\(safeMaximum, current\)\)/);
   assert.match(game, /track\.setAttribute\("aria-valuetext"/);
 });
+
+
+test("form controls share visible keyboard focus and consistent disabled feedback", () => {
+  const css = readFileSync(new URL("../webapp/style.css", import.meta.url), "utf8");
+  assert.match(css, /input:focus-visible,select:focus-visible,textarea:focus-visible/);
+  assert.match(css, /button:disabled\{opacity:\.55\}/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
+});
