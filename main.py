@@ -3915,6 +3915,109 @@ async def api_social(request: web.Request):
                     if trade_cur.rowcount != 1:
                         return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
                     result = {"trade_id":payload["trade_id"],"status":trade_status}
+                elif action == "trade_offer":
+                    if (set(payload) != {"action", "trade_id", "coins", "potions"}
+                            or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0
+                            or type(payload["coins"]) is not int or payload["coins"] < 0
+                            or type(payload["potions"]) is not int or payload["potions"] < 0):
+                        return web.json_response({"error": "A valid trade_id, non-negative coins and potions are required."}, status=400)
+                    trade_cur = await db.execute(
+                        "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
+                    )
+                    trade = await trade_cur.fetchone()
+                    if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
+                        return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
+                    if user_id == trade["initiator_id"]:
+                        await db.execute(
+                            """UPDATE trades SET initiator_coins=?,initiator_potions=?,
+                               initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                            (payload["coins"],payload["potions"],payload["trade_id"]),
+                        )
+                    else:
+                        await db.execute(
+                            """UPDATE trades SET partner_coins=?,partner_potions=?,
+                               initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                            (payload["coins"],payload["potions"],payload["trade_id"]),
+                        )
+                    result = {"trade_id":payload["trade_id"],"status":"open","offer_updated":True}
+                elif action == "trade_confirm":
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_cur = await db.execute(
+                        "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
+                    )
+                    trade = await trade_cur.fetchone()
+                    if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if user_id == trade["initiator_id"]:
+                        await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
+                    else:
+                        await db.execute("UPDATE trades SET partner_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
+                    trade_cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (payload["trade_id"],))
+                    trade = await trade_cur.fetchone()
+                    if trade["initiator_confirmed"] and trade["partner_confirmed"]:
+                        initiator = await get_player(trade["initiator_id"])
+                        partner = await get_player(trade["partner_id"])
+                        invalid_equipment = (
+                            bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"])
+                            or bool(trade["initiator_armor"]) != bool(trade["partner_armor"])
+                            or (trade["initiator_weapon"] and (
+                                initiator["weapon"] != trade["initiator_weapon"]
+                                or initiator["weapon_attack"] != trade["initiator_weapon_attack"]
+                            ))
+                            or (trade["partner_weapon"] and (
+                                partner["weapon"] != trade["partner_weapon"]
+                                or partner["weapon_attack"] != trade["partner_weapon_attack"]
+                            ))
+                            or (trade["initiator_armor"] and (
+                                initiator["armor"] != trade["initiator_armor"]
+                                or initiator["armor_defense"] != trade["initiator_armor_defense"]
+                            ))
+                            or (trade["partner_armor"] and (
+                                partner["armor"] != trade["partner_armor"]
+                                or partner["armor_defense"] != trade["partner_armor_defense"]
+                            ))
+                        )
+                        invalid_balance = (
+                            initiator["coins"] < trade["initiator_coins"]
+                            or initiator["potions"] < trade["initiator_potions"]
+                            or partner["coins"] < trade["partner_coins"]
+                            or partner["potions"] < trade["partner_potions"]
+                        )
+                        if invalid_equipment or invalid_balance:
+                            await db.execute(
+                                "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                                (payload["trade_id"],),
+                            )
+                            await db.commit()
+                            return web.json_response({
+                                "error": "Trade paused because an offered item or balance changed. Update offers and confirm again."
+                            }, status=409)
+                        initiator_weapon = (trade["partner_weapon"],trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"],initiator["weapon_attack"])
+                        partner_weapon = (trade["initiator_weapon"],trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"],partner["weapon_attack"])
+                        initiator_armor = (trade["partner_armor"],trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"],initiator["armor_defense"])
+                        partner_armor = (trade["initiator_armor"],trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"],partner["armor_defense"])
+                        await db.execute(
+                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+                            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
+                             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
+                        )
+                        await db.execute(
+                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+                            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
+                             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
+                        )
+                        await db.execute(
+                            "UPDATE trades SET status='completed' WHERE trade_id=? AND status='open'",
+                            (payload["trade_id"],),
+                        )
+                        result = {"trade_id":payload["trade_id"],"status":"completed"}
+                    else:
+                        result = {"trade_id":payload["trade_id"],"status":"open","waiting_for_other_player":True}
                 elif action == "trade_cancel":
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
