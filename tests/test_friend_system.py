@@ -1,0 +1,80 @@
+import unittest
+
+import aiosqlite
+
+from friend_system import (
+    FriendError,
+    init_friend_tables,
+    list_friends,
+    remove_friend,
+    respond_to_friend_request,
+    send_friend_request,
+)
+
+
+class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await aiosqlite.connect(":memory:")
+        self.db.row_factory = aiosqlite.Row
+        await self.db.executescript("""
+        CREATE TABLE players (
+          user_id INTEGER PRIMARY KEY,
+          username TEXT,
+          level INTEGER NOT NULL DEFAULT 1
+        );
+        INSERT INTO players(user_id,username,level) VALUES
+          (101,'Ash',4),(202,'Mira',8),(303,'Rook',2);
+        """)
+        await init_friend_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.close()
+
+    async def test_request_is_created_and_accepted_by_target(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        await respond_to_friend_request(self.db, request_id, 202, True)
+        friends = await list_friends(self.db, 101)
+        self.assertEqual([(row["user_id"], row["username"]) for row in friends], [(202, "Mira")])
+
+    async def test_self_request_is_rejected(self):
+        with self.assertRaisesRegex(FriendError, "yourself"):
+            await send_friend_request(self.db, 101, 101)
+
+    async def test_duplicate_and_reverse_pending_requests_are_rejected(self):
+        await send_friend_request(self.db, 101, 202)
+        with self.assertRaisesRegex(FriendError, "already pending"):
+            await send_friend_request(self.db, 101, 202)
+        with self.assertRaisesRegex(FriendError, "already sent you"):
+            await send_friend_request(self.db, 202, 101)
+
+    async def test_only_target_can_accept_or_decline(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        with self.assertRaisesRegex(FriendError, "Only the invited player"):
+            await respond_to_friend_request(self.db, request_id, 101, True)
+        await respond_to_friend_request(self.db, request_id, 202, False)
+        with self.assertRaisesRegex(FriendError, "no longer active"):
+            await respond_to_friend_request(self.db, request_id, 202, True)
+
+    async def test_accepted_friendship_is_bidirectional(self):
+        request_id = await send_friend_request(self.db, 101, 303)
+        await respond_to_friend_request(self.db, request_id, 303, True)
+        self.assertEqual([row["user_id"] for row in await list_friends(self.db, 101)], [303])
+        self.assertEqual([row["user_id"] for row in await list_friends(self.db, 303)], [101])
+        with self.assertRaisesRegex(FriendError, "already friends"):
+            await send_friend_request(self.db, 303, 101)
+
+    async def test_removed_friend_can_be_added_again(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        await respond_to_friend_request(self.db, request_id, 202, True)
+        await remove_friend(self.db, 101, 202)
+        self.assertEqual(await list_friends(self.db, 101), [])
+        new_request = await send_friend_request(self.db, 202, 101)
+        self.assertGreater(new_request, request_id)
+
+    async def test_unknown_friend_cannot_be_removed(self):
+        with self.assertRaisesRegex(FriendError, "not on your friend list"):
+            await remove_friend(self.db, 101, 202)
+
+
+if __name__ == "__main__":
+    unittest.main()
