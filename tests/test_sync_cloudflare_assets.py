@@ -34,16 +34,16 @@ class CloudflareAssetSyncTests(unittest.TestCase):
 
     def test_check_mode_accepts_matching_embedded_assets(self):
         self.asset.write_text("current game bundle", encoding="utf-8")
-        source = self.worker.read_text(encoding="utf-8")
         payload = {"/game.js": {"body": "current game bundle", "type": "application/javascript"}}
         self.worker.write_text(
             "const STATIC_ASSETS = " + json.dumps(payload)
             + "\n\nconst STATIC_PATHS = new Set([]);\n",
             encoding="utf-8",
         )
+        before = self.worker.read_text(encoding="utf-8")
         with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
             sync_cloudflare_assets.main()
-        self.assertNotEqual(source, self.worker.read_text(encoding="utf-8"))
+        self.assertEqual(before, self.worker.read_text(encoding="utf-8"))
 
     def test_check_mode_fails_without_modifying_stale_worker(self):
         before = self.worker.read_text(encoding="utf-8")
