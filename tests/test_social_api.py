@@ -60,6 +60,47 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
         self.assertEqual((await cur.fetchone())["status"], "open")
 
+    async def test_trade_confirmation_rejects_changed_equipment_without_transferring_assets(self):
+        initiator_id = 987654928
+        partner_id = 987654929
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        await main.db.execute(
+            "UPDATE players SET coins=100,weapon='Rusty Sword',weapon_attack=0 WHERE user_id=?",
+            (initiator_id,),
+        )
+        await main.db.execute(
+            "UPDATE players SET coins=50,weapon='Rusty Sword',weapon_attack=0 WHERE user_id=?",
+            (partner_id,),
+        )
+        cur = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,
+               initiator_coins,partner_coins,initiator_weapon,initiator_weapon_attack,
+               partner_weapon,partner_weapon_attack)
+               VALUES(?,?,?,'open',10,20,'Changed Blade',12,'Rusty Sword',0)""",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
+            first = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "TradePartner"}):
+            rejected = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        self.assertEqual(first.status, 200)
+        self.assertEqual(rejected.status, 409)
+
+        cur = await main.db.execute(
+            "SELECT status,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
+            (trade_id,),
+        )
+        trade = await cur.fetchone()
+        self.assertEqual((trade["status"],trade["initiator_confirmed"],trade["partner_confirmed"]), ("open",0,0))
+        cur = await main.db.execute("SELECT coins FROM players WHERE user_id=?", (initiator_id,))
+        self.assertEqual((await cur.fetchone())["coins"], 100)
+        cur = await main.db.execute("SELECT coins FROM players WHERE user_id=?", (partner_id,))
+        self.assertEqual((await cur.fetchone())["coins"], 50)
+
     async def test_trade_offer_checks_balance_and_resets_confirmations(self):
         initiator_id = 987654923
         partner_id = 987654924
