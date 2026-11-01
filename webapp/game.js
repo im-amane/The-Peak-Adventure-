@@ -33,6 +33,11 @@
     socialSearchForm: document.getElementById("social-search-form"),
     socialSearchInput: document.getElementById("social-player-search"),
     socialSearchResults: document.getElementById("social-search-results"),
+    guildChatPanel: document.getElementById("guild-chat-panel"),
+    guildChatMessages: document.getElementById("guild-chat-messages"),
+    guildChatForm: document.getElementById("guild-chat-form"),
+    guildChatInput: document.getElementById("guild-chat-input"),
+    guildChatLoad: document.getElementById("guild-chat-load"),
     partyCreate: document.getElementById("party-create"),
     partyTargetId: document.getElementById("party-target-id"),
     partyInvite: document.getElementById("party-invite"),
@@ -354,6 +359,7 @@
     }
     const guild=social.guild;
     addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
+    if(ui.guildChatPanel)ui.guildChatPanel.hidden=!guild;
     const guildInvites=social.pending_guild_invites||[];
     if(guildInvites.length){
       const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
@@ -370,6 +376,23 @@
     if(ui.partyInvite)ui.partyInvite.hidden=!party;
     if(ui.partyTargetId)ui.partyTargetId.hidden=!party;
     if(ui.partyLeave)ui.partyLeave.hidden=!party;
+  }
+
+  function renderGuildChat(messages) {
+    if(!ui.guildChatMessages)return;
+    ui.guildChatMessages.replaceChildren();
+    if(!Array.isArray(messages)||!messages.length){
+      const empty=document.createElement("p");empty.className="small";empty.textContent="No guild messages yet.";
+      ui.guildChatMessages.appendChild(empty);return;
+    }
+    messages.forEach(item=>{
+      const row=document.createElement("article");row.className="guild-chat-message";
+      const author=document.createElement("strong");author.textContent=item.username||"Adventurer";
+      const body=document.createElement("p");body.textContent=item.message||"";
+      const stamp=document.createElement("time");stamp.textContent=item.created_at||"";
+      row.append(author,body,stamp);ui.guildChatMessages.appendChild(row);
+    });
+    ui.guildChatMessages.scrollTop=ui.guildChatMessages.scrollHeight;
   }
 
   function renderPlayerSearch(players) {
@@ -977,6 +1000,23 @@
   if(ui.worldNavigation) ui.worldNavigation.addEventListener("click",event=>{
     const button=event.target.closest("[data-world-travel-id],[data-world-discover]");
     if(button) performWorldAction(button);
+  });
+
+  if(ui.guildChatLoad)ui.guildChatLoad.addEventListener("click",async()=>{
+    try{
+      const result=await runSocialAction({action:"guild_chat"});
+      renderGuildChat(result.result.messages||[]);
+    }catch(_){}
+  });
+  if(ui.guildChatForm)ui.guildChatForm.addEventListener("submit",async event=>{
+    event.preventDefault();
+    const message=ui.guildChatInput.value.trim();
+    if(!message)return;
+    try{
+      const result=await runSocialAction({action:"guild_send",message});
+      renderGuildChat(result.result.messages||[]);
+      ui.guildChatInput.value="";
+    }catch(_){}
   });
 
   if(ui.socialSearchForm)ui.socialSearchForm.addEventListener("submit",async event=>{
