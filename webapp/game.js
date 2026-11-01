@@ -110,6 +110,46 @@
     }
   }
 
+
+  function renderQuests(quests) {
+    if (!ui.questList) return;
+    ui.questList.replaceChildren();
+    if (!quests.length) {
+      const empty=document.createElement("p"); empty.className="small";
+      empty.textContent="Your adventure quests will appear here."; ui.questList.appendChild(empty); return;
+    }
+    quests.forEach(quest => {
+      const card=document.createElement("article"); card.className="quest-card";
+      const title=document.createElement("h3"); title.textContent=quest.title;
+      const description=document.createElement("p"); description.textContent=quest.description;
+      const progress=document.createElement("p");
+      progress.textContent=quest.claimed ? "🎁 Reward claimed" : quest.completed
+        ? "✅ Completed · Reward ready" : "Progress: "+Math.min(quest.progress,quest.target)+"/"+quest.target;
+      const track=document.createElement("div"); track.className="quest-progress";
+      const fill=document.createElement("span");
+      fill.style.width=Math.max(0,Math.min(100,quest.progress/quest.target*100))+"%";
+      track.appendChild(fill); card.append(title,description,progress,track);
+      if (quest.completed && !quest.claimed) {
+        const button=document.createElement("button"); button.type="button"; button.textContent="Claim "+quest.coins+" coins";
+        button.addEventListener("click",()=>claimQuest(quest.id,button)); card.appendChild(button);
+      }
+      ui.questList.appendChild(card);
+    });
+  }
+
+  async function claimQuest(questId,button) {
+    if (requestInFlight) return;
+    requestInFlight=true; button.disabled=true; button.textContent="Claiming...";
+    try {
+      const result=await postApi("/api/quest/claim",{quest_id:questId});
+      applyState(result.state,result.message);
+    } catch(error) {
+      ui.status.textContent=error.message; button.disabled=false; button.textContent="Try again";
+    } finally {
+      requestInFlight=false;
+    }
+  }
+
   async function loadState() {
     if (!initData) {
       ui.status.textContent = "Open this game from the Telegram bot's private chat.";
