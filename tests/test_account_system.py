@@ -10,6 +10,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE security_events(event_id INTEGER PRIMARY KEY,user_id INTEGER,event_type TEXT,severity INTEGER,details TEXT,created_at TEXT);
   CREATE TABLE premium_wallets(user_id INTEGER PRIMARY KEY,balance INTEGER);
   CREATE TABLE premium_transactions(transaction_id INTEGER PRIMARY KEY,telegram_charge_id TEXT,user_id INTEGER,package_id TEXT,stars INTEGER,gems INTEGER);
+  CREATE TABLE premium_shop_purchases(purchase_id INTEGER PRIMARY KEY,user_id INTEGER,item_id TEXT,gems_spent INTEGER);
+  CREATE TABLE player_xp_boosts(user_id INTEGER PRIMARY KEY,remaining_wins INTEGER);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE guild_members(user_id INTEGER PRIMARY KEY,guild_id INTEGER,role TEXT,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
@@ -103,8 +105,10 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
  async def test_delete_account_removes_premium_payment_data(self):
   await self.db.execute("INSERT INTO premium_wallets VALUES(1,50)")
   await self.db.execute("INSERT INTO premium_transactions VALUES(1,'charge-1',1,'spark',25,50)")
+  await self.db.execute("INSERT INTO premium_shop_purchases VALUES(1,1,'xp_charm',60)")
+  await self.db.execute("INSERT INTO player_xp_boosts VALUES(1,2)")
   await delete_player_account(self.db,1)
-  for table in ("premium_wallets","premium_transactions"):
+  for table in ("premium_wallets","premium_transactions","premium_shop_purchases","player_xp_boosts"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table} WHERE user_id=1")
    self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_account_removes_security_events(self):
