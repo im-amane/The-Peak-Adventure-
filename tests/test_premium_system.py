@@ -76,6 +76,12 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await cur.fetchone())["potions"], 2)
         self.assertEqual(await get_premium_balance(self.db, 101), 10)
 
+    async def test_stars_purchase_requires_registered_player(self):
+        package = get_premium_packages()["spark"]
+        with self.assertRaisesRegex(PremiumError, "Player account not found"):
+            await credit_premium_purchase(self.db, 202, "spark", package["stars"], "charge-unregistered")
+        self.assertEqual(await get_premium_balance(self.db, 202), 0)
+
     async def test_charge_id_cannot_be_replayed_for_another_account(self):
         package = get_premium_packages()["spark"]
         await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-replay")
