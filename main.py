@@ -117,7 +117,7 @@ async def init_db():
       turn_count INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS daily_claims (
-      user_id INTEGER PRIMARY KEY, claimed_on TEXT NOT NULL
+      user_id INTEGER PRIMARY KEY, claimed_at INTEGER NOT NULL
     );
     CREATE TABLE IF NOT EXISTS boss_defeats (
       user_id INTEGER NOT NULL, monster_level INTEGER NOT NULL,
@@ -164,6 +164,7 @@ async def init_db():
     """)
     migrations = [
         "ALTER TABLE battles ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE daily_claims ADD COLUMN claimed_at INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN hero_class TEXT NOT NULL DEFAULT 'Knight'",
         "ALTER TABLE players ADD COLUMN class_selected INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN weapon TEXT NOT NULL DEFAULT 'Rusty Sword'",
@@ -330,12 +331,16 @@ async def start_battle(user_id: int, username: str | None, send_target):
 async def claim_daily_reward(user_id: int) -> bool:
     assert db is not None
     async with player_locks[user_id]:
-        today = datetime.now(timezone.utc).date().isoformat()
-        cur = await db.execute("SELECT claimed_on FROM daily_claims WHERE user_id=?", (user_id,))
+        now = int(datetime.now(timezone.utc).timestamp())
+        cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
         previous = await cur.fetchone()
-        if previous and previous["claimed_on"] == today:
+        if previous and now - previous["claimed_at"] < 86400:
             return False
-        await db.execute("INSERT INTO daily_claims(user_id, claimed_on) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET claimed_on=excluded.claimed_on", (user_id, today))
+        await db.execute(
+            "INSERT INTO daily_claims(user_id, claimed_at) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET claimed_at=excluded.claimed_at",
+            (user_id, now),
+        )
         await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (user_id,))
         await db.commit()
         return True
@@ -1262,7 +1267,7 @@ async def daily(message: Message):
     if claimed:
         await message.answer("🎁 Daily reward claimed: +50 coins and +1 potion. Come back tomorrow!")
     else:
-        await message.answer("⏳ You have already claimed today's reward. Come back after the UTC day resets.")
+        await message.answer("⏳ You have already claimed today's reward. Come back 24 hours after your last claim.")
 
 
 @dp.message(Command("leaderboard"))
