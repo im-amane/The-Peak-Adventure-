@@ -3708,6 +3708,18 @@ async def database_backup_loop():
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
 
 
+async def database_healthcheck() -> bool:
+    if db is None:
+        return False
+    try:
+        async with db_lock:
+            cur = await db.execute("SELECT 1")
+            return await cur.fetchone() is not None
+    except Exception:
+        log.exception("Health check database probe failed")
+        return False
+
+
 api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
 
 
@@ -3747,14 +3759,7 @@ async def start_web_server():
         return web.FileResponse(WEB_DIR / "game.js")
 
     async def healthz(request: web.Request):
-        if db is None:
-            return web.json_response({"ok": False, "database": "unavailable"}, status=503)
-        try:
-            async with db_lock:
-                cur = await db.execute("SELECT 1")
-                await cur.fetchone()
-        except Exception:
-            log.exception("Health check database probe failed")
+        if not await database_healthcheck():
             return web.json_response({"ok": False, "database": "unavailable"}, status=503)
         return web.json_response(
             {"ok": True, "service": "peak-adventure", "database": "ok"},
