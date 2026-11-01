@@ -226,7 +226,7 @@ The-Peak-Adventure/
 - [x] Branching NPC dialogue with persistent player choices
 - [~] Ten narrative chapters with scene text; cinematic animations pending
 - [~] World story chain and party-gated chapter; extended group quest chains pending
-- [ ] 100-monster story editorial rewrite
+- [x] 100 unique connected monster stories across all ten world arcs; editorial integrity tests added
 
 ### 13. Admin, Security and Operations
 
