@@ -1366,7 +1366,7 @@ async def help_cmd(message: Message):
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/friend request|accept|decline|list|remove - Friend list\n"
-        "/party create|invite|accept|decline|info|leave|disband - Party management\\n"
+        "/party create|invite|accept|decline|info|leave|disband - Party management\n"
         "/guild create|join|leave|info|top|disband - Guild management\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
