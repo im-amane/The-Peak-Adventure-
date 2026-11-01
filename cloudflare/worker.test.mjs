@@ -357,3 +357,13 @@ test("serves current Mini App source files from the embedded fallback assets", a
     assert.equal(await response.text(), expected, asset.route);
   }
 });
+
+
+test("world portal requires proximity and an unlocked next world", () => {
+  const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(html, /id="portal-travel"/);
+  assert.match(game, /nearPortal=Phaser\.Math\.Distance\.Between\(this\.hero\.x,this\.hero\.y,this\.portalX,this\.portalY\)<72/);
+  assert.match(game, /ui\.portalTravel\.disabled=!nearPortal\|\|!nextWorld\|\|!nextWorld\.unlocked/);
+  assert.match(game, /ui\.portalTravel\.addEventListener\("click"/);
+});
