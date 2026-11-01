@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from game_rules import BOSS_LEVELS, calculate_enemy_damage, class_evades, expected_monster_power, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import BOSS_LEVELS, calculate_enemy_damage, class_evades, expected_monster_power, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 
 
 class GameRulesTests(unittest.TestCase):
@@ -111,6 +111,18 @@ class GameRulesTests(unittest.TestCase):
         for level in (0, 101, True, 1.5):
             with self.subTest(level=level), self.assertRaises(ValueError):
                 nearby_monster_levels(level)
+
+    def test_boss_phase_thresholds_and_normal_monsters(self):
+        self.assertEqual(get_boss_phase(False, 1, 100), 1)
+        self.assertEqual(get_boss_phase(True, 61, 100), 1)
+        self.assertEqual(get_boss_phase(True, 60, 100), 2)
+        self.assertEqual(get_boss_phase(True, 26, 100), 2)
+        self.assertEqual(get_boss_phase(True, 25, 100), 3)
+
+    def test_boss_phases_increase_incoming_damage(self):
+        base = calculate_enemy_damage(40, 1, 0, 0, 0, 0)
+        self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, boss_phase=2), int(base * 1.2))
+        self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, boss_phase=3), int(base * 1.5))
 
 
 if __name__ == "__main__":
