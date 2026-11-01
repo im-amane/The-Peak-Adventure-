@@ -191,3 +191,9 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - `/missions` shows three UTC-resetting objectives for monster wins, crafting and landmark discovery.
 - Claim each completed reward once with `/missions claim MISSION_ID`.
 - Daily missions are separate from the `/daily` login reward and `/weekly` objectives.
+
+
+## Player directory search
+- Use `/players username` to find matching player accounts.
+- Public profiles appear in search; friends-only profiles are visible only to accepted friends.
+- Search results show the player ID and level. Friend requests can still be sent by replying to a player's message in a shared group.
