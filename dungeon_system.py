@@ -1,6 +1,8 @@
 """Persistent multi-room dungeons tied to the ten unlocked worlds."""
 from datetime import datetime, timezone
 
+import aiosqlite
+
 DUNGEONS=[
  {"id":i+1,"world":i+1,"name":name,"rooms":[(i*10+3,"Scout"),(i*10+6,"Guardian"),((i+1)*10,"World Boss")],
   "reward_coins":150+(i*50),"reward_potions":2}
@@ -34,22 +36,35 @@ def available_dungeons(player_level):
 async def enter_dungeon(db,user_id,player_level,dungeon_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
         raise DungeonError("Invalid player account.")
+    if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
+        raise DungeonError("Invalid player level.")
     if not isinstance(dungeon_id,int) or isinstance(dungeon_id,bool) or not 1<=dungeon_id<=10:
         raise DungeonError("Dungeon ID must be between 1 and 10.")
     dungeon=DUNGEONS[dungeon_id-1]
     if player_level<((dungeon["world"]-1)*10+1):
         raise DungeonError(f"This dungeon unlocks at level {(dungeon['world']-1)*10+1}.")
-    cur=await db.execute("SELECT dungeon_id,status FROM dungeon_runs WHERE user_id=?",(user_id,))
-    run=await cur.fetchone()
-    if run and run["status"]=="active":
-        raise DungeonError("Finish or abandon your active dungeon first.")
-    if run and run["status"]=="completed":
-        raise DungeonError("Claim your completed dungeon reward before starting another run.")
-    cur=await db.execute("SELECT 1 FROM dungeon_rewards WHERE user_id=? AND dungeon_id=?",(user_id,dungeon_id))
-    if await cur.fetchone():
-        raise DungeonError("You have already claimed this dungeon reward.")
-    cur=await db.execute("INSERT INTO dungeon_runs(user_id,dungeon_id,room,status) VALUES(?,?,1,'active') ON CONFLICT(user_id) DO UPDATE SET dungeon_id=excluded.dungeon_id,room=1,status='active',started_at=CURRENT_TIMESTAMP,completed_at=NULL",(user_id,dungeon_id))
-    await db.commit()
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        cur=await db.execute("SELECT dungeon_id,status FROM dungeon_runs WHERE user_id=?",(user_id,))
+        run=await cur.fetchone()
+        if run and run["status"]=="active":
+            raise DungeonError("Finish or abandon your active dungeon first.")
+        if run and run["status"]=="completed":
+            raise DungeonError("Claim your completed dungeon reward before starting another run.")
+        cur=await db.execute("SELECT 1 FROM dungeon_rewards WHERE user_id=? AND dungeon_id=?",(user_id,dungeon_id))
+        if await cur.fetchone():
+            raise DungeonError("You have already claimed this dungeon reward.")
+        await db.execute(
+            """INSERT INTO dungeon_runs(user_id,dungeon_id,room,status)
+               VALUES(?,?,1,'active')
+               ON CONFLICT(user_id) DO UPDATE SET dungeon_id=excluded.dungeon_id,
+               room=1,status='active',started_at=CURRENT_TIMESTAMP,completed_at=NULL""",
+            (user_id,dungeon_id),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return await get_dungeon_state(db,user_id)
 
 async def get_dungeon_state(db,user_id):
@@ -63,29 +78,66 @@ async def get_dungeon_state(db,user_id):
       "reward_coins":dungeon["reward_coins"],"reward_potions":dungeon["reward_potions"]}
 
 async def advance_dungeon(db,user_id,monster_level):
-    state=await get_dungeon_state(db,user_id)
-    if not state or state["status"]!="active" or monster_level<state["target_level"]:
-        return None
-    if state["room"]<3:
-        await db.execute("UPDATE dungeon_runs SET room=room+1 WHERE user_id=? AND status='active'",(user_id,))
-    else:
-        await db.execute("UPDATE dungeon_runs SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active'",(user_id,))
-    await db.commit()
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise DungeonError("Invalid player account.")
+    if not isinstance(monster_level,int) or isinstance(monster_level,bool) or not 1<=monster_level<=100:
+        raise DungeonError("Invalid monster level.")
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        cur=await db.execute("SELECT dungeon_id,room,status FROM dungeon_runs WHERE user_id=?",(user_id,))
+        run=await cur.fetchone()
+        if not run or run["status"]!="active":
+            await db.commit()
+            return None
+        dungeon=DUNGEONS[run["dungeon_id"]-1]
+        target_level=dungeon["rooms"][min(run["room"]-1,2)][0]
+        if monster_level<target_level:
+            await db.commit()
+            return None
+        if run["room"]<3:
+            await db.execute(
+                "UPDATE dungeon_runs SET room=room+1 WHERE user_id=? AND status='active' AND room=?",
+                (user_id,run["room"]),
+            )
+        else:
+            await db.execute(
+                "UPDATE dungeon_runs SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active' AND room=3",
+                (user_id,),
+            )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     return await get_dungeon_state(db,user_id)
 
 async def claim_dungeon_reward(db,user_id):
-    state=await get_dungeon_state(db,user_id)
-    if not state or state["status"]!="completed":
-        raise DungeonError("Complete all three dungeon rooms before claiming rewards.")
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise DungeonError("Invalid player account.")
     try:
-        await db.execute("INSERT INTO dungeon_rewards(user_id,dungeon_id) VALUES(?,?)",(user_id,state["dungeon_id"]))
-    except Exception as exc:
+        await db.execute("BEGIN IMMEDIATE")
+        cur=await db.execute("SELECT dungeon_id,room,status FROM dungeon_runs WHERE user_id=?",(user_id,))
+        run=await cur.fetchone()
+        if not run or run["status"]!="completed" or run["room"]!=3:
+            raise DungeonError("Complete all three dungeon rooms before claiming rewards.")
+        dungeon=DUNGEONS[run["dungeon_id"]-1]
+        await db.execute(
+            "INSERT INTO dungeon_rewards(user_id,dungeon_id) VALUES(?,?)",
+            (user_id,run["dungeon_id"]),
+        )
+        cur=await db.execute(
+            "UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",
+            (dungeon["reward_coins"],dungeon["reward_potions"],user_id),
+        )
+        if cur.rowcount!=1:
+            raise DungeonError("Player account not found.")
+        await db.commit()
+        return dungeon["reward_coins"],dungeon["reward_potions"]
+    except aiosqlite.IntegrityError as exc:
         await db.rollback()
         raise DungeonError("This dungeon reward has already been claimed.") from exc
-    await db.execute("UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",
-      (state["reward_coins"],state["reward_potions"],user_id))
-    await db.commit()
-    return state["reward_coins"],state["reward_potions"]
+    except Exception:
+        await db.rollback()
+        raise
 
 async def abandon_dungeon(db,user_id):
     cur=await db.execute("UPDATE dungeon_runs SET status='abandoned' WHERE user_id=? AND status='active'",(user_id,))
