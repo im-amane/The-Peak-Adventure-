@@ -238,7 +238,7 @@ The-Peak-Adventure/
 - [ ] Admin dashboard and role permissions
 - [ ] Anti-cheat and economy abuse detection
 - [ ] Rate limiting and abuse protection audit
-- [ ] Database backup and restore automation
+- [x] Database backup and restore automation
 - [x] Privacy controls and data deletion workflow
 - [ ] Production monitoring and alerting
 
