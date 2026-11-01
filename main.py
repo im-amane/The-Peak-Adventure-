@@ -191,6 +191,14 @@ async def init_db():
         "ALTER TABLE players ADD COLUMN armor_defense INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN pvp_wins INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN pvp_losses INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE trades ADD COLUMN initiator_weapon TEXT",
+        "ALTER TABLE trades ADD COLUMN initiator_weapon_attack INTEGER",
+        "ALTER TABLE trades ADD COLUMN initiator_armor TEXT",
+        "ALTER TABLE trades ADD COLUMN initiator_armor_defense INTEGER",
+        "ALTER TABLE trades ADD COLUMN partner_weapon TEXT",
+        "ALTER TABLE trades ADD COLUMN partner_weapon_attack INTEGER",
+        "ALTER TABLE trades ADD COLUMN partner_armor TEXT",
+        "ALTER TABLE trades ADD COLUMN partner_armor_defense INTEGER",
     ]
     for migration in migrations:
         try:
