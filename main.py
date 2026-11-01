@@ -886,7 +886,11 @@ async def friend_command(message: Message):
 
 @dp.callback_query(F.data.startswith("friend_accept:"))
 async def accept_friend_callback(call: CallbackQuery):
-    request_id = int(call.data.split(":", 1)[1])
+    try:
+        request_id = int(call.data.split(":", 1)[1])
+    except (TypeError, ValueError, IndexError):
+        await call.answer("Invalid friend request.", show_alert=True)
+        return
     try:
         await respond_to_friend_request(db, request_id, call.from_user.id, True)
     except FriendError as exc:
@@ -898,7 +902,11 @@ async def accept_friend_callback(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("friend_decline:"))
 async def decline_friend_callback(call: CallbackQuery):
-    request_id = int(call.data.split(":", 1)[1])
+    try:
+        request_id = int(call.data.split(":", 1)[1])
+    except (TypeError, ValueError, IndexError):
+        await call.answer("Invalid friend request.", show_alert=True)
+        return
     try:
         await respond_to_friend_request(db, request_id, call.from_user.id, False)
     except FriendError as exc:
