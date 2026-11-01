@@ -1488,6 +1488,67 @@ async def start(message: Message):
 
 
 
+
+@dp.message(Command("settings"))
+async def settings_command(message: Message):
+    user_id = message.from_user.id
+    args = (message.text or "").split(maxsplit=2)
+    if len(args) == 1:
+        settings = await get_settings(db, user_id)
+        notifications = "ON" if settings["notifications_enabled"] else "OFF"
+        await message.answer("Player Settings\nNotifications: " + notifications + "\nProfile visibility: " + settings["profile_visibility"].upper() + "\nUse /settings notifications on|off or /settings privacy public|friends.")
+        return
+    if len(args) < 3:
+        await message.answer("Usage: /settings notifications on|off or /settings privacy public|friends")
+        return
+    key, value = args[1].lower(), args[2].lower()
+    try:
+        if key == "notifications" and value in {"on", "off"}:
+            settings = await update_settings(db, user_id, notifications_enabled=(value == "on"))
+        elif key == "privacy" and value in {"public", "friends"}:
+            settings = await update_settings(db, user_id, profile_visibility=value)
+        else:
+            raise AccountError("Choose notifications on/off or privacy public/friends.")
+        notifications = "ON" if settings["notifications_enabled"] else "OFF"
+        await message.answer("Settings saved. Notifications: " + notifications + " · Profile: " + settings["profile_visibility"] + ".")
+    except AccountError as exc:
+        await message.answer(escape(str(exc)))
+
+
+@dp.message(Command("deleteaccount"))
+async def request_account_deletion(message: Message):
+    if message.chat.type != "private":
+        await message.answer("For account safety, request deletion in the bot private chat.")
+        return
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="Permanently delete account", callback_data="account_delete_confirm"),
+        InlineKeyboardButton(text="Cancel", callback_data="account_delete_cancel")
+    ]])
+    await message.answer(
+        "Delete your account permanently?\n"
+        "This removes your character, inventory, progress, quests, achievements, friends, trades and social records. "
+        "Guild leadership or group ownership will be transferred when possible. This cannot be undone.\n\n"
+        "Your Telegram account is not affected.",
+        reply_markup=keyboard
+    )
+
+
+@dp.callback_query(F.data.in_({"account_delete_confirm", "account_delete_cancel"}))
+async def account_deletion_callback(call: CallbackQuery):
+    await call.answer()
+    if call.message.chat.type != "private":
+        await call.message.edit_text("Account deletion can only be confirmed in a private chat.")
+        return
+    if call.data == "account_delete_cancel":
+        await call.message.edit_text("Account deletion cancelled. Your adventure remains intact.")
+        return
+    try:
+        await delete_player_account(db, call.from_user.id)
+        await call.message.edit_text("Your Peak Adventure player account and associated game data have been deleted.")
+    except AccountError as exc:
+        await call.message.edit_text(escape(str(exc)))
+
+
 @dp.message(Command("admin"))
 async def admin_command(message: Message):
     if message.from_user.id not in ADMIN_IDS:
