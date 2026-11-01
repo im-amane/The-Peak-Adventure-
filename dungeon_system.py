@@ -43,6 +43,11 @@ async def enter_dungeon(db,user_id,player_level,dungeon_id):
     run=await cur.fetchone()
     if run and run["status"]=="active":
         raise DungeonError("Finish or abandon your active dungeon first.")
+    if run and run["status"]=="completed":
+        raise DungeonError("Claim your completed dungeon reward before starting another run.")
+    cur=await db.execute("SELECT 1 FROM dungeon_rewards WHERE user_id=? AND dungeon_id=?",(user_id,dungeon_id))
+    if await cur.fetchone():
+        raise DungeonError("You have already claimed this dungeon reward.")
     cur=await db.execute("INSERT INTO dungeon_runs(user_id,dungeon_id,room,status) VALUES(?,?,1,'active') ON CONFLICT(user_id) DO UPDATE SET dungeon_id=excluded.dungeon_id,room=1,status='active',started_at=CURRENT_TIMESTAMP,completed_at=NULL",(user_id,dungeon_id))
     await db.commit()
     return await get_dungeon_state(db,user_id)
