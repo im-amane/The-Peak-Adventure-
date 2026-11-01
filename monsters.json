@@ -1345,7 +1345,7 @@
     "advantage": "Astral Chimera gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Astral Chimera is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The Celestial Ruins drift above the world, connected by bridges made of forgotten wishes.",
+    "story": "[8/10 · Celestial Ruins] ASTRAL CHIMERA guards the bridges of the Celestial Ruins, carrying three memories that belong to the same person: the child who made the first spark, the guardian who forged the seals, and the voice now calling you home.",
     "trait_effect": "regenerate"
   },
   {
@@ -1364,7 +1364,7 @@
     "advantage": "Comet Wyrm gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Comet Wyrm is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] A fallen seraph hides a broken wing beneath a cloak woven from starlight.",
+    "story": "[8/10 · Celestial Ruins] COMET WYRM streaks across the broken sky, marking a route to the first dawn. Its scales contain fragments of the eighth seal, and each fragment shows a different version of the world where the guardian was never abandoned.",
     "trait_effect": "fury"
   },
   {
@@ -1383,7 +1383,7 @@
     "advantage": "Nebula Witch gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Nebula Witch is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The astral chimera carries three memories that belong to the same person.",
+    "story": "[8/10 · Celestial Ruins] NEBULA WITCH has mapped every possible ending and crossed out the ones where you survive. She admits the map is incomplete: one ending appears only when someone chooses to forgive the creator instead of defeating it.",
     "trait_effect": "swift"
   },
   {
@@ -1402,7 +1402,7 @@
     "advantage": "Star Eater gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Star Eater is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The comet wyrm draws a trail across the sky, marking the route to the first dawn.",
+    "story": "[8/10 · Celestial Ruins] STAR EATER consumes constellations to keep a sleeping world from waking too soon. It reveals that the eighth seal was a mirror, hiding the creator's face from the worlds it had once protected.",
     "trait_effect": "armored"
   },
   {
@@ -1421,7 +1421,7 @@
     "advantage": "Cosmic Behemoth gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Cosmic Behemoth is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The nebula witch has mapped every possible ending and crossed out the ones where you survive.",
+    "story": "[8/10 · Celestial Ruins] COSMIC BEHEMOTH is chained by promises made by heroes whose names have been erased. When you break one chain, the names return as stars and point toward the ninth seal, hidden in a place where time has stopped.",
     "trait_effect": "drain"
   },
   {
@@ -1440,7 +1440,7 @@
     "advantage": "Astral Reaper gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Astral Reaper is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The star eater consumes constellations to keep a sleeping world from waking too soon.",
+    "story": "[8/10 · Celestial Ruins] ASTRAL REAPER offers to trade its immortality for one more chance to see the sunrise. It gives you the final memory of the eighth guardian: the creator did not fear death, but feared being remembered only for the worlds it could not save.",
     "trait_effect": "poison"
   },
   {
@@ -1459,7 +1459,7 @@
     "advantage": "Nova Titan gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Nova Titan is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The cosmic behemoth is chained by promises made by heroes whose names have been erased.",
+    "story": "[8/10 · Celestial Ruins] NOVA TITAN holds the last bridge together while the ruins collapse around it. It asks you to carry its core to the ninth seal, because the path must be powered by a willing sacrifice rather than stolen life.",
     "trait_effect": "shield"
   },
   {
@@ -1478,7 +1478,7 @@
     "advantage": "Eternity Maw gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Eternity Maw is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The astral reaper offers to trade its immortality for one more chance to see the sunrise.",
+    "story": "[8/10 · Celestial Ruins] ETERNITY MAW speaks with the voices of every guardian you have defeated. It reveals that the creator has been waiting beyond time, unable to return until someone gathers all eight memories and chooses what they mean.",
     "trait_effect": "reflect"
   },
   {
@@ -1497,7 +1497,7 @@
     "advantage": "Void Dragon gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Void Dragon is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] Eternity's Maw speaks with the voice of every guardian you have defeated.",
+    "story": "[8/10 · Celestial Ruins] VOID DRAGON guards the gate beyond the ruins, its wings showing the first eight seals as scars across the sky. When it falls, the gate opens onto the Eternal Hour, where the ninth seal is counting down to the creator's final breath.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1516,7 +1516,7 @@
     "advantage": "Primordial Dragon God gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Primordial Dragon God is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The eighth seal breaks. The stars rearrange into a portrait of the one who created the seals.",
+    "story": "[8/10 · Celestial Ruins] Primordial Dragon God descends through the collapsing ruins, bearing the eighth seal as a crown of starlight. When you defeat it, the crown becomes a constellation and restores the names of the forgotten heroes. Their memories reveal that the creator sealed itself away to stop its grief from destroying the worlds, and the ninth seal now waits in the frozen moment beyond time.",
     "trait_effect": "berserk"
   },
   {
