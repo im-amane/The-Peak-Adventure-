@@ -33,6 +33,7 @@ from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_c
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
+from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -208,6 +209,7 @@ async def init_db():
     await init_dungeon_tables(db)
     await init_crafting_tables(db)
     await init_presence_tables(db)
+    await init_story_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -2062,6 +2064,62 @@ async def dungeon_command(message: Message):
     except DungeonError as exc:
         await message.answer(escape(str(exc)))
 
+
+
+
+@dp.message(Command("story"))
+async def story_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    args = (message.text or "").split(maxsplit=3)
+    action = args[1].lower() if len(args) > 1 else "list"
+    try:
+        chapters = await get_story_chapters(db, message.from_user.id, player["level"])
+        if action in {"list", "chapters"}:
+            lines = ["📖 <b>The Peak Chronicle</b>"]
+            for chapter in chapters:
+                marker = "✅" if chapter["completed"] else ("🔓" if chapter["unlocked"] else "🔒")
+                lines.append(marker + " " + str(chapter["id"]) + ". " + chapter["title"] + " · Lv." + str(chapter["level"]))
+            lines.append("Read: /story chapter ID")
+            await message.answer("\n".join(lines))
+            return
+        if action == "chapter":
+            if len(args) < 3 or not args[2].isdigit():
+                await message.answer("Usage: /story chapter ID")
+                return
+            chapter_id = int(args[2])
+            if not 1 <= chapter_id <= len(chapters):
+                raise StoryError("Story chapter not found.")
+            chapter = chapters[chapter_id-1]
+            if not chapter["unlocked"] and not chapter["completed"]:
+                raise StoryError("This chapter is locked. Complete earlier chapters and reach its level requirement.")
+            lines = ["🎬 <b>Chapter " + str(chapter_id) + ": " + escape(chapter["title"]) + "</b>",
+                     "<i>" + escape(chapter["npc"]) + "</i>", escape(chapter["scene"])]
+            if chapter["completed"]:
+                lines.append("Your choice: " + escape(chapter["choices"][chapter["choice"]]))
+                lines.append("Claim reward: /story claim " + str(chapter_id))
+            else:
+                lines.append("<b>Choose your path:</b>")
+                for choice_id, description in chapter["choices"].items():
+                    lines.append("/story choose " + str(chapter_id) + " " + choice_id + " · " + escape(description))
+            await message.answer("\n\n".join(lines))
+            return
+        if action == "choose":
+            if len(args) < 4 or not args[2].isdigit():
+                await message.answer("Usage: /story choose CHAPTER choice_id")
+                return
+            result = await choose_story_path(db, message.from_user.id, player["level"], int(args[2]), args[3].lower())
+            await message.answer("📜 <b>Choice recorded.</b>\n" + escape(result["choice"]) + "\nUse /story claim " + str(result["chapter"]["id"]) + " to claim +" + str(result["reward"]) + " coins.")
+            return
+        if action == "claim":
+            if len(args) < 3 or not args[2].isdigit():
+                await message.answer("Usage: /story claim CHAPTER")
+                return
+            reward = await claim_story_reward(db, message.from_user.id, int(args[2]))
+            await message.answer("✨ Story reward claimed: +" + str(reward) + " coins.")
+            return
+        await message.answer("Use /story, /story chapter ID, /story choose CHAPTER choice_id or /story claim CHAPTER.")
+    except StoryError as exc:
+        await message.answer(escape(str(exc)))
 
 
 @dp.message(Command("landmarks"))
