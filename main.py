@@ -327,12 +327,13 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
     if p["hp"] <= 0:
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
         return
-    level = p["level"]
+    world_id = await get_current_world(db, user_id, p["level"])
+    boss_level = world_id * 10
     boss_defeated = False
-    if level in BOSS_LEVELS:
-        cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, level))
+    if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
+        cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, boss_level))
         boss_defeated = await cur.fetchone() is not None
-    monster_level = random.choice(nearby_monster_levels(level, boss_defeated))
+    monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
     m = MONSTER_BY_LEVEL[monster_level]
     await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
     await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
