@@ -177,12 +177,12 @@ The-Peak-Adventure/
 - [x] Guild membership capacity (20)
 - [x] Guild XP and levels
 - [x] Guild rankings
-- [ ] Guild roles and permissions
-- [ ] Guild invitations
-- [ ] Guild chat and announcements
-- [ ] Guild missions and rewards
+- [x] Guild roles and permissions
+- [x] Guild invitations
+- [~] Guild announcements (stored and delivered by private message; in-guild chat channel pending)
+- [x] Guild missions and rewards
 - [ ] Guild wars
-- [ ] Guild boss raids
+- [x] Guild boss raids
 
 ### 10. Telegram Mini App
 
