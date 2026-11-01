@@ -13,6 +13,7 @@ EVENT_TYPES = {
     "invalid_world_action",
     "invalid_story_action",
     "invalid_reward_claim",
+    "invalid_premium_payment",
     "repeated_rate_limit",
 }
 
