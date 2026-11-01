@@ -66,6 +66,9 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state["dungeon"])
         self.assertEqual(len(state["daily_missions"]), 3)
         self.assertTrue(all(item["progress"] == 0 for item in state["daily_missions"]))
+        self.assertEqual(state["social"]["friend_requests"], [])
+        self.assertEqual(state["social"]["party_invites"], [])
+        self.assertEqual(state["social"]["pending_guild_invites"], [])
 
     async def test_miniapp_state_exposes_weekly_missions(self):
         user = {"id": 987654324, "first_name": "QuestHero"}
