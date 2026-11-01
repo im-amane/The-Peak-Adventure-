@@ -132,6 +132,26 @@ class GameRulesTests(unittest.TestCase):
         self.assertIn("final battle", tenth_world[-1]["story"])
         self.assertTrue(tenth_world[-1]["boss"])
 
+    def test_monster_tactics_follow_traits_and_health_thresholds(self):
+        from game_rules import choose_monster_tactic
+
+        self.assertEqual(choose_monster_tactic("swift", 2, 100, 100), "special")
+        self.assertEqual(choose_monster_tactic("swift", 3, 100, 100), "strike")
+        self.assertEqual(choose_monster_tactic("armored", 2, 100, 100), "strike")
+        self.assertEqual(choose_monster_tactic("armored", 3, 100, 100), "special")
+        self.assertEqual(choose_monster_tactic("berserk", 1, 50, 100), "special")
+        self.assertEqual(choose_monster_tactic("fury", 1, 30, 100), "special")
+        self.assertEqual(choose_monster_tactic("fury", 1, 31, 100), "strike")
+        self.assertEqual(choose_monster_tactic("armored", 1, 10, 100, is_boss=True, boss_phase=3), "special")
+        self.assertEqual(choose_monster_tactic("armored", 2, 100, 100, is_boss=True, boss_phase=2), "special")
+
+    def test_monster_tactics_reject_invalid_state(self):
+        from game_rules import choose_monster_tactic
+
+        for args in [("unknown", 1, 10, 10), ("swift", 0, 10, 10), ("swift", 1, 11, 10), ("swift", 1, 1, 0)]:
+            with self.subTest(args=args), self.assertRaises(ValueError):
+                choose_monster_tactic(*args)
+
     def test_all_ten_combat_traits_are_used(self):
         expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
         self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
