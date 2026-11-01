@@ -27,6 +27,7 @@ from party_system import PartyError, create_party, disband_party, get_party_info
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
+from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -195,6 +196,7 @@ async def init_db():
     await init_party_tables(db)
     await init_group_tables(db)
     await init_character_tables(db)
+    await init_account_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
