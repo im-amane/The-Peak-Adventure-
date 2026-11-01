@@ -223,7 +223,7 @@ test("daily mission claim API is POST-only and forwards Telegram auth", async ()
     assert.equal(postResponse.status, 200);
     assert.equal(forwardedUrl, "https://game.example/api/daily-mission/claim");
     assert.equal(forwardedAuth, "signed-data");
-    assert.equal(forwardedBody, JSON.stringify({ mission_id: "daily_hunter" }));
+    assert.equal(new TextDecoder().decode(forwardedBody), JSON.stringify({ mission_id: "daily_hunter" }));
   } finally {
     globalThis.fetch = originalFetch;
   }
