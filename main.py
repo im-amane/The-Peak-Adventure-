@@ -22,6 +22,7 @@ from aiogram.types import WebAppInfo
 
 from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
+from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -185,6 +186,7 @@ async def init_db():
         except aiosqlite.OperationalError:
             pass
     await db.commit()
+    await init_friend_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -794,6 +796,116 @@ async def cancel_trade(message: Message):
     await db.execute("UPDATE trades SET status='cancelled' WHERE trade_id=?", (trade_id,))
     await db.commit()
     await message.answer(f"Trade #{trade_id} cancelled.")
+
+
+
+def friend_request_keyboard(request_id: int):
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="💚 Accept", callback_data=f"friend_accept:{request_id}"),
+        InlineKeyboardButton(text="✋ Decline", callback_data=f"friend_decline:{request_id}"),
+    ]])
+
+
+@dp.message(Command("friend"))
+async def friend_command(message: Message):
+    args = (message.text or "").split(maxsplit=2)
+    action = args[1].lower() if len(args) > 1 else "list"
+    user_id = message.from_user.id
+
+    if action == "request":
+        if message.chat.type not in {"group", "supergroup"} or not message.reply_to_message or not message.reply_to_message.from_user:
+            await message.answer("Reply to another player's message in a group, then use /friend request.")
+            return
+        target = message.reply_to_message.from_user
+        if target.is_bot:
+            await message.answer("Bots cannot join your friend list.")
+            return
+        requester = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+        invited = await get_player(target.id, target.username or target.full_name)
+        if not requester["class_selected"] or not invited["class_selected"]:
+            await message.answer("Both players must register with /start and choose a class first.")
+            return
+        try:
+            request_id = await send_friend_request(db, user_id, target.id)
+        except FriendError as exc:
+            await message.answer(escape(str(exc)))
+            return
+        await message.answer(
+            f"🤝 <b>Friend request #{request_id}</b>\n"
+            f"{escape(requester['username'] or 'Adventurer')} invited "
+            f"{escape(invited['username'] or 'Adventurer')}.",
+            reply_markup=friend_request_keyboard(request_id),
+        )
+        return
+
+    if action in {"accept", "decline"}:
+        if len(args) < 3 or not args[2].isdigit():
+            await message.answer(f"Usage: <code>/friend {action} request_id</code>.")
+            return
+        request_id = int(args[2])
+        try:
+            await respond_to_friend_request(db, request_id, user_id, action == "accept")
+        except FriendError as exc:
+            await message.answer(escape(str(exc)))
+            return
+        await message.answer("💚 Friend request accepted." if action == "accept" else "Friend request declined.")
+        return
+
+    if action == "remove":
+        if len(args) < 3 or not args[2].isdigit():
+            await message.answer("Usage: <code>/friend remove player_id</code>.")
+            return
+        try:
+            await remove_friend(db, user_id, int(args[2]))
+        except FriendError as exc:
+            await message.answer(escape(str(exc)))
+            return
+        await message.answer("Friend removed.")
+        return
+
+    if action == "list":
+        friends = await list_friends(db, user_id)
+        if not friends:
+            await message.answer("👥 Your friend list is empty. Reply to a player's group message with /friend request.")
+            return
+        lines = ["👥 <b>Your Friends</b>"]
+        for index, friend in enumerate(friends, 1):
+            lines.append(f"{index}. {escape(friend['username'] or 'Adventurer')} · Lv.{friend['level']} · ID <code>{friend['user_id']}</code>")
+        await message.answer("\n".join(lines))
+        return
+
+    await message.answer(
+        "Friend commands:\n"
+        "• Reply to a player in a group: <code>/friend request</code>\n"
+        "• <code>/friend accept request_id</code>\n"
+        "• <code>/friend decline request_id</code>\n"
+        "• <code>/friend list</code>\n"
+        "• <code>/friend remove player_id</code>"
+    )
+
+
+@dp.callback_query(F.data.startswith("friend_accept:"))
+async def accept_friend_callback(call: CallbackQuery):
+    request_id = int(call.data.split(":", 1)[1])
+    try:
+        await respond_to_friend_request(db, request_id, call.from_user.id, True)
+    except FriendError as exc:
+        await call.answer(str(exc), show_alert=True)
+        return
+    await call.answer("Friend added!")
+    await call.message.edit_text(f"{call.message.text}\n\n💚 Friend request accepted.")
+
+
+@dp.callback_query(F.data.startswith("friend_decline:"))
+async def decline_friend_callback(call: CallbackQuery):
+    request_id = int(call.data.split(":", 1)[1])
+    try:
+        await respond_to_friend_request(db, request_id, call.from_user.id, False)
+    except FriendError as exc:
+        await call.answer(str(exc), show_alert=True)
+        return
+    await call.answer("Request declined.")
+    await call.message.edit_text(f"{call.message.text}\n\nFriend request declined.")
 
 
 async def guild_summary(guild_id: int):
