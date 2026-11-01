@@ -121,3 +121,12 @@ test("rejects backend URLs that contain paths or query strings", async () => {
   );
   assert.equal(response.status, 503);
 });
+
+test("allows appearance API POST route", async () => {
+  const response = await worker.fetch(
+    new Request("https://edge.example/api/appearance", { method: "GET" }),
+    { BACKEND_ORIGIN: "https://game.example" },
+  );
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "POST");
+});
