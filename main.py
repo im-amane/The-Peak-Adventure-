@@ -124,15 +124,17 @@ player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 class DatabaseLockMiddleware:
     async def __call__(self, handler, event, data):
         async with db_lock:
-            sender = getattr(event, "from_user", None)
+            sender = getattr(event, "event_from_user", None) or getattr(event, "from_user", None)
             if db is not None and sender and sender.id not in ADMIN_IDS:
                 ban = await get_active_ban(db, sender.id)
                 if ban:
                     notice = "⛔ Your game account is suspended. Reason: " + escape(ban["reason"])
-                    if isinstance(event, Message):
-                        await event.answer(notice)
-                    elif isinstance(event, CallbackQuery):
-                        await event.answer("Your game account is suspended.", show_alert=True)
+                    message = getattr(event, "message", None) or getattr(event, "edited_message", None)
+                    callback = getattr(event, "callback_query", None)
+                    if message is not None:
+                        await message.answer(notice)
+                    elif callback is not None:
+                        await callback.answer("Your game account is suspended.", show_alert=True)
                     return None
             return await handler(event, data)
 
@@ -3295,6 +3297,11 @@ async def miniapp_rate_limit(request: web.Request, handler):
     except ValueError:
         # The route returns the canonical authentication error.
         return await handler(request)
+    if db is not None and user["id"] not in ADMIN_IDS:
+        async with db_lock:
+            ban = await get_active_ban(db, user["id"])
+        if ban:
+            return web.json_response({"error": "Game account suspended.", "reason": ban["reason"]}, status=403)
     limit = 120 if request.method == "GET" else 40
     allowed, retry_after = api_rate_limiter.allow(f"telegram:{user['id']}", limit)
     if not allowed:
