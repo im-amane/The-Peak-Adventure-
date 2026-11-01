@@ -210,7 +210,7 @@ The-Peak-Adventure/
 - [x] Dual trade confirmation
 - [x] Trade cancellation
 - [x] Secure two-party trading of coins, potions, equipped weapons and armor with revalidation at confirmation
-- [ ] Auction house and market listings
+- [x] Timed equipment auctions, minimum bid increments, coin escrow/refunds, automatic settlement, cancellation and preserved gear stash
 - [x] Monster material drops, unique recipes and weapon/armor crafting
 - [~] Item rarity and economy balancing
 - [ ] Premium currency and payments
