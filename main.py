@@ -3310,6 +3310,8 @@ async def api_explore(request: web.Request):
     if not isinstance(payload, dict):
         return web.json_response({"error": "JSON body must be an object."}, status=400)
     if set(payload) - {"monster_level"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_monster_request", "unexpected exploration fields", 2)
         return web.json_response({"error": "Unsupported exploration request fields."}, status=400)
     requested_monster_level = payload.get("monster_level")
     if requested_monster_level is not None and (type(requested_monster_level) is not int or not 1 <= requested_monster_level <= 100):
@@ -3707,8 +3709,12 @@ async def api_action(request: web.Request):
         return web.json_response({"error": "JSON body must be an object."}, status=400)
     action = payload.get("action")
     if set(payload) != {"action"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_battle_action", "unexpected action fields", 2)
         return web.json_response({"error": "Unsupported battle action fields."}, status=400)
     if action not in {"attack", "skill", "potion", "flee"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_battle_action", str(action)[:80], 2)
         return web.json_response({"error": "Unknown battle action."}, status=400)
     user_id = user["id"]
     async with db_lock:
