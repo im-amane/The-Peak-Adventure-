@@ -123,4 +123,12 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   row=await cur.fetchone()
   self.assertEqual((row["current_bid"],row["highest_bidder"],row["status"]),(0,None,"active"))
 
+
+ async def test_delete_account_removes_guild_chat_history(self):
+  await self.db.execute("CREATE TABLE guild_chat_messages(message_id INTEGER PRIMARY KEY,guild_id INTEGER,user_id INTEGER,message TEXT)")
+  await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
+  await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM guild_chat_messages WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
+
 if __name__=="__main__": unittest.main()
