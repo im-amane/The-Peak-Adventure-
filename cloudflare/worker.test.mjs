@@ -457,3 +457,13 @@ test("hero workshop persists face and body customization controls", () => {
   assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX,1\)/);
   assert.match(game, /\["race","skin","hair","face","body","outfit"\]/);
 });
+
+
+test("hero level-up, defeat and respawn effects are wired to state changes", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /previousLevel !== null && data\.level > previousLevel/);
+  assert.match(game, /previousHp !== null && previousHp > 0 && data\.hp <= 0/);
+  assert.match(game, /playDeathAnimation\(\)/);
+  assert.match(game, /playRespawnAnimation\(\)/);
+  assert.match(game, /playLevelUpAnimation\(\)/);
+});
