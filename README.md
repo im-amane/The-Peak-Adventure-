@@ -56,6 +56,8 @@ On Windows, activate with `.venv\\Scripts\\activate`.
 
 The repository includes a Cloudflare Worker in `cloudflare/worker.mjs`. Cloudflare serves the Mini App's `webapp/` assets globally, while the Worker forwards only the game's known API routes to the Python/Aiohttp origin. It preserves Telegram Mini App authentication headers, rejects unsupported methods and oversized bodies, strips cookies and arbitrary authorization headers, disables caching for authenticated API responses, and enables Worker observability. The Worker does not replace the Python game server or its SQLite database.
 
+When changing `webapp/index.html`, `webapp/style.css`, or `webapp/game.js`, run `python scripts/sync_cloudflare_assets.py` to refresh the Worker fallback copies. CI checks that these embedded copies match the canonical Mini App files.
+
 1. Install Wrangler: `npm install --save-dev wrangler`.
 2. Authenticate: `npx wrangler login`.
 3. Set the deployed Python service URL as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (enter the HTTPS Render/VPS origin, without a path).
