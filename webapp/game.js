@@ -66,6 +66,7 @@
   let pendingSceneEffects = [];
   const pressedDirections = new Set();
   let sprintTouchHeld = false;
+  let sprintKeyboardHeld = false;
   let nearMonster = false;
   let nearNpc = false;
   let nearPortal = false;
@@ -76,6 +77,25 @@
   let ambientNodes = [];
   let ambientGain = null;
 
+  function clearMovementInput() {
+    pressedDirections.clear();
+    sprintTouchHeld = false;
+    sprintKeyboardHeld = false;
+    const control = document.getElementById("sprint-control");
+    if (control) control.setAttribute("aria-pressed", "false");
+  }
+
+  window.addEventListener("keydown", event => {
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") sprintKeyboardHeld = true;
+  });
+  window.addEventListener("keyup", event => {
+    if (event.code === "ShiftLeft" || event.code === "ShiftRight") sprintKeyboardHeld = false;
+  });
+  window.addEventListener("blur", clearMovementInput);
+  window.addEventListener("pagehide", clearMovementInput);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearMovementInput();
+  });
 
   function startAmbientMusic() {
     if (!soundEnabled || !audioContext || audioContext.state !== "running" || ambientNodes.length) return;
@@ -1064,9 +1084,9 @@
           this.weatherGraphics.fillCircle(x,y,1+(i%3));
         }
       }
-      if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
+      if(gameState && gameState.battle_active){clearMovementInput();ui.encounter.disabled=true;return;}
       const baseSpeed=0.18*delta;
-      const sprintHeld=Boolean((this.sprintKey&&this.sprintKey.isDown)||sprintTouchHeld);
+      const sprintHeld=Boolean(sprintKeyboardHeld||sprintTouchHeld);
       const speed=baseSpeed*(sprintHeld?1.45:1);
       let dx=0,dy=0;
       if(this.cursors.left.isDown||this.keys.A.isDown||pressedDirections.has("left"))dx=-1;
@@ -1110,12 +1130,17 @@
       const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
       if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
       const walking=Boolean(dx||dy);
-      const gait=walking?Math.sin(this.time.now/(sprinting?52:75))*(sprinting?0.66:0.48):Math.sin(this.time.now/430)*0.055;
+      const gait=walking?Math.sin(this.time.now/(sprinting?46:76))*(sprinting?0.82:0.52):Math.sin(this.time.now/430)*0.065;
       if(this.hero.limbs){
-        this.hero.limbs.leftArm.rotation=-gait;
-        this.hero.limbs.rightArm.rotation=gait;
-        this.hero.limbs.leftLeg.rotation=gait*0.72;
-        this.hero.limbs.rightLeg.rotation=-gait*0.72;
+        this.hero.limbs.leftArm.rotation=-gait*0.92;
+        this.hero.limbs.rightArm.rotation=gait*0.92;
+        this.hero.limbs.leftLeg.rotation=gait*0.78;
+        this.hero.limbs.rightLeg.rotation=-gait*0.78;
+      }
+      if(sprinting&&this.time.now-(this.lastSprintDustAt||0)>160){
+        this.lastSprintDustAt=this.time.now;
+        const dust=this.add.circle(this.hero.x-dx*5,this.hero.y+15,2,0xd9c8a0,0.42).setDepth(8);
+        this.tweens.add({targets:dust,x:dust.x-dx*11,y:dust.y+5-dy*4,alpha:0,scale:2.1,duration:260,onComplete:()=>dust.destroy()});
       }
       if(this.npc && this.npc.limbs){
         const idle=Math.sin(this.time.now/520)*0.045;
