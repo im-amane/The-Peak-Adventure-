@@ -11,7 +11,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Elemental matchups, weapon attack bonuses and armor defence bonuses
 - Equipment shop with level-gated weapons, armor and potions
 - Persistent story quests and achievements with one-time rewards
-- Daily rewards with a UTC 24-hour claim cooldown
+- Daily rewards with a rolling 24-hour claim cooldown
 - One-time boss clears, player XP/levels, coins, HP and leaderboards
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
