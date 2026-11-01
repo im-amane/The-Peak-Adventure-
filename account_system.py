@@ -115,6 +115,15 @@ async def delete_player_account(db,user_id):
         await db.execute("UPDATE auction_listings SET highest_bidder=NULL,current_bid=0 WHERE highest_bidder=? AND status='active'",(user_id,))
         await db.execute("DELETE FROM auction_stash WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
+    # Remove records added by optional gameplay services when those services are installed.
+    for table, where, params in (
+        ("player_reports","reporter_id=? OR target_id=?",(user_id,user_id)),
+        ("player_weekly_quests","user_id=?",(user_id,)),
+        ("player_stamina","user_id=?",(user_id,)),
+    ):
+        cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,))
+        if await cur.fetchone():
+            await db.execute(f"DELETE FROM {table} WHERE {where}",params)
     for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards","player_materials","crafted_items","player_worlds","player_presence","world_discoveries","player_story","story_flags","story_reward_claims"):
         await db.execute(f"DELETE FROM {table} WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM players WHERE user_id=?",(user_id,))
