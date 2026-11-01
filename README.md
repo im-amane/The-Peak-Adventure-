@@ -92,7 +92,7 @@ python -c "import main"
 python -m unittest discover -s tests -v
 ```
 
-The repository includes a GitHub Actions workflow configured to run these checks on pushes and pull requests to `main`.
+The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run automated unit tests on pushes and pull requests to `main`.
 
 ## Remaining development
 The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, co-op parties, guild invites and equipment trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
