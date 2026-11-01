@@ -191,7 +191,7 @@ async def get_player(user_id: int, username: str | None = None):
     return await cur.fetchone()
 
 
-def menu():
+def menu(include_webapp: bool = False):
     rows = [
         [InlineKeyboardButton(text="🗺️ Explore", callback_data="explore"),
          InlineKeyboardButton(text="👤 Profile", callback_data="profile")],
@@ -205,7 +205,7 @@ def menu():
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ]
-    if WEBAPP_URL:
+    if WEBAPP_URL and include_webapp:
         rows.insert(0, [InlineKeyboardButton(text="🎮 Open 2D Adventure", web_app=WebAppInfo(url=WEBAPP_URL))])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -1098,7 +1098,7 @@ async def start(message: Message):
         "and a forgotten force is waking beneath the earth. Your journey begins with one small slime...\n\n"
         "Explore, fight monsters, grow stronger, and uncover the mystery behind the 100 levels.\n\n"
         "Use the buttons below or /help.",
-        reply_markup=menu())
+        reply_markup=menu(include_webapp=message.chat.type == "private"))
 
 
 @dp.message(Command("help"))
@@ -1319,7 +1319,7 @@ async def cb_choose_class(call: CallbackQuery):
         f"✨ You are now a <b>{chosen}</b>!\n"
         f"Class skill: {stats['skill']}\nElement: {stats['element']}\n"
         "Your adventure begins now.",
-        reply_markup=menu(),
+        reply_markup=menu(include_webapp=call.message.chat.type == "private"),
     )
 
 
@@ -1376,7 +1376,7 @@ async def cb_buy_item(call: CallbackQuery):
 async def cb_profile(call: CallbackQuery):
     await call.answer()
     p = await get_player(call.from_user.id, call.from_user.username)
-    await call.message.answer(await player_text(p), reply_markup=menu())
+    await call.message.answer(await player_text(p), reply_markup=menu(include_webapp=call.message.chat.type == "private"))
 
 
 @dp.callback_query(F.data == "inventory")
