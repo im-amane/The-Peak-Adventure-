@@ -16,6 +16,8 @@
 The-Peak-Adventure/
 ├── main.py                    # Telegram bot, handlers, API and game services
 ├── game_rules.py              # Shared combat/progression rules
+├── friend_system.py            # Persistent friend requests and friend list
+├── party_system.py             # Four-player parties and leadership lifecycle
 ├── telegram_auth.py           # Telegram Mini App initData verification
 ├── monsters.json              # 100-level monster catalogue
 ├── requirements.txt           # Python dependencies
@@ -23,8 +25,14 @@ The-Peak-Adventure/
 ├── Procfile                   # Process start command
 ├── Dockerfile                 # Container build
 ├── render.yaml                # Render deployment blueprint
+├── cloudflare/
+│   ├── worker.mjs              # Cloudflare static-asset/API edge gateway
+│   └── worker.test.mjs         # Edge gateway tests
+├── wrangler.jsonc              # Cloudflare Worker + static asset configuration
 ├── tests/
-│   └── test_game_rules.py     # Game rules/catalogue tests
+│   ├── test_game_rules.py     # Game rules/catalogue tests
+│   ├── test_friend_system.py  # Friend request lifecycle tests
+│   └── test_party_system.py   # Party invite/capacity/leadership tests
 ├── .github/workflows/
 │   └── tests.yml              # CI test workflow
 ├── webapp/
@@ -139,9 +147,10 @@ The-Peak-Adventure/
 - [x] Duel accept and decline
 - [x] Turn-based PvP actions
 - [x] Surrender and PvP ranking
-- [ ] Friend requests and friend list
+- [x] Friend requests and friend list
 - [ ] Online presence
-- [ ] Party creation and invitations
+- [x] Party creation and invitations
+- [x] Party membership management and leader handoff
 - [ ] Co-op exploration
 - [ ] Co-op PvE battles
 - [ ] Team boss raids
@@ -249,11 +258,11 @@ The-Peak-Adventure/
 
 ## Audited implementation progress
 
-- Total tracked implementation tasks: 169
-- Fully implemented tasks: 89
-- Partially implemented tasks: 8
-- Pending tasks: 72
-- Fully implemented coverage: 52% (89 / 169; partial tasks are not counted as complete)
+- Total tracked implementation tasks: 170
+- Fully implemented tasks: 94
+- Partially implemented tasks: 7
+- Pending tasks: 69
+- Fully implemented coverage: 55% (94 / 170; partial tasks are not counted as complete)
 
 This is repository checklist coverage, not a claim that the game is production-ready or live-tested.
 
@@ -266,4 +275,4 @@ This is repository checklist coverage, not a claim that the game is production-r
 6. Only then promote a feature to fully verified completion.
 
 ## Current verification caveat
-The repository contains automated test files and a GitHub Actions workflow. This checklist does not claim that the current test suite has been executed successfully in this session, nor that a live Telegram deployment has been tested.
+The repository contains automated test files and a GitHub Actions workflow. Friend and party service logic received local SQLite-backed checks (9/9 and 10/10), and the Cloudflare Worker tests ran locally in Node.js (8/8). The full GitHub Actions Python suite, full application compile/import, live Telegram bot, and production Cloudflare/Render deployment are not yet verified.
