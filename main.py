@@ -649,13 +649,15 @@ async def trade_summary(trade):
     initiator = await get_player(trade["initiator_id"])
     partner = await get_player(trade["partner_id"])
     return (
-        f"🤝 <b>Trade #{trade['trade_id']}</b> · {trade['status'].upper()}\n"
-        f"<b>{escape(initiator['username'] or 'Player 1')}</b> offers: "
-        f"{trade['initiator_coins']} coins, {trade['initiator_potions']} potions\n"
-        f"<b>{escape(partner['username'] or 'Player 2')}</b> offers: "
-        f"{trade['partner_coins']} coins, {trade['partner_potions']} potions\n"
-        f"Confirmations: {'✅' if trade['initiator_confirmed'] else '⌛'} / "
-        f"{'✅' if trade['partner_confirmed'] else '⌛'}"
+        "🤝 <b>Trade #" + str(trade["trade_id"]) + "</b> · " + trade["status"].upper() + "\n"
+        + "<b>" + escape(initiator["username"] or "Player 1") + "</b> offers: "
+        + str(trade["initiator_coins"]) + " coins, " + str(trade["initiator_potions"]) + " potions, "
+        + escape(trade["initiator_weapon"] or "no weapon") + ", " + escape(trade["initiator_armor"] or "no armor") + "\n"
+        + "<b>" + escape(partner["username"] or "Player 2") + "</b> offers: "
+        + str(trade["partner_coins"]) + " coins, " + str(trade["partner_potions"]) + " potions, "
+        + escape(trade["partner_weapon"] or "no weapon") + ", " + escape(trade["partner_armor"] or "no armor") + "\n"
+        + "Confirmations: " + ("✅" if trade["initiator_confirmed"] else "⌛") + " / "
+        + ("✅" if trade["partner_confirmed"] else "⌛")
     )
 
 
