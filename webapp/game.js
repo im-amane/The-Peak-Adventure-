@@ -362,14 +362,6 @@
         addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
       });
     }
-    const guildInvites=social.pending_guild_invites||[];
-    if(guildInvites.length){
-      const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
-      guildInvites.forEach(invite=>{
-        addAction(card,"Accept","guild_accept",{inviteId:invite.invite_id});
-        addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
-      });
-    }
     if(social.pending_trades){
       const note=document.createElement("p");note.className="small";note.textContent="🤝 Pending trades: "+social.pending_trades;
       ui.socialOverview.appendChild(note);
