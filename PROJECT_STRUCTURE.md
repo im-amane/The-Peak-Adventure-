@@ -128,7 +128,7 @@ The-Peak-Adventure/
 - [x] Monster encounter level validation
 - [x] Boss HP phase thresholds at 60% and 25%
 - [x] Boss phase damage scaling
-- [~] Monster discovery/bestiary basics
+- [x] Monster discovery/bestiary basics
 - [x] 100 individually authored and lore-consistent stories
 - [ ] Monster evolution and variants
 - [ ] Elite and roaming events
