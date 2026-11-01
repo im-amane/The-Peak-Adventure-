@@ -1,5 +1,6 @@
 """The Peak Adventure - Telegram turn-based RPG bot."""
 import asyncio
+from html import escape
 import json
 import logging
 import os
@@ -175,7 +176,7 @@ def xp_needed(level: int) -> int:
 
 
 async def player_text(p):
-    return (f"👤 <b>{p['username'] or 'Adventurer'}</b>\n"
+    return (f"👤 <b>{escape(p['username'] or 'Adventurer')}</b>\n"
             f"🧙 Class: <b>{p['hero_class']}</b>\n"
             f"⚔️ Weapon: <b>{p['weapon']}</b> (+{p['weapon_attack']} ATK)\n"
             f"🛡️ Armor: <b>{p['armor']}</b> (+{p['armor_defense']} DEF)\n"
@@ -402,7 +403,7 @@ async def help_cmd(message: Message):
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
-        "/claimquest <id> - Claim a completed quest reward\n\n"
+        "/claimquest quest_id - Claim a completed quest reward\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
 
@@ -483,7 +484,7 @@ async def quests(message: Message):
 @dp.message(Command("claimquest"))
 async def claimquest(message: Message):
     if len(message.command) < 2:
-        await message.answer("Usage: /claimquest <quest_id>. Use /quests to see available rewards.")
+        await message.answer("Usage: <code>/claimquest quest_id</code>. Use /quests to see available rewards.")
         return
     result = await claim_quest_reward(message.from_user.id, message.command[1])
     await message.answer(result)
@@ -508,7 +509,7 @@ async def leaderboard(message: Message):
         return
     lines = ["🏆 <b>Top Adventurers</b>"]
     for i, row in enumerate(rows, 1):
-        lines.append(f"{i}. {row['username'] or 'Adventurer'} · Lv.{row['level']} · {row['wins']} wins")
+        lines.append(f"{i}. {escape(row['username'] or 'Adventurer')} · Lv.{row['level']} · {row['wins']} wins")
     await message.answer("\n".join(lines))
 
 
@@ -652,7 +653,7 @@ async def cb_leaderboard(call: CallbackQuery):
     cur = await db.execute("SELECT username, level, wins FROM players ORDER BY level DESC, wins DESC LIMIT 10")
     rows = await cur.fetchall()
     await call.message.answer("🏆 <b>Leaderboard</b>\n" + "\n".join(
-        f"{i}. {r['username'] or 'Adventurer'} · Lv.{r['level']} · {r['wins']} wins" for i, r in enumerate(rows, 1)))
+        f"{i}. {escape(r['username'] or 'Adventurer')} · Lv.{r['level']} · {r['wins']} wins" for i, r in enumerate(rows, 1)))
 
 
 async def _battle_action_unlocked(call: CallbackQuery):
