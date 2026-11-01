@@ -12,7 +12,7 @@
     {
       "id": "01",
       "name": "Telegram Bot System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Bot startup and command routing",
@@ -75,7 +75,7 @@
     {
       "id": "02",
       "name": "Personal Player System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Player registration and Telegram identity",
@@ -311,7 +311,7 @@
     {
       "id": "06",
       "name": "Monster and Boss System",
-      "status": "partial",
+      "status": "pending",
       "items": [
         {
           "name": "100 monster records and ordered levels",
@@ -480,7 +480,7 @@
     {
       "id": "09",
       "name": "Guild System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Guild create/join/leave/info/top/disband commands",
