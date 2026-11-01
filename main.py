@@ -3486,7 +3486,6 @@ async def api_dungeon(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
-            await expire_stale_trades()
             async with player_locks[user_id]:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "enter":
