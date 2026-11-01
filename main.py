@@ -124,6 +124,11 @@ async def init_db():
       defeated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY(user_id, monster_level)
     );
+    CREATE TABLE IF NOT EXISTS monster_discoveries (
+      user_id INTEGER NOT NULL, monster_level INTEGER NOT NULL,
+      discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(user_id, monster_level)
+    );
     CREATE TABLE IF NOT EXISTS quest_progress (
       user_id INTEGER NOT NULL, quest_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
@@ -314,6 +319,10 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
     await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
     await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
                      (user_id, monster_level, m["hp"]))
+    await db.execute(
+        "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+        (user_id, monster_level),
+    )
     await db.commit()
     await send_battle(send_target, user_id, "🌲 <b>You enter the wilds...</b>")
 
@@ -1214,11 +1223,18 @@ async def monster_info(message: Message):
 
 @dp.message(Command("bestiary"))
 async def bestiary(message: Message):
-    p = await get_player(message.from_user.id)
-    upper = min(100, p["level"] + 1)
-    discovered = MONSTERS[:upper]
-    lines = ["📚 <b>Monster Bestiary</b>"]
-    for monster in discovered:
+    await get_player(message.from_user.id)
+    cur = await db.execute(
+        "SELECT monster_level FROM monster_discoveries WHERE user_id=? ORDER BY monster_level",
+        (message.from_user.id,),
+    )
+    rows = await cur.fetchall()
+    if not rows:
+        await message.answer("📚 <b>Monster Bestiary</b>\nNo creatures discovered yet. Use /explore to begin your research.")
+        return
+    lines = [f"📚 <b>Monster Bestiary</b> · {len(rows)}/100 discovered"]
+    for row in rows:
+        monster = MONSTER_BY_LEVEL[row["monster_level"]]
         marker = "👑" if monster["boss"] else "•"
         lines.append(f"{marker} Lv.{monster['level']} {monster['name']} · {monster['element']}")
     lines.append("\nUse /monster <code>level</code> for full details.")
@@ -1685,6 +1701,10 @@ async def api_explore(request: web.Request):
             await db.execute(
                 "INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
                 (user_id, monster_level, monster["hp"]),
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+                (user_id, monster_level),
             )
             await db.commit()
     return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
