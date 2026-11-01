@@ -121,6 +121,7 @@ async def delete_player_account(db,user_id):
         ("player_bans","user_id=?",(user_id,)),
         ("player_weekly_quests","user_id=?",(user_id,)),
         ("player_stamina","user_id=?",(user_id,)),
+        ("player_mana","user_id=?",(user_id,)),
     ):
         cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,))
         if await cur.fetchone():
