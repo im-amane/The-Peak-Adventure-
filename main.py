@@ -1477,7 +1477,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
             await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
             return
         damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
-        await db.execute("UPDATE players SET skill_cd=3 WHERE user_id=?", (user_id,))
+        await db.execute("UPDATE players SET skill_cd=4 WHERE user_id=?", (user_id,))
         action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
     else:
         damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
@@ -1706,7 +1706,7 @@ async def api_action(request: web.Request):
                 (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
                 - monster["defense"] // 2,
             ) * 2
-            await db.execute("UPDATE players SET skill_cd=3 WHERE user_id=?", (user_id,))
+            await db.execute("UPDATE players SET skill_cd=4 WHERE user_id=?", (user_id,))
             action_line = f"{class_stats['skill']} deals {damage} damage."
         else:
             damage = max(
