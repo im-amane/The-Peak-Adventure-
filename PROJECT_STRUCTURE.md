@@ -72,7 +72,7 @@ The-Peak-Adventure/
 - [x] Story quest progress and one-time rewards
 - [x] Achievements and one-time rewards
 - [x] Daily reward cooldown
-- [~] Bestiary discovery
+- [x] Persistent bestiary discovery from Telegram and Mini App encounters
 - [x] Player settings and preferences
 - [x] Account recovery, JSON export, privacy settings and confirmed account deletion (JSON export implemented; account deletion workflow pending)
 
