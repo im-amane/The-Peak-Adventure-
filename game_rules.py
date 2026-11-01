@@ -34,7 +34,7 @@ def validate_monster_catalogue(monsters: list[dict]) -> None:
     required = {
         "name", "level", "boss", "rank", "power", "attack_power", "defense",
         "speed", "hp", "element", "special_move", "unique_power",
-        "advantage", "disadvantage", "weakness", "story",
+        "advantage", "disadvantage", "weakness", "story", "trait_effect",
     }
     for monster in monsters:
         missing = required.difference(monster)
