@@ -46,6 +46,7 @@ from roaming_event_system import RoamingEventError, attack_roaming_event, claim_
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
+from security_system import get_security_events, get_suspicious_players, init_security_tables, record_security_event
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 
 load_dotenv()
@@ -268,6 +269,7 @@ async def init_db():
     await init_daily_mission_tables(db)
     await init_roaming_event_tables(db)
     await init_evolution_tables(db)
+    await init_security_tables(db)
     await init_moderation_tables(db)
     await init_mana_tables(db)
 
@@ -2190,7 +2192,7 @@ async def admin_command(message: Message):
             f"Players: {stats['players']}\nActive monster battles: {stats['active_battles']}\n"
             f"Guilds: {stats['guilds']}\nRegistered groups: {stats['registered_groups']}\n"
             f"Active PvP duels: {stats['active_duels']}\n\n"
-            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE."
+            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin security [PLAYER_ID], /admin announce MESSAGE."
         )
         return
     if action=="ban":
@@ -2237,6 +2239,21 @@ async def admin_command(message: Message):
             await message.answer("✅ Report resolved.")
         except ReportError as exc:
             await message.answer(escape(str(exc)))
+        return
+    if action=="security":
+        if len(args)>2 and args[2].isdigit():
+            target=int(args[2])
+            events=await get_security_events(db,target,20)
+            lines=[f"🛡️ <b>Security Events · Player {target}</b>"]
+            for row in events:
+                lines.append(f"#{row['event_id']} · severity {row['severity']} · {escape(row['event_type'])}\\n{escape(row['details'])} · {row['created_at']}")
+            await message.answer("\\n\\n".join(lines) if len(lines)>1 else "No security events for this player.")
+        else:
+            rows=await get_suspicious_players(db,1440,20)
+            lines=["🛡️ <b>Suspicious Activity · Last 24 Hours</b>"]
+            for row in rows:
+                lines.append(f"Player <code>{row['user_id']}</code> · {row['event_count']} events · risk {row['risk_score']} · max severity {row['max_severity']} · last {row['last_seen']}")
+            await message.answer("\\n".join(lines) if len(lines)>1 else "No suspicious activity recorded.")
         return
     if action=="logs":
         logs=await recent_admin_actions(db,20)
@@ -2286,7 +2303,7 @@ async def admin_command(message: Message):
         await record_admin_action(db,message.from_user.id,"broadcast",None,"sent="+str(sent)+", failed="+str(failed))
         await message.answer(f"📢 Broadcast finished. Sent: {sent}. Failed: {failed}.")
         return
-    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE.")
+    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin security [PLAYER_ID], /admin announce MESSAGE.")
 
 
 @dp.message(Command("export"))
@@ -3614,6 +3631,7 @@ async def api_social(request: web.Request):
                         for row in rows
                     ]}
                 else:
+                    await record_security_event(db, user_id, "invalid_social_action", action[:80], 2)
                     return web.json_response({"error": "Unsupported social action."}, status=400)
                 state = await miniapp_state(user)
     except (FriendError, PartyError, GuildFeatureError) as exc:
