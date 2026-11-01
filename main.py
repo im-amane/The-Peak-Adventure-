@@ -763,17 +763,20 @@ async def _battle_action_unlocked(call: CallbackQuery):
     else:
         damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
         action_line = f"⚔️ You strike for {damage} damage."
-    elemental_multiplier = 1.0
-    if class_stats["element"] == m["weakness"]:
-        elemental_multiplier = 1.5
-        action_line += f" ✨ Super effective! {class_stats['element']} exploits its weakness."
-    elif class_stats["element"] == m["element"]:
-        elemental_multiplier = 0.8
-        action_line += f" 🧱 {m['element']} resists your matching element."
-    damage = max(1, int(damage * elemental_multiplier))
-    if m["trait_effect"] == "armored":
-        damage = max(1, int(damage * 0.85))
-        action_line += " 🛡️ Its armor absorbs part of the hit."
+    if action != "potion":
+        elemental_multiplier = 1.0
+        if class_stats["element"] == m["weakness"]:
+            elemental_multiplier = 1.5
+            action_line += f" ✨ Super effective! {class_stats['element']} exploits its weakness."
+        elif class_stats["element"] == m["element"]:
+            elemental_multiplier = 0.8
+            action_line += f" 🧱 {m['element']} resists your matching element."
+        damage = max(1, int(damage * elemental_multiplier))
+        if m["trait_effect"] == "armored":
+            damage = max(1, int(damage * 0.85))
+            action_line += " 🛡️ Its armor absorbs part of the hit."
+    else:
+        damage = 0
     new_enemy_hp = max(0, b["monster_hp"] - damage)
     turn_count = b["turn_count"] + 1
     if new_enemy_hp > 0 and m["trait_effect"] == "regenerate":
