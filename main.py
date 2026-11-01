@@ -29,7 +29,7 @@ from group_system import GroupError, attack_group_raid, award_group_xp, claim_gr
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message
+from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
@@ -3154,6 +3154,13 @@ async def miniapp_state(user: dict):
         social_guild = {"guild_id":guild_row["guild_id"],"name":guild_row["name"],"level":guild_row["guild_level"],
             "xp":guild_row["guild_xp"],"role":guild_row["role"],
             "members":[{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"],"role":row["role"]} for row in guild_members_rows]}
+    pending_guild_invites = await list_pending_guild_invites(db, user_id)
+    social_guild_invites = [
+        {"invite_id":row["invite_id"],"guild_id":row["guild_id"],"guild_name":row["guild_name"],
+         "inviter_id":row["inviter_id"],"inviter_name":row["inviter_name"] or "Adventurer",
+         "inviter_level":row["inviter_level"]}
+        for row in pending_guild_invites
+    ]
     trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
     pending_trades = (await trade_cur.fetchone())["total"]
     dungeon_state = await get_dungeon_state(db, user_id)
@@ -3180,7 +3187,9 @@ async def miniapp_state(user: dict):
         "hero_class": p["hero_class"],
         "appearance": appearance,
         "quests": quest_state,
-        "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
+        "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
+                    "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
+                    "pending_trades": pending_trades},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
