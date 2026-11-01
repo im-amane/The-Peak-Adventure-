@@ -406,15 +406,15 @@
         },
         {
           "name": "Co-op PvE battles",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Team boss raids",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Matchmaking and anti-abuse limits",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Party membership management and leader handoff",
@@ -790,17 +790,17 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 123,
-    "partial_items": 17,
-    "pending_items": 30,
-    "fully_implemented_percent": 72,
+    "complete_items": 125,
+    "partial_items": 18,
+    "pending_items": 27,
+    "fully_implemented_percent": 73,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 123,
-    "partial": 17,
-    "pending": 30,
+    "complete": 125,
+    "partial": 18,
+    "pending": 27,
     "total": 170,
-    "percentage": 72
+    "percentage": 73
   }
 }
