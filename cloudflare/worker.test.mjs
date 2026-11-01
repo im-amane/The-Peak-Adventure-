@@ -545,3 +545,15 @@ test("form controls share visible keyboard focus and consistent disabled feedbac
   assert.match(css, /button:disabled\{opacity:\.55\}/);
   assert.match(css, /prefers-reduced-motion:reduce/);
 });
+
+
+test("Mini App requests abort after a bounded timeout and always clear the timer", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /async function requestWithTimeout\(path, options\)/);
+  assert.match(game, /window\.setTimeout\(\(\) => controller\.abort\(\), 20000\)/);
+  assert.match(game, /signal: controller\.signal/);
+  assert.match(game, /if \(controller\.signal\.aborted\)/);
+  assert.match(game, /window\.clearTimeout\(timeoutId\)/);
+  assert.match(game, /requestWithTimeout\("\/api\/state"/);
+  assert.match(game, /requestWithTimeout\(path/);
+});
