@@ -86,6 +86,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/shop` - Buy weapons, armor and potions
 - `/heal` - Restore HP at camp
 - `/map` - View the current region
+- `/travel` - View unlocked worlds and fast travel with `/travel 3`
 - `/monster <level>` - Inspect a monster
 - `/bestiary` - View discovered monsters
 - `/quests` - View story quests and claimable rewards
