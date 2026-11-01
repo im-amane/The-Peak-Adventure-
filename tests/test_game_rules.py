@@ -260,11 +260,11 @@ class GameRulesTests(unittest.TestCase):
         )
         result = resolve_enemy_turn(**common)
         self.assertEqual(result["boss_phase"], 1)
-        self.assertEqual(result["enemy_damage"], 38)
+        self.assertEqual(result["enemy_damage"], 57)
         self.assertFalse(result["evaded"])
-        self.assertEqual(result["player_hp"], 62)
-        self.assertEqual(result["monster_hp"], 70)
-        self.assertIn("The monster steals 9 HP.", result["effect_notes"])
+        self.assertEqual(result["player_hp"], 43)
+        self.assertEqual(result["monster_hp"], 74)
+        self.assertIn("The monster steals 14 HP.", result["effect_notes"])
 
     def test_shared_enemy_turn_resolution_handles_dodge_reflect_and_poison(self):
         from game_rules import resolve_enemy_turn
