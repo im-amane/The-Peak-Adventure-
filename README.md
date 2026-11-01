@@ -14,7 +14,8 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Daily rewards with a UTC 24-hour claim cooldown
 - One-time boss clears, player XP/levels, coins, HP and leaderboards
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
-- Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings\n- Player trading for coins and health potions with dual confirmation
+- Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
+- Player trading for coins and health potions with dual confirmation
 - Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement and in-app battle controls
 - Telegram initData HMAC authentication for the Mini App API
 - SQLite persistence and automated catalogue/authentication tests
