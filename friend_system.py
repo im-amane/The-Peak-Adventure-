@@ -8,6 +8,9 @@ class FriendError(ValueError):
     """A friend operation cannot be completed."""
 
 
+MAX_PENDING_FRIEND_REQUESTS = 10
+
+
 async def init_friend_tables(db: aiosqlite.Connection) -> None:
     await db.executescript("""
     CREATE TABLE IF NOT EXISTS friend_requests (
@@ -57,6 +60,12 @@ async def send_friend_request(db: aiosqlite.Connection, requester_id: int, targe
         if existing["requester_id"] == requester_id:
             raise FriendError("Your friend request is already pending.")
         raise FriendError("This player has already sent you a request. Accept it instead.")
+    cur = await db.execute(
+        "SELECT COUNT(*) AS total FROM friend_requests WHERE requester_id=? AND status='pending'",
+        (requester_id,),
+    )
+    if (await cur.fetchone())["total"] >= MAX_PENDING_FRIEND_REQUESTS:
+        raise FriendError(f"You can have at most {MAX_PENDING_FRIEND_REQUESTS} outgoing friend requests pending.")
     try:
         cur = await db.execute(
             "INSERT INTO friend_requests(user_low,user_high,requester_id,target_id) VALUES(?,?,?,?)",
