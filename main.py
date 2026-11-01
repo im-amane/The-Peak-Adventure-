@@ -3203,6 +3203,9 @@ async def miniapp_state(user: dict):
         "potions": p["potions"],
         "skill_cd": p["skill_cd"],
         "coins": p["coins"],
+        "world_id": world_id,
+        "worlds": await get_world_choices(db, user_id, p["level"]),
+        "landmark": await get_world_landmark(db, user_id, world_id),
         "region": region_names[region_index],
         "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
         "nearby_monsters": nearby_monsters,
@@ -3408,6 +3411,49 @@ async def api_weekly_quest_claim(request: web.Request):
         "message": f"Weekly quest claimed: +{reward['coins']} coins and +{reward['potions']} potions.",
         "state": state,
     })
+
+
+async def api_world(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "World request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "World payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or payload.get("action") not in {"travel", "discover"}:
+        return web.json_response({"error": "Unsupported world action."}, status=400)
+    user_id = user["id"]
+    try:
+        async with db_lock:
+            async with player_locks[user_id]:
+                player = await get_player(user_id, user.get("username") or user.get("first_name"))
+                if payload["action"] == "travel":
+                    if set(payload) != {"action", "world_id"}:
+                        return web.json_response({"error": "A world_id is required."}, status=400)
+                    world_id = payload.get("world_id")
+                    if not isinstance(world_id, int) or isinstance(world_id, bool):
+                        return web.json_response({"error": "Invalid world ID."}, status=400)
+                    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+                    if await cur.fetchone():
+                        return web.json_response({"error": "Finish or escape your active battle before travelling."}, status=409)
+                    world = await travel_to_world(db, user_id, player["level"], world_id)
+                    message = "Fast travel complete. You are now in " + world["name"] + "."
+                else:
+                    if set(payload) != {"action"}:
+                        return web.json_response({"error": "Unexpected fields in landmark request."}, status=400)
+                    world_id = await get_current_world(db, user_id, player["level"])
+                    reward = await discover_world_landmark(db, user_id, player["level"], world_id)
+                    await record_weekly_progress(db, user_id, "landmarks")
+                    await record_daily_progress(db, user_id, "landmarks")
+                    message = f"Landmark discovered: {reward['landmark']}. +{reward['coins']} coins and +{reward['potions']} potions."
+                state = await miniapp_state(user)
+    except WorldError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({"message": message, "state": state})
 
 
 async def api_story(request: web.Request):
@@ -3717,6 +3763,7 @@ async def start_web_server():
     app.router.add_post("/api/quest/claim", api_quest_claim)
     app.router.add_post("/api/daily-mission/claim", api_daily_mission_claim)
     app.router.add_post("/api/weekly-quest/claim", api_weekly_quest_claim)
+    app.router.add_post("/api/world", api_world)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
