@@ -65,11 +65,23 @@ async def delete_player_account(db,user_id):
             await db.execute("UPDATE group_admins SET role='owner' WHERE chat_id=? AND user_id=?",(chat_id,successor["user_id"]))
             await db.execute("UPDATE group_profiles SET owner_id=? WHERE chat_id=?",(successor["user_id"],chat_id))
         else:
+            await db.execute("DELETE FROM group_raid_contributions WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
             for table in ("group_profiles","group_admins","group_players","group_missions","group_raids","group_bans"):
                 await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
     await db.execute("DELETE FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id))
     await db.execute("DELETE FROM party_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
-    await db.execute("DELETE FROM party_members WHERE user_id=?",(user_id,))
+    cur=await db.execute("SELECT party_id FROM party_members WHERE user_id=?",(user_id,))
+    party=await cur.fetchone()
+    if party:
+        party_id=party["party_id"]
+        cur=await db.execute("SELECT leader_id FROM parties WHERE party_id=?",(party_id,))
+        party_row=await cur.fetchone()
+        if party_row and party_row["leader_id"]==user_id:
+            cur=await db.execute("SELECT user_id FROM party_members WHERE party_id=? AND user_id!=? ORDER BY joined_at,user_id LIMIT 1",(party_id,user_id))
+            successor=await cur.fetchone()
+            if successor: await db.execute("UPDATE parties SET leader_id=? WHERE party_id=?",(successor["user_id"],party_id))
+            else: await db.execute("DELETE FROM parties WHERE party_id=?",(party_id,))
+        await db.execute("DELETE FROM party_members WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_players WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_admins WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_bans WHERE user_id=? OR actor_id=?",(user_id,user_id))
