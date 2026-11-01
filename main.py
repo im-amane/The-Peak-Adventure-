@@ -24,6 +24,7 @@ from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evad
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
+from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -189,6 +190,7 @@ async def init_db():
     await db.commit()
     await init_friend_tables(db)
     await init_party_tables(db)
+    await init_group_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -1065,6 +1067,94 @@ async def decline_party_callback(call: CallbackQuery):
     await call.message.edit_text(f"{call.message.text}\n\nParty invitation declined.")
 
 
+
+@dp.message(Command("group"))
+async def group_command(message: Message):
+    args=(message.text or "").split(maxsplit=2)
+    action=args[1].lower() if len(args)>1 else "info"
+    uid=message.from_user.id
+    if action=="top":
+        groups=await top_groups(db)
+        lines=["🏆 <b>Adventure Group Rankings</b>"]
+        for i,g in enumerate(groups,1): lines.append(f"{i}. {escape(g['title'])} · Lv.{g['group_level']} · XP {g['group_xp']}")
+        await message.answer("\n".join(lines) if len(lines)>1 else "No registered groups yet.")
+        return
+    if message.chat.type not in {"group","supergroup"}:
+        await message.answer("Use group commands inside a Telegram group. /group top works anywhere.")
+        return
+    cid=message.chat.id
+    if await is_group_banned(db,cid,uid):
+        await message.answer("⛔ You are blocked from this group's game features.")
+        return
+    if action=="register":
+        try: admins=await message.bot.get_chat_administrators(cid)
+        except Exception:
+            await message.answer("I need access to the group's admin list to verify its owner and admins."); return
+        actor=next((a for a in admins if a.user.id==uid),None)
+        owner=next((a for a in admins if a.status=="creator"),None)
+        if not actor or not owner:
+            await message.answer("Only the Telegram group owner or an administrator can register it."); return
+        try:
+            await register_group(db,cid,message.chat.title or "Adventure Group",owner.user.id)
+            for a in admins: await set_group_admin(db,cid,a.user.id,"owner" if a.status=="creator" else "admin")
+        except GroupError as exc:
+            await message.answer(escape(str(exc))); return
+        await message.answer("✅ Group registered. Owner and admin roles verified."); return
+    try: profile=await get_group_profile(db,cid)
+    except GroupError as exc:
+        await message.answer(escape(str(exc))); return
+    player=await get_player(uid,message.from_user.username or message.from_user.full_name)
+    if not player["class_selected"]:
+        await message.answer("Choose a hero class with /class first."); return
+    await record_group_player(db,cid,uid,player["username"],player["level"])
+    if action=="info":
+        await message.answer(f"🏰 <b>{escape(profile['title'])}</b>\nLevel {profile['group_level']} · XP {profile['group_xp']}/{profile['group_level']*500}\nPlayers: {profile['player_count']} · Verified admins: {profile['admin_count']}\nOwner ID: <code>{profile['owner_id']}</code>"); return
+    if action=="members":
+        rows=await list_group_players(db,cid); lines=[f"👥 <b>{escape(profile['title'])} roster</b>"]
+        lines += [f"{i}. {escape(r['username'] or 'Adventurer')} · Lv.{r['player_level']}" for i,r in enumerate(rows,1)]
+        await message.answer("\n".join(lines)); return
+    if action=="missions":
+        rows=await get_group_missions(db,cid); lines=["📜 <b>Daily group missions</b>"]
+        for r in rows: lines.append(f"{'✅' if r['completed'] else '▫️'} {r['title']}: {r['progress']}/{r['target']} · {r['reward']} coins")
+        await message.answer("\n".join(lines)); return
+    if action=="claim":
+        if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
+        try:
+            coins,xp=await claim_group_mission(db,cid,uid,args[2].lower())
+            await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(coins,uid)); await db.commit()
+            await message.answer(f"🎁 Claimed {coins} coins and {xp} group XP.")
+        except GroupError as exc: await message.answer(escape(str(exc)))
+        return
+    if action=="raid":
+        parts=(message.text or "").split(); sub=parts[2].lower() if len(parts)>2 else "status"
+        if sub=="start":
+            try:
+                if not await is_group_admin(db,cid,uid): raise GroupError("Only verified group admins can start a raid.")
+                level=min(100,max(10,((profile["group_level"]+9)//10)*10)); boss=MONSTER_BY_LEVEL[level]
+                rid=await start_group_raid(db,cid,uid,level,boss["name"],boss["hp"]*5)
+                await message.answer(f"🐉 <b>GROUP RAID #{rid}</b>\n{escape(boss['name'])} · Lv.{level} · {boss['hp']*5} HP\nUse /group raid attack.")
+            except GroupError as exc: await message.answer(escape(str(exc)))
+            return
+        if sub=="attack":
+            try:
+                result=await attack_group_raid(db,cid,uid,max(1,player["level"]*5+player["weapon_attack"]))
+                await record_group_activity(db,cid,"boss" if result["status"]=="won" else "battle")
+                await award_group_xp(db,cid,100 if result["status"]=="won" else 10)
+                await message.answer(f"⚔️ {escape(player['username'] or 'Adventurer')} deals {result['damage']} damage.\n{escape(result['boss_name'])}: {result['hp']}/{result['max_hp']} HP\n"+("🏆 <b>RAID CLEARED!</b>" if result["status"]=="won" else "The raid continues."))
+            except GroupError as exc: await message.answer(escape(str(exc)))
+            return
+        raid=await group_raid_status(db,cid)
+        await message.answer("No raid has been started." if not raid else f"🐉 {escape(raid['boss_name'])}: {raid['hp']}/{raid['max_hp']} HP · {raid['status'].upper()}"); return
+    if action in {"ban","unban"}:
+        if len(args)<3 or not args[2].isdigit():
+            await message.answer("Usage: /group ban|unban player_id [reason]"); return
+        try:
+            await set_group_ban(db,cid,uid,int(args[2]),action=="ban"," ".join(args[3:]))
+            await message.answer("Player blocked from group game features." if action=="ban" else "Player unblocked.")
+        except GroupError as exc: await message.answer(escape(str(exc)))
+        return
+    await message.answer("Commands: /group register, info, members, missions, claim ID, raid start|status|attack, ban|unban ID, top.")
+
 async def guild_summary(guild_id: int):
     cur = await db.execute(
         "SELECT g.*, COUNT(m.user_id) AS member_count FROM guilds g "
@@ -1394,6 +1484,7 @@ async def help_cmd(message: Message):
         "/friend request|accept|decline|list|remove - Friend list\n"
         "/party create|invite|accept|decline|info|leave|disband - Party management\n"
         "/guild create|join|leave|info|top|disband - Guild management\n"
+        "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
