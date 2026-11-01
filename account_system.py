@@ -66,6 +66,7 @@ async def delete_player_account(db,user_id):
             await db.execute("UPDATE group_profiles SET owner_id=? WHERE chat_id=?",(successor["user_id"],chat_id))
         else:
             await db.execute("DELETE FROM group_raid_contributions WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
+            await db.execute("DELETE FROM group_raid_cooldowns WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
             for table in ("group_profiles","group_admins","group_players","group_missions","group_raids","group_bans"):
                 await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
     await db.execute("DELETE FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id))
@@ -86,6 +87,7 @@ async def delete_player_account(db,user_id):
     await db.execute("DELETE FROM group_admins WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_bans WHERE user_id=? OR actor_id=?",(user_id,user_id))
     await db.execute("DELETE FROM group_raid_contributions WHERE user_id=?",(user_id,))
+    await db.execute("DELETE FROM group_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM duels WHERE challenger_id=? OR opponent_id=?",(user_id,user_id))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
     for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings"):
