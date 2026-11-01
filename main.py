@@ -1593,7 +1593,7 @@ async def admin_command(message: Message):
     if action=="announce":
         if len(args)<3 or not args[2].strip():
             await message.answer("Usage: /admin announce your announcement"); return
-        cur=await db.execute("SELECT user_id FROM players")
+        cur=await db.execute("SELECT p.user_id FROM players p LEFT JOIN player_settings s ON s.user_id=p.user_id WHERE s.notifications_enabled IS NULL OR s.notifications_enabled=1")
         player_ids=[row["user_id"] for row in await cur.fetchall()]
         sent=failed=0
         text=escape(args[2].strip()[:3500])
@@ -1797,7 +1797,7 @@ async def daily(message: Message):
 
 @dp.message(Command("leaderboard"))
 async def leaderboard(message: Message):
-    cur = await db.execute("SELECT username, level, wins FROM players ORDER BY level DESC, wins DESC LIMIT 10")
+    cur = await db.execute("SELECT p.username,p.level,p.wins FROM players p LEFT JOIN player_settings s ON s.user_id=p.user_id WHERE s.profile_visibility IS NULL OR s.profile_visibility = ? ORDER BY p.level DESC,p.wins DESC LIMIT 10", ("public",))
     rows = await cur.fetchall()
     if not rows:
         await message.answer("No adventurers yet.")
@@ -1960,7 +1960,7 @@ async def cb_daily(call: CallbackQuery):
 @dp.callback_query(F.data == "leaderboard")
 async def cb_leaderboard(call: CallbackQuery):
     await call.answer()
-    cur = await db.execute("SELECT username, level, wins FROM players ORDER BY level DESC, wins DESC LIMIT 10")
+    cur = await db.execute("SELECT p.username,p.level,p.wins FROM players p LEFT JOIN player_settings s ON s.user_id=p.user_id WHERE s.profile_visibility IS NULL OR s.profile_visibility = ? ORDER BY p.level DESC,p.wins DESC LIMIT 10", ("public",))
     rows = await cur.fetchall()
     await call.message.answer("🏆 <b>Leaderboard</b>\n" + "\n".join(
         f"{i}. {escape(r['username'] or 'Adventurer')} · Lv.{r['level']} · {r['wins']} wins" for i, r in enumerate(rows, 1)))
