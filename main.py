@@ -2078,12 +2078,22 @@ async def miniapp_state(user: dict):
         }
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     appearance = await get_appearance(db, user_id)
+    await refresh_quest_progress(user_id)
+    quest_cur = await db.execute("SELECT quest_id,progress,completed,claimed FROM quest_progress WHERE user_id=?", (user_id,))
+    quest_progress = {row["quest_id"]: row for row in await quest_cur.fetchall()}
+    quest_state = [
+        {**quest, "progress": quest_progress[quest["id"]]["progress"],
+         "completed": bool(quest_progress[quest["id"]]["completed"]),
+         "claimed": bool(quest_progress[quest["id"]]["claimed"])}
+        for quest in QUESTS if quest["id"] in quest_progress
+    ]
     return {
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
         "class_selected": bool(p["class_selected"]),
         "battle_active": battle is not None,
         "hero_class": p["hero_class"],
         "appearance": appearance,
+        "quests": quest_state,
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
@@ -2161,6 +2171,23 @@ async def api_explore(request: web.Request):
             )
             await db.commit()
     return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
+
+
+async def api_quest_claim(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Invalid JSON body."}, status=400)
+    if not isinstance(payload, dict) or not isinstance(payload.get("quest_id"), str) or len(payload["quest_id"]) > 64:
+        return web.json_response({"error": "A valid quest_id is required."}, status=400)
+    async with db_lock:
+        result = await claim_quest_reward(user["id"], payload["quest_id"])
+        state = await miniapp_state(user)
+    return web.json_response({"message": result, "state": state})
 
 
 async def api_appearance(request: web.Request):
@@ -2349,6 +2376,7 @@ async def start_web_server():
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/appearance", api_appearance)
+    app.router.add_post("/api/quest/claim", api_quest_claim)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
