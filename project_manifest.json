@@ -575,7 +575,7 @@
         },
         {
           "name": "Friends, party, guild and trading screens",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Polished responsive visual design and accessibility audit",
@@ -791,15 +791,15 @@
   "progress_summary": {
     "total_items": 170,
     "complete_items": 119,
-    "partial_items": 16,
-    "pending_items": 35,
+    "partial_items": 17,
+    "pending_items": 34,
     "fully_implemented_percent": 70,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
     "complete": 119,
-    "partial": 16,
-    "pending": 35,
+    "partial": 17,
+    "pending": 34,
     "total": 170,
     "percentage": 70
   }
