@@ -28,6 +28,12 @@ async def init_guild_features(db):
       guild_id INTEGER PRIMARY KEY,message TEXT NOT NULL,author_id INTEGER NOT NULL,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS guild_chat_messages(
+      message_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,message TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_guild_chat_history ON guild_chat_messages(guild_id,message_id DESC);
     CREATE TABLE IF NOT EXISTS guild_missions(
       guild_id INTEGER NOT NULL,mission_date TEXT NOT NULL,mission_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0,claimed INTEGER NOT NULL DEFAULT 0,
@@ -118,6 +124,28 @@ async def set_guild_role(db,guild_id,actor_id,target_id,role):
     if target["role"]=="leader": raise GuildFeatureError("Guild leader role cannot be changed.")
     await db.execute("UPDATE guild_members SET role=? WHERE guild_id=? AND user_id=?",(role,guild_id,target_id))
     await db.commit()
+
+
+async def send_guild_message(db,guild_id,user_id,message):
+    if not valid_id(guild_id) or not valid_id(user_id):
+        raise GuildFeatureError("Invalid guild chat account.")
+    if not await guild_role(db,guild_id,user_id):
+        raise GuildFeatureError("Only guild members can use guild chat.")
+    message=" ".join(str(message or "").split())
+    if not message or len(message)>500:
+        raise GuildFeatureError("Guild messages must contain 1 to 500 characters.")
+    cur=await db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(?,?,?)",(guild_id,user_id,message))
+    await db.commit()
+    return int(cur.lastrowid)
+
+async def get_guild_chat(db,guild_id,user_id,limit=10):
+    if not valid_id(guild_id) or not valid_id(user_id) or not await guild_role(db,guild_id,user_id):
+        raise GuildFeatureError("Only guild members can read guild chat.")
+    limit=max(1,min(int(limit),50))
+    cur=await db.execute("""SELECT c.message_id,c.user_id,p.username,c.message,c.created_at
+      FROM guild_chat_messages c JOIN players p ON p.user_id=c.user_id
+      WHERE c.guild_id=? ORDER BY c.message_id DESC LIMIT ?""",(guild_id,limit))
+    return list(reversed(await cur.fetchall()))
 
 async def set_guild_announcement(db,guild_id,actor_id,message):
     if not await _officer(db,guild_id,actor_id): raise GuildFeatureError("Only guild leaders and officers can post announcements.")
