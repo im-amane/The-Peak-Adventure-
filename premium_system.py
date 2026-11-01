@@ -180,12 +180,12 @@ async def buy_premium_item(db, user_id, item_id):
 
 
 async def consume_xp_boost(db, user_id):
-    cur = await db.execute("SELECT remaining_wins FROM player_xp_boosts WHERE user_id=?", (user_id,))
-    row = await cur.fetchone()
-    if not row or row["remaining_wins"] <= 0:
-        return False
-    await db.execute(
-        "UPDATE player_xp_boosts SET remaining_wins=remaining_wins-1 WHERE user_id=? AND remaining_wins>0",
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise PremiumError("Invalid player account.")
+    cur = await db.execute(
+        """UPDATE player_xp_boosts SET remaining_wins=remaining_wins-1
+           WHERE user_id=? AND remaining_wins>0
+           RETURNING remaining_wins""",
         (user_id,),
     )
-    return True
+    return await cur.fetchone() is not None
