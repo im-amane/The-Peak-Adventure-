@@ -162,11 +162,11 @@
         },
         {
           "name": "Weapon appearance visuals",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Idle, walk and run frame animations",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Attack, skill, hit and death animations",
