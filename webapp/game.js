@@ -899,6 +899,8 @@
         return {sprite,data:monster,label};
       });
       this.selectedMonster=null;
+      this.movePath=[];
+      this.movePathIndex=0;
       this.heroIdle = this.tweens.add({
         targets:this.hero, y:this.hero.y-3, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
       });
@@ -906,9 +908,23 @@
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
       this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
-      this.input.on("pointerdown",()=>{
-        if(nearMonster)this.challenge();
-        else if(nearNpc)this.talkToNpc();
+      this.input.on("pointerdown",pointer=>{
+        if(nearMonster){this.challenge();return;}
+        if(nearNpc){this.talkToNpc();return;}
+        const point=this.cameras.main.getWorldPoint(pointer.x,pointer.y);
+        const target={
+          x:Phaser.Math.Clamp(point.x,24,this.worldWidth-24),
+          y:Phaser.Math.Clamp(point.y,this.worldHeight*0.46,this.worldHeight-24)
+        };
+        this.movePath=window.PeakPathfinding
+          ? window.PeakPathfinding.findPath(
+              {x:this.hero.x,y:this.hero.y},
+              target,
+              this.obstacles,
+              {width:this.worldWidth,height:this.worldHeight,minY:this.worldHeight*0.46,cellSize:32,margin:14,maxNodes:1800}
+            )
+          : [];
+        this.movePathIndex=0;
       });
       this.physics=null;
     }
@@ -980,6 +996,24 @@
       if(this.cursors.right.isDown||this.keys.D.isDown||pressedDirections.has("right"))dx=1;
       if(this.cursors.up.isDown||this.keys.W.isDown||pressedDirections.has("up"))dy=-1;
       if(this.cursors.down.isDown||this.keys.S.isDown||pressedDirections.has("down"))dy=1;
+      if(dx||dy){
+        this.movePath=[];
+        this.movePathIndex=0;
+      }else if(this.movePath&&this.movePathIndex<this.movePath.length){
+        const waypoint=this.movePath[this.movePathIndex];
+        const diffX=waypoint.x-this.hero.x;
+        const diffY=waypoint.y-this.hero.y;
+        const distance=Math.hypot(diffX,diffY);
+        if(distance<=speed+2){
+          this.hero.x=waypoint.x;
+          this.hero.y=waypoint.y;
+          this.movePathIndex++;
+          if(this.movePathIndex>=this.movePath.length)this.movePath=[];
+        }else{
+          dx=diffX/distance;
+          dy=diffY/distance;
+        }
+      }
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       const moving=dx!==0||dy!==0;
       if(moving){
