@@ -10,7 +10,14 @@ from urllib.parse import parse_qsl
 def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> dict:
     if not init_data or not bot_token:
         raise ValueError("Missing Telegram initData or bot token")
-    pairs = parse_qsl(init_data, keep_blank_values=True, strict_parsing=True)
+    if len(init_data) > 8192:
+        raise ValueError("Telegram initData is too large")
+    try:
+        pairs = parse_qsl(
+            init_data, keep_blank_values=True, strict_parsing=True, max_num_fields=20
+        )
+    except ValueError as exc:
+        raise ValueError("Malformed Telegram initData") from exc
     data = {}
     for key, value in pairs:
         if key in data:
