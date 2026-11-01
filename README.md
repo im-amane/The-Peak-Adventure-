@@ -46,6 +46,17 @@ The server listens on `0.0.0.0:$PORT` when `PORT` is supplied, otherwise `WEB_PO
 
 On Windows, activate with `.venv\\Scripts\\activate`.
 
+## Deploy with Render
+1. Push this repository to GitHub and create a new Blueprint in Render.
+2. Select this repository so Render reads `render.yaml`.
+3. Set `BOT_TOKEN` to the token from @BotFather.
+4. Set `WEBAPP_URL` to the public HTTPS URL Render assigns to the service (for example, `https://your-service.onrender.com`).
+5. If Telegram asks for a Web App domain, set the service hostname with BotFather.
+6. Deploy. The blueprint includes a persistent disk mounted at `/data` so the SQLite player database survives restarts.
+
+The included Render blueprint uses a paid Starter web service and a persistent disk. For a VPS, build the included Dockerfile and pass the same environment variables. Keep `BOT_TOKEN` private.
+
+
 ## Commands
 - `/start` - Create your hero and open the game menu
 - `/profile` - Hero stats, class and equipment
