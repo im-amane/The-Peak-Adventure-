@@ -1,5 +1,7 @@
 """Telegram Stars premium-currency ledger with idempotent payment crediting."""
 import os
+import time
+from stamina_system import MAX_STAMINA, REGEN_SECONDS
 import aiosqlite
 
 
@@ -153,14 +155,23 @@ async def buy_premium_item(db, user_id, item_id):
         if balance < item["cost"]:
             raise PremiumError(f"You need {item['cost']} gems; your balance is {balance}.")
         if item_id == "stamina_crystal":
-            cur = await db.execute("SELECT stamina,max_stamina FROM player_stamina WHERE user_id=?", (user_id,))
+            now = int(time.time())
+            await db.execute(
+                "INSERT OR IGNORE INTO player_stamina(user_id,stamina,updated_at) VALUES(?,?,?)",
+                (user_id, MAX_STAMINA, now),
+            )
+            cur = await db.execute("SELECT stamina,updated_at FROM player_stamina WHERE user_id=?", (user_id,))
             stamina = await cur.fetchone()
-            if not stamina:
-                raise PremiumError("Stamina data is not ready for this player.")
-            restored = min(50, stamina["max_stamina"] - stamina["stamina"])
+            elapsed = max(0, now - stamina["updated_at"])
+            gained = min(MAX_STAMINA - stamina["stamina"], elapsed // REGEN_SECONDS)
+            current = stamina["stamina"] + gained
+            restored = min(50, MAX_STAMINA - current)
             if restored <= 0:
                 raise PremiumError("Your stamina is already full.")
-            await db.execute("UPDATE player_stamina SET stamina=stamina+? WHERE user_id=?", (restored, user_id))
+            await db.execute(
+                "UPDATE player_stamina SET stamina=?,updated_at=? WHERE user_id=?",
+                (current + restored, now, user_id),
+            )
         elif item_id == "potion_bundle":
             await db.execute("UPDATE players SET potions=potions+5 WHERE user_id=?", (user_id,))
         elif item_id == "xp_charm":
