@@ -172,3 +172,9 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Weekly progress is saved per player and week; rewards can only be claimed once with `/weekly claim QUEST_ID`.
 - Use `/weekly` to view objectives and progress.
 - Players can submit a report with `/report PLAYER_ID reason`. Administrators can review reports with `/admin reports` and resolve them with `/admin resolve REPORT_ID reviewed|dismissed [note]`.
+
+
+## Mana
+- Players begin with 100 mana. Class skills cost 30 mana.
+- Mana regenerates by 1 point per minute and restores 5 points after each completed combat turn.
+- The Telegram command `/mana` shows current mana. The Mini App HUD displays both mana and stamina.
