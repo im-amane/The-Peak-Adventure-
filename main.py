@@ -35,11 +35,15 @@ from crafting_system import MATERIALS, CraftingError, award_material_drop, craft
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
+from db_backup import create_backup
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
+BACKUP_DIR = os.getenv("BACKUP_DIR", "backups")
+BACKUP_INTERVAL_SECONDS = max(3600, int(os.getenv("BACKUP_INTERVAL_SECONDS", "21600")))
+BACKUP_RETENTION = max(1, int(os.getenv("BACKUP_RETENTION", "7")))
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("PORT", os.getenv("WEB_PORT", "8080")))
@@ -3141,6 +3145,19 @@ async def api_action(request: web.Request):
         })
 
 
+async def database_backup_loop():
+    """Take a verified SQLite snapshot on startup and every configured interval."""
+    while True:
+        try:
+            backup_path = await asyncio.to_thread(
+                create_backup, DB_PATH, BACKUP_DIR, BACKUP_RETENTION
+            )
+            log.info("Verified database backup created: %s", backup_path)
+        except Exception:
+            log.exception("Database backup failed; live game database remains untouched")
+        await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
+
+
 async def start_web_server():
     async def serve_index(request: web.Request):
         return web.FileResponse(WEB_DIR / "index.html")
@@ -3180,12 +3197,18 @@ async def main():
     if WEBAPP_URL and not WEBAPP_URL.startswith("https://"):
         raise RuntimeError("WEBAPP_URL must use public HTTPS for Telegram Mini Apps.")
     await init_db()
+    backup_task = asyncio.create_task(database_backup_loop(), name="database-backups")
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     runner = await start_web_server()
     log.info("Starting The Peak Adventure bot")
     try:
         await dp.start_polling(bot)
     finally:
+        backup_task.cancel()
+        try:
+            await backup_task
+        except asyncio.CancelledError:
+            pass
         await runner.cleanup()
         await bot.session.close()
         if db:
