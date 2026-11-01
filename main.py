@@ -812,7 +812,59 @@ async def battle_action(call: CallbackQuery):
         await _battle_action_unlocked(call)
 
 
-{server}async def main():
+async def api_state(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    user_id = user["id"]
+    p = await get_player(user_id, user.get("username") or user.get("first_name") or "Adventurer")
+    region_names = [
+        "Whispering Meadow", "Ashen Desert", "Stormglass Highlands", "Hollow Kingdom",
+        "Ember Abyss", "Frostfang Peaks", "Primordial Rift", "Celestial Ruins",
+        "Eternal Hour", "Origin Realm",
+    ]
+    region_index = min(9, (p["level"] - 1) // 10)
+    monster_level = min(100, p["level"] + 1)
+    if p["level"] in BOSS_LEVELS:
+        cur = await db.execute(
+            "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
+            (user_id, p["level"]),
+        )
+        if not await cur.fetchone():
+            monster_level = p["level"]
+    monster = MONSTER_BY_LEVEL[monster_level]
+    return web.json_response({
+        "first_name": user.get("first_name") or user.get("username") or "Adventurer",
+        "class_selected": bool(p["class_selected"]),
+        "hero_class": p["hero_class"],
+        "weapon": p["weapon"],
+        "level": p["level"],
+        "xp": p["xp"],
+        "xp_required": xp_needed(p["level"]),
+        "hp": p["hp"],
+        "max_hp": p["max_hp"],
+        "coins": p["coins"],
+        "region": region_names[region_index],
+        "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
+    })
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", lambda request: web.FileResponse(WEB_DIR / "index.html"))
+    app.router.add_get("/style.css", lambda request: web.FileResponse(WEB_DIR / "style.css"))
+    app.router.add_get("/game.js", lambda request: web.FileResponse(WEB_DIR / "game.js"))
+    app.router.add_get("/api/state", api_state)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
+    await site.start()
+    log.info("Mini App web server listening on %s:%s", WEB_HOST, WEB_PORT)
+    return runner
+
+
+async def main():
     if not TOKEN:
         raise RuntimeError("BOT_TOKEN is missing. Add it to your .env file.")
     await init_db()
