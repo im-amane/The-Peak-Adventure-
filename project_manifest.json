@@ -500,19 +500,19 @@
         },
         {
           "name": "Guild roles and permissions",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Guild invitations",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Guild chat and announcements",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Guild missions and rewards",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Guild wars",
@@ -520,7 +520,7 @@
         },
         {
           "name": "Guild boss raids",
-          "status": "pending"
+          "status": "complete"
         }
       ]
     },
@@ -790,17 +790,17 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 114,
-    "partial_items": 15,
-    "pending_items": 41,
-    "fully_implemented_percent": 67,
+    "complete_items": 118,
+    "partial_items": 16,
+    "pending_items": 36,
+    "fully_implemented_percent": 69,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 114,
-    "partial": 15,
-    "pending": 41,
+    "complete": 118,
+    "partial": 16,
+    "pending": 36,
     "total": 170,
-    "percentage": 67
+    "percentage": 69
   }
 }
