@@ -58,9 +58,11 @@ export default {
       }
     }
 
-    const headers = new Headers(request.headers);
-    headers.delete("host");
-    headers.delete("content-length");
+    const headers = new Headers();
+    for (const name of ["accept", "content-type", "x-telegram-init-data"]) {
+      const value = request.headers.get(name);
+      if (value) headers.set(name, value);
+    }
     headers.set("x-forwarded-host", incoming.host);
     headers.set("x-forwarded-proto", incoming.protocol.slice(0, -1));
     const clientIp = request.headers.get("cf-connecting-ip");
