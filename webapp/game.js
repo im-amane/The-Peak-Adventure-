@@ -950,19 +950,23 @@
     const previous = soundEnabled;
     const next = !previous;
     soundEnabled = next;
+    requestInFlight = true;
     button.disabled = true;
     button.setAttribute("aria-pressed", String(next));
     button.textContent = next ? "🔊 Sound" : "🔇 Muted";
     try {
       const result = await postApi("/api/settings", {sound_enabled: next});
+      requestInFlight = false;
       applyState(result.state, result.message);
       if (next) playSound("potion");
     } catch (error) {
+      requestInFlight = false;
       soundEnabled = previous;
       button.setAttribute("aria-pressed", String(previous));
       button.textContent = previous ? "🔊 Sound" : "🔇 Muted";
       ui.status.textContent = error.message;
     } finally {
+      requestInFlight = false;
       button.disabled = false;
     }
   });
