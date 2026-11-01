@@ -2346,7 +2346,7 @@ async def help_cmd(message: Message):
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
                 "/auction - Browse; /auction sell weapon|armor price [hours]\n/auction cancel ID; /bid ID amount\n/auction stash; /auction equip ID\n"
-        "/premium - Peak Gems wallet and Telegram Stars packages\n"
+        "/premium - Peak Gems wallet and Telegram Stars packages\n/premium shop; /premium buy ITEM_ID - Spend gems\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n"
         "/map - View your current region\n/travel - View unlocked worlds and fast travel\n"
         "/dungeons - View dungeons\n/dungeon enter|status|abandon|claim - Dungeon controls\n"
