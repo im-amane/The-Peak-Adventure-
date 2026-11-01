@@ -94,6 +94,7 @@ def calculate_enemy_damage(
     *,
     fury: bool = False,
     special: bool = False,
+    boss_phase: int = 1,
 ) -> int:
     """Return monster damage after player mitigation and monster modifiers."""
     damage = max(
@@ -105,6 +106,9 @@ def calculate_enemy_damage(
         damage = int(damage * 1.25)
     if special:
         damage = int(damage * 1.5)
+    if boss_phase not in {1, 2, 3}:
+        raise ValueError("boss_phase must be 1, 2, or 3")
+    damage = int(damage * {1: 1.0, 2: 1.2, 3: 1.5}[boss_phase])
     return damage
 
  
@@ -131,3 +135,16 @@ def nearby_monster_levels(level: int, boss_defeated: bool = False) -> tuple[int,
         for offset in (-1, 0, 1)
     } - BOSS_LEVELS)
     return tuple(candidates or [max(1, level - 1)])
+
+ 
+def get_boss_phase(is_boss: bool, current_hp: int, max_hp: int) -> int:
+    """Bosses escalate at 60% and 25% health; normal monsters stay in phase one."""
+    if max_hp <= 0 or current_hp < 0:
+        raise ValueError("monster HP values must be non-negative and max_hp positive")
+    if not is_boss:
+        return 1
+    if current_hp * 4 <= max_hp:
+        return 3
+    if current_hp * 5 <= max_hp * 3:
+        return 2
+    return 1
