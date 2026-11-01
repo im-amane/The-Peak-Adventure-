@@ -32,4 +32,10 @@ class SlidingWindowRateLimiter:
                      if not timestamps or timestamps[-1] <= cutoff]
             for entry in stale:
                 self._events.pop(entry, None)
+            while len(self._events) > self.max_keys:
+                oldest = min(
+                    self._events,
+                    key=lambda entry: self._events[entry][-1] if self._events[entry] else float("-inf"),
+                )
+                self._events.pop(oldest, None)
         return True, 0
