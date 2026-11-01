@@ -97,6 +97,13 @@ def calculate_enemy_damage(
     boss_phase: int = 1,
 ) -> int:
     """Return monster damage after player mitigation and monster modifiers."""
+    numeric_values = (attack_power, player_level, armor_defense, class_defense, monster_speed, random_bonus)
+    if any(type(value) is not int for value in numeric_values):
+        raise ValueError("enemy damage inputs must be integers")
+    if attack_power < 0 or player_level < 1 or armor_defense < 0 or monster_speed < 0:
+        raise ValueError("invalid enemy damage stats")
+    if type(fury) is not bool or type(special) is not bool:
+        raise ValueError("fury and special modifiers must be booleans")
     damage = max(
         3,
         attack_power - player_level * 2 - armor_defense - class_defense
@@ -168,8 +175,10 @@ def choose_monster_tactic(
         "regenerate", "fury", "swift", "armored", "drain", "poison",
         "shield", "reflect", "lifesteal", "berserk",
     }
-    if trait_effect not in valid_traits:
+    if not isinstance(trait_effect, str) or trait_effect not in valid_traits:
         raise ValueError("unknown monster trait")
+    if type(is_boss) is not bool:
+        raise ValueError("is_boss must be a boolean")
     if type(turn_count) is not int or turn_count < 1:
         raise ValueError("turn_count must be a positive integer")
     if type(monster_max_hp) is not int or monster_max_hp <= 0:
