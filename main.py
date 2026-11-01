@@ -3381,6 +3381,8 @@ async def api_quest_claim(request: web.Request):
     except ValueError:
         return web.json_response({"error": "Invalid JSON body."}, status=400)
     if not isinstance(payload, dict) or not isinstance(payload.get("quest_id"), str) or len(payload["quest_id"]) > 64:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid quest claim payload", 2)
         return web.json_response({"error": "A valid quest_id is required."}, status=400)
     async with db_lock:
         result = await claim_quest_reward(user["id"], payload["quest_id"])
@@ -3402,9 +3404,13 @@ async def api_daily_mission_claim(request: web.Request):
     except ValueError:
         return web.json_response({"error": "Daily mission payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or set(payload) != {"mission_id"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid daily mission claim payload", 2)
         return web.json_response({"error": "A mission_id is required."}, status=400)
     mission_id = payload.get("mission_id")
     if not isinstance(mission_id, str) or len(mission_id) > 64:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid daily mission ID", 2)
         return web.json_response({"error": "Invalid daily mission ID."}, status=400)
     try:
         async with db_lock:
@@ -3431,9 +3437,13 @@ async def api_weekly_quest_claim(request: web.Request):
     except ValueError:
         return web.json_response({"error": "Weekly quest payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or set(payload) != {"quest_id"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid weekly quest claim payload", 2)
         return web.json_response({"error": "A quest_id is required."}, status=400)
     quest_id = payload.get("quest_id")
     if not isinstance(quest_id, str) or len(quest_id) > 64:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid weekly quest ID", 2)
         return web.json_response({"error": "Invalid weekly quest ID."}, status=400)
     try:
         async with db_lock:
@@ -3904,6 +3914,14 @@ async def miniapp_rate_limit(request: web.Request, handler):
     limit = 120 if request.method == "GET" else 40
     allowed, retry_after = api_rate_limiter.allow(f"telegram:{user['id']}", limit)
     if not allowed:
+        if db is not None:
+            try:
+                async with db_lock:
+                    await record_security_event(
+                        db, user["id"], "repeated_rate_limit", request.path, 2
+                    )
+            except Exception:
+                log.exception("Unable to record Mini App rate-limit event")
         return web.json_response(
             {"error": "Too many requests. Please slow down and try again."},
             status=429,
