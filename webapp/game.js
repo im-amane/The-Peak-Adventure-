@@ -112,6 +112,14 @@
 
 
 
+
+  function renderDungeon(dungeon) {
+    if (!ui.dungeonStatus) return;
+    ui.dungeonStatus.textContent = dungeon
+      ? "🗝️ " + dungeon.name + " · Room " + dungeon.room + "/3 · " + dungeon.status.toUpperCase() + " · target monster Lv." + dungeon.target_level + ". Use /dungeon in chat for controls."
+      : "🗝️ No active dungeon. Use /dungeons in chat to explore hidden places.";
+  }
+
   function renderSocial(social) {
     if (!ui.socialOverview) return;
     ui.socialOverview.replaceChildren();
