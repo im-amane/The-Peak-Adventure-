@@ -65,6 +65,13 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(PartyError, "pending party invitation"):
             await invite_to_party(self.db, party_b, 303, 202)
 
+    async def test_pending_party_invites_are_private_to_target(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        incoming = await list_pending_party_invites(self.db, 202)
+        self.assertEqual([row["invite_id"] for row in incoming], [invite_id])
+        self.assertEqual(await list_pending_party_invites(self.db, 101), [])
+
     async def test_party_capacity_is_four(self):
         party_id = await create_party(self.db, 101)
         for target in (202, 303, 404):
