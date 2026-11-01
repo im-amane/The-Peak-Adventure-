@@ -3361,6 +3361,28 @@ async def miniapp_state(user: dict):
         (user_id,user_id),
     )
     pending_trade_count = (await trade_count_cur.fetchone())["total"]
+    open_trade_cur = await db.execute(
+        """SELECT t.*,p.username AS other_username
+           FROM trades t
+           JOIN players p ON p.user_id=CASE WHEN t.initiator_id=? THEN t.partner_id ELSE t.initiator_id END
+           WHERE t.status='open' AND (t.initiator_id=? OR t.partner_id=?)
+           ORDER BY t.created_at DESC,t.trade_id DESC LIMIT 10""",
+        (user_id,user_id,user_id),
+    )
+    open_trade_rows = await open_trade_cur.fetchall()
+    open_trades = [
+        {
+            "trade_id":row["trade_id"],
+            "other_username":row["other_username"] or "Adventurer",
+            "my_coins":row["initiator_coins"] if row["initiator_id"] == user_id else row["partner_coins"],
+            "my_potions":row["initiator_potions"] if row["initiator_id"] == user_id else row["partner_potions"],
+            "their_coins":row["partner_coins"] if row["initiator_id"] == user_id else row["initiator_coins"],
+            "their_potions":row["partner_potions"] if row["initiator_id"] == user_id else row["initiator_potions"],
+            "my_confirmed":bool(row["initiator_confirmed"] if row["initiator_id"] == user_id else row["partner_confirmed"]),
+            "their_confirmed":bool(row["partner_confirmed"] if row["initiator_id"] == user_id else row["initiator_confirmed"]),
+        }
+        for row in open_trade_rows
+    ]
     dungeon_state = await get_dungeon_state(db, user_id)
     dungeon_choices = available_dungeons(p["level"])
     claimed_cur = await db.execute("SELECT dungeon_id FROM dungeon_rewards WHERE user_id=?", (user_id,))
@@ -3387,7 +3409,8 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
-                    "pending_trades": pending_trades, "pending_trade_count": pending_trade_count},
+                    "pending_trades": pending_trades, "pending_trade_count": pending_trade_count,
+                    "open_trades": open_trades},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
