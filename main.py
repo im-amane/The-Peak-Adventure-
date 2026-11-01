@@ -943,6 +943,10 @@ async def party_command(message: Message):
     args = (message.text or "").split(maxsplit=1)
     action = args[1].lower() if len(args) > 1 else "info"
     user_id = message.from_user.id
+    player = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+    if action in {"create", "invite", "accept"} and not player["class_selected"]:
+        await message.answer("Choose your hero class with /class before joining a party.")
+        return
     try:
         if action == "create":
             party_id = await create_party(db, user_id)
@@ -957,7 +961,7 @@ async def party_command(message: Message):
                 await message.answer("Bots cannot join a party.")
                 return
             party, _ = await get_party_info(db, user_id)
-            requester = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+            requester = player
             invited = await get_player(target.id, target.username or target.full_name)
             if not requester["class_selected"] or not invited["class_selected"]:
                 await message.answer("Both players must register with /start and choose a class first.")
@@ -1007,10 +1011,11 @@ async def party_command(message: Message):
 async def accept_party_callback(call: CallbackQuery):
     try:
         invite_id = int(call.data.split(":", 1)[1])
-        await respond_to_party_invite(db, invite_id, call.from_user.id, True)
     except (TypeError, ValueError, IndexError):
         await call.answer("Invalid party invitation.", show_alert=True)
         return
+    try:
+        await respond_to_party_invite(db, invite_id, call.from_user.id, True)
     except PartyError as exc:
         await call.answer(str(exc), show_alert=True)
         return
@@ -1022,10 +1027,11 @@ async def accept_party_callback(call: CallbackQuery):
 async def decline_party_callback(call: CallbackQuery):
     try:
         invite_id = int(call.data.split(":", 1)[1])
-        await respond_to_party_invite(db, invite_id, call.from_user.id, False)
     except (TypeError, ValueError, IndexError):
         await call.answer("Invalid party invitation.", show_alert=True)
         return
+    try:
+        await respond_to_party_invite(db, invite_id, call.from_user.id, False)
     except PartyError as exc:
         await call.answer(str(exc), show_alert=True)
         return
