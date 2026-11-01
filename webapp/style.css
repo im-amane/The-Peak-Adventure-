@@ -108,3 +108,11 @@ button:disabled{cursor:not-allowed}
 .settings-grid select{min-width:0;width:100%;padding:10px 8px;border-radius:9px;border:1px solid #65576a;background:#151c29;color:#fff1d8;font:inherit}
 .save-settings{margin-top:10px;width:100%;background:#294c43;border-color:#5e8b75;color:#e1f1e4}
 @media(max-width:420px){.settings-grid{grid-template-columns:1fr}}
+
+.story-panel{background:#202332;border:1px solid #61546d;border-radius:15px;padding:13px;margin:12px 0}
+.story-chapter{padding:10px;margin:8px 0;background:#151c29;border:1px solid #3d3b50;border-radius:10px}
+.story-chapter h3{font-size:13px;color:#e5d4ff;margin:0 0 6px}
+.story-chapter p{font-size:11px;color:#c9c0d4;line-height:1.45;margin:5px 0}
+.story-choices{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.story-choice{font-size:11px;padding:7px 9px;background:#3d3153;border-color:#76648d;color:#f2e9ff}
+.story-choice:disabled{opacity:.55}
