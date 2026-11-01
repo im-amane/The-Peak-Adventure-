@@ -1,0 +1,161 @@
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  if (tg) { tg.ready(); tg.expand(); }
+  const initData = tg ? tg.initData : "";
+  const ui = {
+    coins: document.getElementById("coins"),
+    name: document.getElementById("hero-name"),
+    heroClass: document.getElementById("hero-class"),
+    level: document.getElementById("level"),
+    hp: document.getElementById("hp"),
+    xp: document.getElementById("xp-fill"),
+    region: document.getElementById("region"),
+    monster: document.getElementById("monster-label"),
+    status: document.getElementById("status"),
+    encounter: document.getElementById("encounter")
+  };
+  const worldPalettes = [
+    {sky:0x8fae91,ground:0x5d8059,accent:0xd6c98b},
+    {sky:0xd6a96f,ground:0xa97842,accent:0xf1d79a},
+    {sky:0x7b9eae,ground:0x57747b,accent:0xd7e3d7},
+    {sky:0x6a6c83,ground:0x343b4f,accent:0xb7a8c8},
+    {sky:0xb65e3d,ground:0x673b2e,accent:0xf0a15a},
+    {sky:0x8faeb7,ground:0x597c8c,accent:0xe4f1f2},
+    {sky:0x4b466f,ground:0x25233e,accent:0x9c8dc9},
+    {sky:0x6577a8,ground:0x3b456f,accent:0xe4d7a2},
+    {sky:0x44445b,ground:0x242537,accent:0xb4a4d2},
+    {sky:0x4b354c,ground:0x251c31,accent:0xe4c17d}
+  ];
+  const worldNames = ["Whispering Meadow","Ashen Desert","Stormglass Highlands","Hollow Kingdom","Ember Abyss","Frostfang Peaks","Primordial Rift","Celestial Ruins","Eternal Hour","Origin Realm"];
+  let gameState = null;
+  let sceneRef = null;
+  let touchDirection = {x:0,y:0};
+  let nearMonster = false;
+
+  async function loadState() {
+    if (!initData) {
+      ui.status.textContent = "Open this game from the Telegram bot's private chat.";
+      return null;
+    }
+    const response = await fetch("/api/state", {headers: {"X-Telegram-Init-Data": initData}});
+    if (!response.ok) {
+      ui.status.textContent = "Telegram session could not be verified. Reopen the Mini App from the bot.";
+      return null;
+    }
+    const data = await response.json();
+    gameState = data;
+    ui.name.textContent = data.first_name || "Adventurer";
+    ui.heroClass.textContent = data.hero_class + " · " + data.weapon;
+    ui.level.textContent = "Lv. " + data.level;
+    ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
+    ui.coins.textContent = data.coins;
+    ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
+    ui.region.textContent = data.region;
+    ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
+    ui.status.textContent = data.class_selected ? "The wilds are waiting. Find the creature on the map." : "Choose a hero class in the bot chat before exploring.";
+    return data;
+  }
+
+  function makeHero(scene, x, y) {
+    const c = scene.add.container(x,y);
+    const g = scene.add.graphics();
+    g.fillStyle(0x25374a,1); g.fillRoundedRect(-15,-5,30,29,8);
+    g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
+    g.fillStyle(0xe2b98d,1); g.fillCircle(0,-15,11);
+    g.fillStyle(0x382b2b,1); g.fillEllipse(0,-23,22,12);
+    g.fillStyle(0x273a52,1); g.fillRoundedRect(-12,0,24,18,5);
+    g.lineStyle(3,0xc9d4dc,1); g.beginPath(); g.moveTo(13,-3); g.lineTo(26,-25); g.strokePath();
+    g.lineStyle(4,0x9b7044,1); g.beginPath(); g.moveTo(10,1); g.lineTo(18,-10); g.strokePath();
+    g.fillStyle(0x171b25,1); g.fillCircle(-4,-16,1.5); g.fillCircle(4,-16,1.5);
+    c.add(g); c.setDepth(10); return c;
+  }
+
+  function makeMonster(scene,x,y,level,color) {
+    const c=scene.add.container(x,y);
+    const g=scene.add.graphics();
+    const r=Math.min(34,17+level/12);
+    g.fillStyle(color,1); g.fillEllipse(0,2,r*2,r*1.55);
+    g.lineStyle(3,0x1b1b27,1); g.strokeEllipse(0,2,r*2,r*1.55);
+    g.fillStyle(0xe9d8bd,1); g.fillTriangle(-r+5,-r/2,-r+13,-r-13,-r+18,-r/2);
+    g.fillTriangle(r-5,-r/2,r-13,-r-13,r-18,-r/2);
+    g.fillStyle(0xffe9c6,1); g.fillCircle(-8,-2,4); g.fillCircle(8,-2,4);
+    g.fillStyle(0x261a25,1); g.fillCircle(-8,-2,1.8); g.fillCircle(8,-2,1.8);
+    g.lineStyle(2,0x241a24,1); g.beginPath(); g.arc(0,9,7,0.2,Math.PI-0.2,false); g.strokePath();
+    c.add(g); c.setDepth(5); return c;
+  }
+
+  class AdventureScene extends Phaser.Scene {
+    constructor(){super("adventure");}
+    create(){
+      sceneRef=this;
+      const w=this.scale.width,h=this.scale.height;
+      const idx=Math.max(0,Math.min(9,gameState ? Math.floor((gameState.level-1)/10):0));
+      const palette=worldPalettes[idx];
+      this.cameras.main.setBackgroundColor(palette.sky);
+      const ground=this.add.graphics();
+      ground.fillStyle(palette.ground,1); ground.fillRect(0,h*0.43,w,h*0.57);
+      ground.lineStyle(2,0x1e2c2b,0.2);
+      for(let x=0;x<w;x+=44){for(let y=h*0.43;y<h;y+=38){ground.strokeRect(x,y,44,38);}}
+      for(let i=0;i<12;i++){
+        const x=(i*83+31)%w,y=h*0.53+(i*47)%(h*0.4);
+        ground.fillStyle(palette.accent,0.24);ground.fillCircle(x,y,2+(i%3));
+      }
+      for(let i=0;i<7;i++){
+        const x=25+i*145;
+        const tree=this.add.graphics();
+        tree.fillStyle(0x473d32,1);tree.fillRect(x-4,h*0.37,8,34);
+        tree.fillStyle(idx===4?0x563b35:0x345943,1);tree.fillTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);
+        tree.lineStyle(2,0x172b29,0.55);tree.strokeTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);
+      }
+      this.hero=makeHero(this,w*0.22,h*0.7);
+      const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
+      this.monster=makeMonster(this,w*0.77,h*0.68,gameState.monster.level,monsterColor);
+      this.add.text(w*0.77,h*0.68-54,gameState.monster.name,{fontFamily:"Georgia",fontSize:"13px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
+      this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
+      this.cursors=this.input.keyboard.createCursorKeys();
+      this.keys=this.input.keyboard.addKeys("W,A,S,D");
+      this.input.on("pointerdown",pointer=>{if(nearMonster)this.challenge();});
+      this.physics=null;
+    }
+    challenge(){
+      if(!gameState.class_selected){ui.status.textContent="Choose your class in the Telegram chat first.";return;}
+      if(tg){tg.sendData(JSON.stringify({action:"explore"}));ui.status.textContent="Returning to the chat to start your battle...";}
+      else{ui.status.textContent="Telegram Mini App session required to start a battle.";}
+    }
+    update(_,delta){
+      if(!this.hero)return;
+      const speed=0.18*delta;
+      let dx=0,dy=0;
+      if(this.cursors.left.isDown||this.keys.A.isDown||touchDirection.x<0)dx=-1;
+      if(this.cursors.right.isDown||this.keys.D.isDown||touchDirection.x>0)dx=1;
+      if(this.cursors.up.isDown||this.keys.W.isDown||touchDirection.y<0)dy=-1;
+      if(this.cursors.down.isDown||this.keys.S.isDown||touchDirection.y>0)dy=1;
+      if(dx&&dy){dx*=0.707;dy*=0.707;}
+      this.hero.x=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.scale.width-24);
+      this.hero.y=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
+      const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.monster.x,this.monster.y);
+      nearMonster=distance<88;
+      ui.encounter.disabled=!nearMonster||!gameState.class_selected;
+      ui.encounter.textContent=nearMonster?"⚔️ Challenge Monster":"⚔️ Find the monster";
+      if(nearMonster)ui.status.textContent="The creature has noticed you. Prepare for battle.";
+    }
+  }
+
+  function bootGame(){
+    if(!gameState)return;
+    const config={type:Phaser.AUTO,parent:"game",width:900,height:500,backgroundColor:"#344b3e",scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[AdventureScene]};
+    new Phaser.Game(config);
+  }
+  document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
+  document.querySelectorAll("[data-dir]").forEach(button=>{
+    const dir=button.dataset.dir;
+    const vector={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[dir];
+    const start=event=>{event.preventDefault();touchDirection={x:vector[0],y:vector[1]};};
+    const stop=event=>{event.preventDefault();touchDirection={x:0,y:0};};
+    button.addEventListener("pointerdown",start);
+    button.addEventListener("pointerup",stop);
+    button.addEventListener("pointerleave",stop);
+    button.addEventListener("pointercancel",stop);
+  });
+  loadState().then(bootGame).catch(()=>{ui.status.textContent="Could not load the game. Reopen it from Telegram.";});
+})();
