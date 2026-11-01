@@ -46,6 +46,14 @@ class GameRulesTests(unittest.TestCase):
         self.assertTrue(alpha["boss"])
         self.assertEqual(alpha["power"], 27852332)
 
+    def test_first_world_stories_name_their_monster_and_form_one_arc(self):
+        first_world = self.monsters[:10]
+        for monster in first_world:
+            self.assertIn(monster["name"].casefold(), monster["story"].casefold())
+            self.assertIn("Whispering Meadow", monster["story"])
+        self.assertIn("blue spark", first_world[0]["story"])
+        self.assertIn("first seal", first_world[-1]["story"])
+
     def test_rejects_blank_unique_power(self):
         broken = copy.deepcopy(self.monsters)
         broken[0]["unique_power"] = "   "
