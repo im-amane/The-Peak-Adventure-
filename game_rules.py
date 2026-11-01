@@ -148,3 +148,43 @@ def get_boss_phase(is_boss: bool, current_hp: int, max_hp: int) -> int:
     if current_hp * 5 <= max_hp * 3:
         return 2
     return 1
+
+def choose_monster_tactic(
+    trait_effect: str,
+    turn_count: int,
+    monster_hp: int,
+    monster_max_hp: int,
+    *,
+    is_boss: bool = False,
+    boss_phase: int = 1,
+) -> str:
+    """Choose a deterministic enemy move from its trait, health and boss phase.
+
+    Enraged traits become aggressive at their health thresholds; swift monsters
+    use specials every second turn, ordinary monsters every third turn, and
+    late-phase bosses every turn.
+    """
+    valid_traits = {
+        "regenerate", "fury", "swift", "armored", "drain", "poison",
+        "shield", "reflect", "lifesteal", "berserk",
+    }
+    if trait_effect not in valid_traits:
+        raise ValueError("unknown monster trait")
+    if type(turn_count) is not int or turn_count < 1:
+        raise ValueError("turn_count must be a positive integer")
+    if type(monster_max_hp) is not int or monster_max_hp <= 0:
+        raise ValueError("monster_max_hp must be a positive integer")
+    if type(monster_hp) is not int or not 0 <= monster_hp <= monster_max_hp:
+        raise ValueError("monster_hp must be between zero and monster_max_hp")
+    if boss_phase not in {1, 2, 3} or (boss_phase > 1 and not is_boss):
+        raise ValueError("invalid boss phase")
+
+    health_ratio = monster_hp / monster_max_hp
+    enraged = (trait_effect == "berserk" and health_ratio <= 0.5) or (
+        trait_effect == "fury" and health_ratio <= 0.3
+    )
+    if enraged or (is_boss and boss_phase == 3):
+        return "special"
+    cadence = 2 if trait_effect == "swift" or (is_boss and boss_phase == 2) else 3
+    return "special" if turn_count % cadence == 0 else "strike"
+
