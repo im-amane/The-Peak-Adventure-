@@ -22,3 +22,13 @@ button:active{background:#526b79;transform:translateY(1px)}
 .encounter-button:disabled{opacity:.45;filter:grayscale(.7)}
 .bottom-note{text-align:center;padding:12px}.bottom-note p{margin:2px}.small{font-size:10px;color:var(--muted)}
 @media(min-width:700px){.app-shell{padding-top:24px}.mobile-controls{max-width:520px;margin:12px auto 0}.dpad button{min-width:48px;min-height:42px}}
+
+.battle-panel{background:#211e2a;border:1px solid #6d5262;border-radius:16px;padding:14px;margin:12px 0;box-shadow:0 12px 30px #0004}
+.battle-panel[hidden]{display:none}
+.battle-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.enemy-hp-track{height:10px;background:#0c111a;border-radius:9px;overflow:hidden;margin:10px 0}
+.enemy-hp-track div{height:100%;width:100%;background:linear-gradient(90deg,#b84b4b,#e0a05b);transition:width .25s}
+#battle-message{font-size:13px;line-height:1.5;color:#e8d9c6;min-height:36px}
+.battle-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.battle-actions button{font-size:12px;min-width:0;padding:6px 3px}
+@media(max-width:480px){.battle-actions{grid-template-columns:repeat(2,1fr)}}
