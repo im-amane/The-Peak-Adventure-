@@ -140,3 +140,15 @@ button:disabled{cursor:not-allowed}
 .daily-mission-card h4,.daily-mission-card p{margin:0}
 .daily-mission-card h4{font-size:14px}
 .daily-mission-card .dungeon-action{justify-self:start}
+
+
+.world-navigation{display:grid;gap:10px;margin-bottom:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(10,17,28,.48)}
+.world-navigation h3{margin:0;font-size:15px}
+.world-choice-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:7px}
+.world-choice{min-width:0;padding:9px 10px;font-size:11px;text-align:left;background:#1e3040;border-color:#40576b}
+.world-choice.current{background:#3d4b3b;border-color:#8ba878;color:#f4f2d6}
+.world-choice:disabled{opacity:.62}
+.landmark-card{display:grid;gap:7px;padding:10px;border-top:1px solid var(--line);font-size:12px}
+.landmark-card p{margin:0;color:var(--muted);line-height:1.45}
+.landmark-action{justify-self:start;padding:8px 12px;background:#4b5b3d;border-color:#8da66d;color:#eff5d8;font-size:12px}
+@media(max-width:480px){.world-choice-list{grid-template-columns:1fr 1fr}.world-choice{font-size:10px;padding:8px 6px}}
