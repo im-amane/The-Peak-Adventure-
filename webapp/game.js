@@ -521,8 +521,14 @@
         const coinsInput=document.createElement("input");coinsInput.type="number";coinsInput.min="0";coinsInput.step="1";coinsInput.required=true;coinsInput.value=String(trade.my_coins);coinsInput.inputMode="numeric";
         const potionsLabel=document.createElement("label");potionsLabel.textContent="Potions to offer";
         const potionsInput=document.createElement("input");potionsInput.type="number";potionsInput.min="0";potionsInput.step="1";potionsInput.required=true;potionsInput.value=String(trade.my_potions);potionsInput.inputMode="numeric";
+        const weaponLabel=document.createElement("label");weaponLabel.className="trade-equipment-choice";
+        const weaponInput=document.createElement("input");weaponInput.type="checkbox";weaponInput.checked=Boolean(trade.my_weapon);
+        weaponLabel.append(weaponInput,document.createTextNode(" Offer equipped weapon ("+(gameState.weapon||"none")+")"));
+        const armorLabel=document.createElement("label");armorLabel.className="trade-equipment-choice";
+        const armorInput=document.createElement("input");armorInput.type="checkbox";armorInput.checked=Boolean(trade.my_armor);
+        armorLabel.append(armorInput,document.createTextNode(" Offer equipped armor ("+(gameState.armor||"none")+")"));
         const save=document.createElement("button");save.type="submit";save.textContent="Save offer";
-        form.append(coinsLabel,coinsInput,potionsLabel,potionsInput,save);
+        form.append(coinsLabel,coinsInput,potionsLabel,potionsInput,weaponLabel,armorLabel,save);
         form.addEventListener("submit",async event=>{
           event.preventDefault();
           const coins=Number(coinsInput.value),potions=Number(potionsInput.value);
@@ -530,7 +536,10 @@
             ui.status.textContent="Enter valid whole-number amounts for your trade offer.";return;
           }
           save.disabled=true;
-          try{await runSocialAction({action:"trade_offer",trade_id:trade.trade_id,coins,potions});}
+          try{await runSocialAction({
+            action:"trade_offer",trade_id:trade.trade_id,coins,potions,
+            offer_weapon:weaponInput.checked,offer_armor:armorInput.checked
+          });}
           catch(_){save.disabled=false;}
         });
         card.appendChild(form);
