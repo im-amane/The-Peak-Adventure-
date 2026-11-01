@@ -58,7 +58,7 @@ async def record_security_event(db, user_id, event_type, details="", severity=1)
                  SELECT event_id FROM security_events
                  ORDER BY event_id DESC LIMIT 1 OFFSET ?
                )""",
-            (MAX_SECURITY_EVENTS - 1,),
+            (MAX_SECURITY_EVENTS,),
         )
     await db.commit()
 
