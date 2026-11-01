@@ -1993,7 +1993,7 @@ async def help_cmd(message: Message):
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/friend request|accept|decline|list|remove - Friend list\n/online - Recent online friends\n"
         "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights\n"
-        "/guild create|join|leave|info|top|disband - Guild management\n"
+        "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/admin - Bot administration (authorized IDs only)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
