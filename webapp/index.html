@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>The Peak Adventure</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <div><span class="eyebrow">THE PEAK</span><h1>Adventure</h1></div>
+      <div class="coin-pill">🪙 <span id="coins">--</span></div>
+    </header>
+    <section class="hero-hud">
+      <div class="hero-line"><strong id="hero-name">Adventurer</strong><span id="hero-class">Choose your class in chat</span></div>
+      <div class="level-line"><span id="level">Lv. --</span><span id="hp">❤️ -- / --</span></div>
+      <div class="xp-track"><div id="xp-fill"></div></div>
+    </section>
+    <section class="world-panel">
+      <div class="world-heading"><div><span class="eyebrow">CURRENT REGION</span><h2 id="region">Loading the realm...</h2></div><span id="monster-label" class="monster-label">Nearby threat</span></div>
+      <div id="game" aria-label="2D adventure map"></div>
+      <div class="map-hint">Move with WASD / arrow keys or the controls below. Walk near the creature to challenge it.</div>
+      <div class="mobile-controls">
+        <div class="dpad">
+          <button data-dir="up" aria-label="Move up">▲</button>
+          <div><button data-dir="left" aria-label="Move left">◀</button><button data-dir="down" aria-label="Move down">▼</button><button data-dir="right" aria-label="Move right">▶</button></div>
+        </div>
+        <button id="encounter" class="encounter-button" disabled>⚔️ Find the monster</button>
+      </div>
+    </section>
+    <section class="bottom-note">
+      <p id="status">Connecting to Telegram...</p>
+      <p class="small">Battles, quests, gear and saved progress are handled by the Telegram bot.</p>
+    </section>
+  </main>
+  <script src="/game.js"></script>
+</body>
+</html>
