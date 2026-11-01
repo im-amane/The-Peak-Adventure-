@@ -296,7 +296,7 @@
         },
         {
           "name": "Dungeons and secret areas",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "World unlock and fast travel",
@@ -661,7 +661,7 @@
         },
         {
           "name": "Quest journal and detailed story UI",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Branching NPC dialogue",
@@ -790,16 +790,16 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 121,
-    "partial_items": 16,
-    "pending_items": 33,
+    "complete_items": 122,
+    "partial_items": 17,
+    "pending_items": 31,
     "fully_implemented_percent": 71,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 121,
-    "partial": 16,
-    "pending": 33,
+    "complete": 122,
+    "partial": 17,
+    "pending": 31,
     "total": 170,
     "percentage": 71
   }
