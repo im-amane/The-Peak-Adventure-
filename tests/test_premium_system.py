@@ -14,9 +14,9 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.db = await aiosqlite.connect(":memory:")
         self.db.row_factory = aiosqlite.Row
         await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY,potions INTEGER NOT NULL DEFAULT 0)")
-        await self.db.execute("CREATE TABLE player_stamina(user_id INTEGER PRIMARY KEY,stamina INTEGER NOT NULL,max_stamina INTEGER NOT NULL)")
+        await self.db.execute("CREATE TABLE player_stamina(user_id INTEGER PRIMARY KEY,stamina INTEGER NOT NULL,updated_at INTEGER NOT NULL)")
         await self.db.execute("INSERT INTO players(user_id,potions) VALUES(101,2)")
-        await self.db.execute("INSERT INTO player_stamina VALUES(101,30,100)")
+        await self.db.execute("INSERT INTO player_stamina VALUES(101,30,1800000000)")
         await init_premium_tables(self.db)
 
     async def asyncTearDown(self):
@@ -51,7 +51,7 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         stamina = await buy_premium_item(self.db, 101, "stamina_crystal")
         self.assertEqual(stamina["balance"], 135)
         cur = await self.db.execute("SELECT stamina FROM player_stamina WHERE user_id=101")
-        self.assertEqual((await cur.fetchone())["stamina"], 80)
+        self.assertEqual((await cur.fetchone())["stamina"], 100)
 
     async def test_xp_charm_adds_three_wins_and_is_consumed_once_per_victory(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
