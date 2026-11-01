@@ -75,4 +75,6 @@ The repository includes a GitHub Actions workflow configured to run these checks
 ## Remaining development
 The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, multiplayer parties/PvP/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
 
-The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.\n\nNever commit your real `.env` or bot token.
+The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
+
+Never commit your real `.env` or bot token.
