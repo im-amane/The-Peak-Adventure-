@@ -11,10 +11,15 @@
     heroClass: document.getElementById("hero-class"),
     level: document.getElementById("level"),
     hp: document.getElementById("hp"),
+    hpTrack: document.getElementById("hp-track"),
+    hpFill: document.getElementById("hp-fill"),
     stamina: document.getElementById("stamina"),
+    staminaTrack: document.getElementById("stamina-track"),
     staminaFill: document.getElementById("stamina-fill"),
     mana: document.getElementById("mana"),
+    manaTrack: document.getElementById("mana-track"),
     manaFill: document.getElementById("mana-fill"),
+    xpTrack: document.getElementById("xp-track"),
     xp: document.getElementById("xp-fill"),
     region: document.getElementById("region"),
     monster: document.getElementById("monster-label"),
@@ -164,6 +169,18 @@
     });
   }
 
+  function updateHudMeter(track, fill, current, maximum) {
+    if (!track || !fill) return;
+    const safeMaximum = Number.isFinite(maximum) && maximum > 0 ? maximum : 0;
+    const safeCurrent = Number.isFinite(current) ? Math.max(0, Math.min(safeMaximum, current)) : 0;
+    const percentage = safeMaximum > 0 ? (safeCurrent / safeMaximum) * 100 : 0;
+    track.setAttribute("aria-valuenow", String(Math.round(percentage)));
+    track.setAttribute("aria-valuetext", safeMaximum > 0
+      ? safeCurrent + " of " + safeMaximum
+      : "Unavailable");
+    fill.style.width = percentage + "%";
+  }
+
   function applyState(data, message) {
     const previousRegion = gameState ? gameState.region : null;
     const previousMonster = gameState ? gameState.monster.level : null;
@@ -177,13 +194,14 @@
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
     ui.level.textContent = "Lv. " + data.level;
     ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
+    updateHudMeter(ui.hpTrack, ui.hpFill, data.hp, data.max_hp);
     if (data.mana && ui.mana) {
       ui.mana.textContent = data.mana.mana + " / " + data.mana.max_mana;
-      if (ui.manaFill) ui.manaFill.style.width = (data.mana.mana / data.mana.max_mana * 100) + "%";
+      updateHudMeter(ui.manaTrack, ui.manaFill, data.mana.mana, data.mana.max_mana);
     }
     if (data.stamina && ui.stamina) {
       ui.stamina.textContent = data.stamina.stamina + " / " + data.stamina.max_stamina;
-      if (ui.staminaFill) ui.staminaFill.style.width = (data.stamina.stamina / data.stamina.max_stamina * 100) + "%";
+      updateHudMeter(ui.staminaTrack, ui.staminaFill, data.stamina.stamina, data.stamina.max_stamina);
     }
     ui.coins.textContent = data.coins;
     if(ui.premiumGems)ui.premiumGems.textContent = Number.isFinite(data.premium_gems) ? data.premium_gems : 0;
@@ -229,7 +247,7 @@
         }
       }
     }
-    ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
+    updateHudMeter(ui.xpTrack, ui.xp, data.xp, data.xp_required);
     ui.region.textContent = data.region;
     ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
     const battle = data.battle;
@@ -245,7 +263,9 @@
     if (battle) {
       ui.battleName.textContent = (battle.elite ? "💀 ELITE · " : (battle.evolved ? "✨ ASCENDED · " : "")) + battle.name + " · Lv." + battle.level + (battle.phase > 1 ? " · Phase " + battle.phase : "");
       ui.battleHp.textContent = "❤️ " + battle.hp + " / " + battle.max_hp;
-      ui.battleHpFill.style.width = Math.max(0, battle.hp / battle.max_hp * 100) + "%";
+      const enemyHpPercent = Number.isFinite(battle.max_hp) && battle.max_hp > 0
+        ? Math.max(0, Math.min(100, battle.hp / battle.max_hp * 100)) : 0;
+      ui.battleHpFill.style.width = enemyHpPercent + "%";
       ui.potionCount.textContent = "Health potions: " + data.potions + " · " + battle.special_move;
       ui.battleMessage.textContent = message ? message.replace(/<[^>]*>/g, "") : battle.story;
     }
