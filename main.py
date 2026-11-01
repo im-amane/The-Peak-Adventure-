@@ -821,7 +821,7 @@ async def cb_friend_list(call: CallbackQuery):
     lines = ["👥 <b>Your Friends</b>"]
     for index, friend in enumerate(friends, 1):
         lines.append(f"{index}. {escape(friend['username'] or 'Adventurer')} · Lv.{friend['level']} · ID <code>{friend['user_id']}</code>")
-    await call.message.answer("\\n".join(lines))
+    await call.message.answer("\n".join(lines))
 
 
 @dp.message(Command("friend"))
