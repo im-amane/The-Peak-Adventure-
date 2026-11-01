@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from game_rules import BOSS_LEVELS, calculate_enemy_damage, class_evades, expected_monster_power, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import BOSS_LEVELS, calculate_enemy_damage, class_evades, expected_monster_power, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 
 
 class GameRulesTests(unittest.TestCase):
@@ -99,6 +99,18 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(skill_cooldown_for_class("Knight"), 4)
         self.assertEqual(skill_cooldown_for_class("Archer"), 4)
         self.assertEqual(skill_cooldown_for_class("Berserker"), 4)
+
+    def test_nearby_monsters_offer_multiple_level_appropriate_encounters(self):
+        self.assertEqual(nearby_monster_levels(1), (1, 2))
+        self.assertEqual(nearby_monster_levels(11), (11, 12))
+        self.assertEqual(nearby_monster_levels(10), (10,))
+        self.assertEqual(nearby_monster_levels(10, boss_defeated=True), (9, 11))
+        self.assertEqual(nearby_monster_levels(100, boss_defeated=True), (99,))
+
+    def test_nearby_monster_levels_reject_invalid_player_level(self):
+        for level in (0, 101, True, 1.5):
+            with self.subTest(level=level), self.assertRaises(ValueError):
+                nearby_monster_levels(level)
 
 
 if __name__ == "__main__":
