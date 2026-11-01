@@ -114,14 +114,14 @@
     return data;
   }
 
-  async function startEncounter() {
+  async function startEncounter(monsterLevel) {
     if (!gameState.class_selected) { ui.status.textContent = "Choose your class in the Telegram chat first."; return; }
     if (gameState.battle_active) { ui.status.textContent = "You already have an active battle."; return; }
     if (requestInFlight) return;
     requestInFlight = true;
     ui.encounter.disabled = true;
     try {
-      const result = await postApi("/api/explore", {});
+      const result = await postApi("/api/explore", {monster_level: monsterLevel});
       applyState(result.state, result.message);
     } catch (error) {
       ui.status.textContent = error.message;
@@ -252,14 +252,20 @@
         "The Alpha God began as a lonely light, not a monster."
       ];
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
-      this.monster=makeMonster(this,w*0.77,h*0.68,gameState.monster.level,monsterColor);
+      const roster=Array.isArray(gameState.nearby_monsters)&&gameState.nearby_monsters.length?gameState.nearby_monsters:[gameState.monster];
+      const positions=roster.length===1?[0.77]:roster.length===2?[0.65,0.84]:[0.57,0.73,0.89];
+      this.monsters=roster.map((monster,index)=>{
+        const x=w*positions[Math.min(index,positions.length-1)];
+        const y=h*(index%2===0?0.68:0.76);
+        const sprite=makeMonster(this,x,y,monster.level,monsterColor);
+        const label=this.add.text(x,y-48,monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
+        this.tweens.add({targets:sprite,y:sprite.y-5,duration:800+index*90,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+        return {sprite,data:monster,label};
+      });
+      this.selectedMonster=null;
       this.heroIdle = this.tweens.add({
         targets:this.hero, y:this.hero.y-3, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
       });
-      this.monsterIdle = this.tweens.add({
-        targets:this.monster, y:this.monster.y-5, duration:850, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
-      });
-      this.add.text(w*0.77,h*0.68-54,gameState.monster.name,{fontFamily:"Georgia",fontSize:"13px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
       this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
@@ -271,7 +277,7 @@
       this.physics=null;
     }
     challenge(){
-      startEncounter();
+      if(this.selectedMonster)startEncounter(this.selectedMonster.level);
     }
     talkToNpc(){
       if(!nearNpc || (gameState && gameState.battle_active))return;
@@ -299,17 +305,25 @@
       if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
       const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
       if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
-      const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.monster.x,this.monster.y);
-      nearMonster=distance<88;
+      let closest=null,closestDistance=Infinity;
+      this.monsters.forEach(entry=>{
+        const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,entry.sprite.x,entry.sprite.y);
+        if(distance<closestDistance){closestDistance=distance;closest=entry;}
+      });
+      nearMonster=closestDistance<88;
+      this.selectedMonster=nearMonster?closest:null;
       nearNpc=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.npc.x,this.npc.y)<72;
       ui.interact.disabled=!nearNpc;
       ui.interact.textContent=nearNpc?"💬 Talk to Wanderer":"💬 Find Wanderer";
       if(Phaser.Input.Keyboard.JustDown(this.keys.E))this.talkToNpc();
       ui.encounter.disabled=!nearMonster||!gameState.class_selected||gameState.battle_active;
-      ui.encounter.textContent=nearMonster?"⚔️ Challenge Monster":"⚔️ Find the monster";
-      if(nearMonster)ui.status.textContent="The creature has noticed you. Prepare for battle.";
+      ui.encounter.textContent=nearMonster?"⚔️ Challenge "+closest.data.name:"⚔️ Find a monster";
+      ui.monster.textContent=nearMonster?"Lv. "+closest.data.level+" · "+closest.data.name:(rosterCountText());
+      if(nearMonster)ui.status.textContent=closest.data.name+" has noticed you. Prepare for battle.";
     }
   }
+
+  function rosterCountText(){return "Nearby threats: "+(gameState&&Array.isArray(gameState.nearby_monsters)?gameState.nearby_monsters.length:1);}
 
   function bootGame(){
     if(!gameState)return;
