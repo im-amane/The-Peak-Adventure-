@@ -3459,7 +3459,10 @@ async def api_world(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "World payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or payload.get("action") not in {"travel", "discover"}:
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "World payload must be a JSON object."}, status=400)
+    action = payload.get("action")
+    if not isinstance(action, str) or action not in {"travel", "discover"}:
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_world_action", "unsupported action", 2)
         return web.json_response({"error": "Unsupported world action."}, status=400)
@@ -3468,7 +3471,7 @@ async def api_world(request: web.Request):
         async with db_lock:
             async with player_locks[user_id]:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
-                if payload["action"] == "travel":
+                if action == "travel":
                     if set(payload) != {"action", "world_id"}:
                         return web.json_response({"error": "A world_id is required."}, status=400)
                     world_id = payload.get("world_id")
