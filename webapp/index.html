@@ -31,6 +31,19 @@
       <button id="save-appearance" class="save-appearance">Save appearance</button>
       <p id="appearance-status" class="small" aria-live="polite">Your hero's appearance is ready to customize.</p>
     </section>
+    <section class="inventory-panel" aria-labelledby="inventory-title">
+      <div class="section-heading"><div><span class="eyebrow">YOUR GEAR</span><h2 id="inventory-title">Inventory & Equipment</h2></div></div>
+      <div class="inventory-grid">
+        <article><span>🪙 Coins</span><strong id="inventory-coins">--</strong></article>
+        <article><span>🧪 Potions</span><strong id="inventory-potions">--</strong></article>
+        <article><span>⚔️ Weapon</span><strong id="inventory-weapon">--</strong><small id="inventory-attack"></small></article>
+        <article><span>🛡️ Armor</span><strong id="inventory-armor">--</strong><small id="inventory-defense"></small></article>
+      </div>
+    </section>
+    <section class="quest-panel" aria-labelledby="quest-title">
+      <div class="section-heading"><div><span class="eyebrow">ADVENTURE LOG</span><h2 id="quest-title">Story Quests</h2></div></div>
+      <div id="quest-list" class="quest-list"><p class="small">Loading your quests...</p></div>
+    </section>
     <section class="world-panel">
       <div class="world-heading"><div><span class="eyebrow">CURRENT REGION</span><h2 id="region">Loading the realm...</h2></div><span id="monster-label" class="monster-label">Nearby threat</span></div>
       <div id="game" aria-label="2D adventure map"></div>
