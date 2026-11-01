@@ -36,6 +36,13 @@ def validate_monster_catalogue(monsters: list[dict]) -> None:
         "speed", "hp", "element", "special_move", "unique_power",
         "advantage", "disadvantage", "weakness", "story", "trait_effect",
     }
+    special_moves = [monster.get("special_move") for monster in monsters]
+    unique_powers = [monster.get("unique_power") for monster in monsters]
+    stories = [monster.get("story") for monster in monsters]
+    if len(set(special_moves)) != MAX_LEVEL or len(set(unique_powers)) != MAX_LEVEL or len(set(stories)) != MAX_LEVEL:
+        raise ValueError("Monster moves, unique powers, and story entries must be unique")
+
+    valid_traits = {"regenerate", "fury", "swift", "armored", "drain"}
     for monster in monsters:
         missing = required.difference(monster)
         if missing:
@@ -45,6 +52,8 @@ def validate_monster_catalogue(monsters: list[dict]) -> None:
             raise ValueError(f"Monster level {level} has incorrect power progression")
         if not isinstance(monster["hp"], int) or monster["hp"] <= 0:
             raise ValueError(f"Monster level {level} must have positive HP")
+        if monster["trait_effect"] not in valid_traits:
+            raise ValueError(f"Monster level {level} has an unknown combat trait")
         should_be_boss = level in BOSS_LEVELS
         if bool(monster["boss"]) != should_be_boss:
             raise ValueError(f"Monster level {level} has incorrect boss designation")
