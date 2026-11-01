@@ -102,6 +102,9 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
     provider_charge_id = str(provider_charge_id or "")[:255]
     try:
         await db.execute("BEGIN IMMEDIATE")
+        cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+        if not await cur.fetchone():
+            raise PremiumError("Player account not found.")
         cur = await db.execute(
             "SELECT user_id,package_id,stars FROM premium_transactions WHERE telegram_charge_id=?",
             (telegram_charge_id,),
