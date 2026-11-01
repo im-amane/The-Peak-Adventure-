@@ -152,9 +152,9 @@ The-Peak-Adventure/
 - [x] Party creation and invitations
 - [x] Party membership management and leader handoff
 - [ ] Co-op exploration
-- [ ] Co-op PvE battles
-- [ ] Team boss raids
-- [ ] Matchmaking and anti-abuse limits
+- [x] Shared party PvE battles with contribution tracking and per-member rewards
+- [x] Party-wide boss raids with cooldowns
+- [~] Matchmaking and anti-abuse limits (per-player raid cooldowns; automatic matchmaking pending)
 
 ### 08. Telegram Group Chat Features
 
