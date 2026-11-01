@@ -3188,6 +3188,10 @@ async def api_action(request: web.Request):
         elif action == "skill":
             if p["skill_cd"] > 0:
                 return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+            try:
+                await consume_mana(db, user_id, SKILL_MANA_COST)
+            except ManaError as exc:
+                return web.json_response({"error": str(exc)}, status=409)
             damage = max(
                 25,
                 (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
@@ -3220,6 +3224,7 @@ async def api_action(request: web.Request):
         if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
             new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
         if new_enemy_hp == 0:
+            await restore_mana(db, user_id, TURN_MANA_REGEN)
             await db.execute(
                 "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
                 (user_id,),
@@ -3271,6 +3276,7 @@ async def api_action(request: web.Request):
             (new_hp, user_id),
         )
         await db.commit()
+        await restore_mana(db, user_id, TURN_MANA_REGEN)
         effect_text = " " + " ".join(effect_notes) if effect_notes else ""
         if new_hp == 0:
             message = await finish_battle(user_id, False)
