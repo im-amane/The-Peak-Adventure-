@@ -3457,6 +3457,7 @@ async def api_state(request: web.Request):
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=401)
     async with db_lock:
+        await expire_stale_trades()
         return web.json_response(await miniapp_state(user))
 
 
@@ -3485,6 +3486,7 @@ async def api_dungeon(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
+            await expire_stale_trades()
             async with player_locks[user_id]:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "enter":
@@ -3788,6 +3790,22 @@ async def api_premium_shop(request: web.Request):
     return web.json_response({"message": f"Purchased {purchase['title']}.", "purchase": purchase, "state": state})
 
 
+async def expire_stale_trades():
+    """Expire abandoned invitations and open offers after 24 hours."""
+    if db is None:
+        return 0
+    cur = await db.execute(
+        """UPDATE trades
+           SET status='expired',initiator_confirmed=0,partner_confirmed=0
+           WHERE status IN ('pending','open')
+             AND datetime(created_at) <= datetime('now','-24 hours')"""
+    )
+    expired_count = cur.rowcount
+    if expired_count:
+        await db.commit()
+    return expired_count
+
+
 async def api_social(request: web.Request):
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
@@ -4065,6 +4083,7 @@ async def api_social(request: web.Request):
                 else:
                     await record_security_event(db, user_id, "invalid_social_action", action[:80], 2)
                     return web.json_response({"error": "Unsupported social action."}, status=400)
+                await db.commit()
                 state = await miniapp_state(user)
     except (FriendError, PartyError, GuildFeatureError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
