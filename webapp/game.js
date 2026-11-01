@@ -153,14 +153,19 @@
     }
   }
 
-  function makeHero(scene, x, y, heroClass) {
+  function makeHero(scene, x, y, heroClass, appearance = {}) {
     const c = scene.add.container(x,y);
     const g = scene.add.graphics();
-    const cloak = {Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a;
+    const cloak = {traveler:0x344d68,knight:0x596a86,mage:0x654b88,ranger:0x41684f}[appearance.outfit] || ({Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a);
+    const skin = {fair:0xf1d2b5,warm:0xe2b98d,tan:0xb97850,deep:0x70442f}[appearance.skin] || 0xe2b98d;
     g.fillStyle(cloak,1); g.fillRoundedRect(-15,-5,30,29,8);
     g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
-    g.fillStyle(0xe2b98d,1); g.fillCircle(0,-15,11);
-    g.fillStyle(0x382b2b,1); g.fillEllipse(0,-23,22,12);
+    g.fillStyle(skin,1); g.fillCircle(0,-15,11);
+    g.fillStyle(0x382b2b,1);
+    if (appearance.hair === "shaved") g.fillEllipse(0,-23,18,5);
+    else if (appearance.hair === "long") { g.fillEllipse(0,-23,22,12); g.fillRoundedRect(-11,-20,5,17,3); g.fillRoundedRect(6,-20,5,17,3); }
+    else if (appearance.hair === "braided") { g.fillEllipse(0,-23,22,12); g.fillCircle(-12,-15,4); g.fillCircle(12,-15,4); }
+    else g.fillEllipse(0,-23,22,12);
     g.fillStyle(0x273a52,1); g.fillRoundedRect(-12,0,24,18,5);
     g.lineStyle(3,0xc9d4dc,1); g.beginPath(); g.moveTo(13,-3); g.lineTo(26,-25); g.strokePath();
     g.lineStyle(4,0x9b7044,1); g.beginPath(); g.moveTo(10,1); g.lineTo(18,-10); g.strokePath();
@@ -240,7 +245,7 @@
           this.obstacleGraphics.fillCircle(obstacle.x+8,obstacle.y-5,3);
         }
       });
-      this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
+      this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
@@ -339,6 +344,29 @@
     if (phaserGame) phaserGame.destroy(true);
     phaserGame = new Phaser.Game(config);
   }
+
+  document.getElementById("save-appearance").addEventListener("click", async () => {
+    if (requestInFlight || !gameState) return;
+    const button = document.getElementById("save-appearance");
+    const payload = {};
+    ["race","skin","hair","outfit"].forEach(key => {
+      payload[key] = document.getElementById("appearance-" + key).value;
+    });
+    requestInFlight = true;
+    button.disabled = true;
+    ui.appearanceStatus.textContent = "Saving your hero...";
+    try {
+      const result = await postApi("/api/appearance", payload);
+      applyState(result.state, result.message);
+      if (sceneRef) sceneRef.scene.restart();
+      ui.appearanceStatus.textContent = "Appearance saved successfully.";
+    } catch (error) {
+      ui.appearanceStatus.textContent = error.message;
+    } finally {
+      requestInFlight = false;
+      button.disabled = false;
+    }
+  });
   document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
   document.getElementById("interact-npc").addEventListener("click",()=>{if(sceneRef)sceneRef.talkToNpc();});
   document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
