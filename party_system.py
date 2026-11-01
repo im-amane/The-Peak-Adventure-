@@ -254,11 +254,7 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
             await db.execute("DELETE FROM party_battle_cooldowns WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
             await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
             await db.execute("DELETE FROM party_battles WHERE party_id=?", (party_id,))
-            await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
-    await db.execute("DELETE FROM party_battle_cooldowns WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
-    await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
-    await db.execute("DELETE FROM party_battles WHERE party_id=?", (party_id,))
-    await db.execute("DELETE FROM parties WHERE party_id=?", (party_id,))
+            await db.execute("DELETE FROM parties WHERE party_id=?", (party_id,))
     await db.commit()
     return new_leader
 
@@ -274,6 +270,10 @@ async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -
         raise PartyError("Only the party leader can disband it.")
     await db.execute("UPDATE party_invites SET status='cancelled',responded_at=CURRENT_TIMESTAMP WHERE party_id=? AND status='pending'", (party_id,))
     await db.execute("DELETE FROM party_members WHERE party_id=?", (party_id,))
+    await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
+    await db.execute("DELETE FROM party_battle_cooldowns WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
+    await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
+    await db.execute("DELETE FROM party_battles WHERE party_id=?", (party_id,))
     await db.execute("DELETE FROM parties WHERE party_id=?", (party_id,))
     await db.commit()
 
