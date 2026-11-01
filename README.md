@@ -87,6 +87,8 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/heal` - Restore HP at camp
 - `/map` - View the current region
 - `/travel` - View unlocked worlds and fast travel with `/travel 3`
+- `/dungeons` - View level-unlocked dungeons
+- `/dungeon enter|status|abandon|claim` - Explore three-room dungeons
 - `/monster <level>` - Inspect a monster
 - `/bestiary` - View discovered monsters
 - `/quests` - View story quests and claimable rewards
