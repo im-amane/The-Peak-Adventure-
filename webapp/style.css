@@ -72,3 +72,17 @@ button:disabled{cursor:not-allowed}
 .sound-toggle{min-height:36px;padding:6px 10px;background:#263748;border-color:#58758b;color:#e7f0f3;font-size:12px}
 .sound-toggle[aria-pressed="false"]{opacity:.68}
 @media(max-width:360px){.topbar-actions{gap:5px}.sound-toggle{padding:5px 7px;font-size:11px}}
+
+.inventory-panel,.quest-panel{background:#1c2732;border:1px solid #435767;border-radius:15px;padding:13px;margin:12px 0}
+.inventory-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.inventory-grid article{display:grid;gap:4px;padding:10px;border-radius:10px;background:#101a24;min-width:0}
+.inventory-grid span,.inventory-grid small{font-size:11px;color:#aebdca}
+.inventory-grid strong{font-size:13px;color:#f1dfbd;overflow-wrap:anywhere}
+.quest-list{display:grid;gap:8px}
+.quest-card{padding:10px;border-radius:10px;background:#101a24;border:1px solid #334757}
+.quest-card h3{margin:0 0 5px;font-size:14px;color:#f0dfc1}
+.quest-card p{margin:4px 0;font-size:12px;color:#bdc8d0;line-height:1.4}
+.quest-progress{height:6px;border-radius:9px;background:#263544;overflow:hidden;margin:8px 0}
+.quest-progress span{display:block;height:100%;background:#c69a5b}
+.quest-card button{width:100%;min-height:36px;margin-top:6px;background:#684d2c;border-color:#b98c52;color:#fff1d2;font-size:12px}
+@media(max-width:520px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
