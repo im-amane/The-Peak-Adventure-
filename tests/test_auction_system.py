@@ -74,6 +74,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_cannot_list_equipment_during_battle(self):
         await self.db.execute("INSERT INTO battles VALUES(1)")
+        await self.db.commit()
         with self.assertRaisesRegex(AuctionError,"active battle"):
             await create_listing(self.db,1,"weapon",100,now=1000)
 
