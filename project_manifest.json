@@ -1,0 +1,787 @@
+{
+  "project": "The Peak Adventure",
+  "version": "1.0.0",
+  "repository": "https://github.com/im-amane/The-Peak-Adventure-",
+  "status_legend": {
+    "complete": "Implemented in repository; runtime validation may still be required",
+    "partial": "Implemented in part; additional work remains",
+    "pending": "Not implemented yet"
+  },
+  "note": "Statuses reflect a code/repository audit, not a claim that live gameplay or every automated test has passed.",
+  "modules": [
+    {
+      "id": "01",
+      "name": "Telegram Bot System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Bot startup and command routing",
+          "status": "complete"
+        },
+        {
+          "name": "/start registration and game menu",
+          "status": "complete"
+        },
+        {
+          "name": "/help command list",
+          "status": "complete"
+        },
+        {
+          "name": "/profile and /class",
+          "status": "complete"
+        },
+        {
+          "name": "/explore and /map",
+          "status": "complete"
+        },
+        {
+          "name": "/inventory and /shop",
+          "status": "complete"
+        },
+        {
+          "name": "/quests and reward claims",
+          "status": "complete"
+        },
+        {
+          "name": "/achievements and reward claims",
+          "status": "complete"
+        },
+        {
+          "name": "/daily rewards",
+          "status": "complete"
+        },
+        {
+          "name": "/leaderboard and PvP rankings",
+          "status": "complete"
+        },
+        {
+          "name": "Inline callback battle controls",
+          "status": "partial"
+        },
+        {
+          "name": "Bot error handling and operational logging",
+          "status": "partial"
+        },
+        {
+          "name": "Admin command panel",
+          "status": "pending"
+        },
+        {
+          "name": "Broadcast and announcement system",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "name": "Personal Player System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Player registration and Telegram identity",
+          "status": "complete"
+        },
+        {
+          "name": "Persistent SQLite player profile",
+          "status": "complete"
+        },
+        {
+          "name": "Four hero classes: Knight, Mage, Archer, Berserker",
+          "status": "complete"
+        },
+        {
+          "name": "Level and XP progression",
+          "status": "complete"
+        },
+        {
+          "name": "HP, coins and potion tracking",
+          "status": "complete"
+        },
+        {
+          "name": "Equipment and inventory basics",
+          "status": "complete"
+        },
+        {
+          "name": "Story quest progress and one-time rewards",
+          "status": "complete"
+        },
+        {
+          "name": "Achievements and one-time rewards",
+          "status": "complete"
+        },
+        {
+          "name": "Daily reward cooldown",
+          "status": "complete"
+        },
+        {
+          "name": "Bestiary discovery",
+          "status": "partial"
+        },
+        {
+          "name": "Player settings and preferences",
+          "status": "pending"
+        },
+        {
+          "name": "Account recovery and data export",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "name": "Character Design System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Four class identities in game data",
+          "status": "complete"
+        },
+        {
+          "name": "Character stats and class passives",
+          "status": "complete"
+        },
+        {
+          "name": "Playable custom character sprite sheets",
+          "status": "pending"
+        },
+        {
+          "name": "Race selection",
+          "status": "pending"
+        },
+        {
+          "name": "Character appearance editor",
+          "status": "pending"
+        },
+        {
+          "name": "Hair, face and body customization",
+          "status": "pending"
+        },
+        {
+          "name": "Armor and outfit visuals",
+          "status": "pending"
+        },
+        {
+          "name": "Weapon appearance visuals",
+          "status": "pending"
+        },
+        {
+          "name": "Idle, walk and run frame animations",
+          "status": "pending"
+        },
+        {
+          "name": "Attack, skill, hit and death animations",
+          "status": "pending"
+        },
+        {
+          "name": "Level-up and cosmetic effects",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "name": "2D Game Engine",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Phaser 3 integration",
+          "status": "complete"
+        },
+        {
+          "name": "2D world rendering and biome palettes",
+          "status": "complete"
+        },
+        {
+          "name": "Camera follow and scrolling world",
+          "status": "complete"
+        },
+        {
+          "name": "Keyboard movement",
+          "status": "complete"
+        },
+        {
+          "name": "Mobile touch movement",
+          "status": "complete"
+        },
+        {
+          "name": "Obstacle collision",
+          "status": "complete"
+        },
+        {
+          "name": "NPC collision and interaction",
+          "status": "complete"
+        },
+        {
+          "name": "Multiple monster map targets",
+          "status": "complete"
+        },
+        {
+          "name": "Server-validated encounter selection",
+          "status": "complete"
+        },
+        {
+          "name": "Turn-based combat rules",
+          "status": "complete"
+        },
+        {
+          "name": "Boss three-phase combat",
+          "status": "complete"
+        },
+        {
+          "name": "Class passives and dodge rules",
+          "status": "complete"
+        },
+        {
+          "name": "Elemental, weapon and armor combat modifiers",
+          "status": "complete"
+        },
+        {
+          "name": "Monster AI with tactical decision-making",
+          "status": "pending"
+        },
+        {
+          "name": "Advanced physics and pathfinding",
+          "status": "pending"
+        },
+        {
+          "name": "Particle and spell effects",
+          "status": "pending"
+        },
+        {
+          "name": "Sound and music engine",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "name": "World and Map System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Ten biome/world themes",
+          "status": "complete"
+        },
+        {
+          "name": "Level-based world/region selection",
+          "status": "partial"
+        },
+        {
+          "name": "Camera scrolling and map bounds",
+          "status": "complete"
+        },
+        {
+          "name": "Basic obstacles and collision",
+          "status": "complete"
+        },
+        {
+          "name": "Wanderer NPC",
+          "status": "complete"
+        },
+        {
+          "name": "Ten region-specific NPC dialogue lines",
+          "status": "complete"
+        },
+        {
+          "name": "Multiple monster encounter locations",
+          "status": "complete"
+        },
+        {
+          "name": "Large multi-zone maps",
+          "status": "pending"
+        },
+        {
+          "name": "Portals and landmarks",
+          "status": "pending"
+        },
+        {
+          "name": "Dungeons and secret areas",
+          "status": "pending"
+        },
+        {
+          "name": "World unlock and fast travel",
+          "status": "pending"
+        },
+        {
+          "name": "Weather and day/night cycle",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "name": "Monster and Boss System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "100 monster records and ordered levels",
+          "status": "complete"
+        },
+        {
+          "name": "Ten boss milestones at levels 10–100",
+          "status": "complete"
+        },
+        {
+          "name": "Monster power progression rules",
+          "status": "complete"
+        },
+        {
+          "name": "Monster traits and combat effects",
+          "status": "complete"
+        },
+        {
+          "name": "Special move and unique-power data fields",
+          "status": "complete"
+        },
+        {
+          "name": "Advantage, disadvantage and weakness fields",
+          "status": "complete"
+        },
+        {
+          "name": "Monster encounter level validation",
+          "status": "complete"
+        },
+        {
+          "name": "Boss HP phase thresholds at 60% and 25%",
+          "status": "complete"
+        },
+        {
+          "name": "Boss phase damage scaling",
+          "status": "complete"
+        },
+        {
+          "name": "Monster discovery/bestiary basics",
+          "status": "partial"
+        },
+        {
+          "name": "100 individually authored and lore-consistent stories",
+          "status": "pending"
+        },
+        {
+          "name": "Monster evolution and variants",
+          "status": "pending"
+        },
+        {
+          "name": "Elite and roaming events",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "name": "Multiplayer System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Group-context player duel challenge",
+          "status": "complete"
+        },
+        {
+          "name": "Duel accept and decline",
+          "status": "complete"
+        },
+        {
+          "name": "Turn-based PvP actions",
+          "status": "complete"
+        },
+        {
+          "name": "Surrender and PvP ranking",
+          "status": "complete"
+        },
+        {
+          "name": "Friend requests and friend list",
+          "status": "pending"
+        },
+        {
+          "name": "Online presence",
+          "status": "pending"
+        },
+        {
+          "name": "Party creation and invitations",
+          "status": "pending"
+        },
+        {
+          "name": "Co-op exploration",
+          "status": "pending"
+        },
+        {
+          "name": "Co-op PvE battles",
+          "status": "pending"
+        },
+        {
+          "name": "Team boss raids",
+          "status": "pending"
+        },
+        {
+          "name": "Matchmaking and anti-abuse limits",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "name": "Telegram Group Chat Features",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Duel challenge through group reply",
+          "status": "complete"
+        },
+        {
+          "name": "PvP rankings command",
+          "status": "complete"
+        },
+        {
+          "name": "Player trade initiation through group reply",
+          "status": "complete"
+        },
+        {
+          "name": "Group registration and verification",
+          "status": "pending"
+        },
+        {
+          "name": "Group profile and settings",
+          "status": "pending"
+        },
+        {
+          "name": "Group owner/admin permissions",
+          "status": "pending"
+        },
+        {
+          "name": "Group member roster",
+          "status": "pending"
+        },
+        {
+          "name": "Group XP and level",
+          "status": "pending"
+        },
+        {
+          "name": "Group missions and rewards",
+          "status": "pending"
+        },
+        {
+          "name": "Group boss/raid commands",
+          "status": "pending"
+        },
+        {
+          "name": "Group leaderboard and events",
+          "status": "pending"
+        },
+        {
+          "name": "Group-specific moderation controls",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "name": "Guild System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Guild create/join/leave/info/top/disband commands",
+          "status": "complete"
+        },
+        {
+          "name": "Guild membership capacity (20)",
+          "status": "complete"
+        },
+        {
+          "name": "Guild XP and levels",
+          "status": "complete"
+        },
+        {
+          "name": "Guild rankings",
+          "status": "complete"
+        },
+        {
+          "name": "Guild roles and permissions",
+          "status": "pending"
+        },
+        {
+          "name": "Guild invitations",
+          "status": "pending"
+        },
+        {
+          "name": "Guild chat and announcements",
+          "status": "pending"
+        },
+        {
+          "name": "Guild missions and rewards",
+          "status": "pending"
+        },
+        {
+          "name": "Guild wars",
+          "status": "pending"
+        },
+        {
+          "name": "Guild boss raids",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "name": "Telegram Mini App",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Phaser 3 Mini App shell",
+          "status": "complete"
+        },
+        {
+          "name": "Telegram initData HMAC validation",
+          "status": "complete"
+        },
+        {
+          "name": "Player HUD",
+          "status": "complete"
+        },
+        {
+          "name": "2D world and scrolling camera",
+          "status": "complete"
+        },
+        {
+          "name": "Keyboard and touch controls",
+          "status": "complete"
+        },
+        {
+          "name": "Monster target selection",
+          "status": "complete"
+        },
+        {
+          "name": "Battle HUD and boss phase display",
+          "status": "complete"
+        },
+        {
+          "name": "Skill cooldown and potion availability UI",
+          "status": "complete"
+        },
+        {
+          "name": "Safe API response handling and request guard",
+          "status": "complete"
+        },
+        {
+          "name": "Character customization screen",
+          "status": "pending"
+        },
+        {
+          "name": "Dedicated inventory/equipment/quest screens",
+          "status": "pending"
+        },
+        {
+          "name": "Friends, party, guild and trading screens",
+          "status": "pending"
+        },
+        {
+          "name": "Polished responsive visual design and accessibility audit",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "name": "Economy and Trading",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Coins and potion economy",
+          "status": "complete"
+        },
+        {
+          "name": "Equipment shop",
+          "status": "complete"
+        },
+        {
+          "name": "Level-gated weapons and armor",
+          "status": "complete"
+        },
+        {
+          "name": "Player coin/potion trade offer",
+          "status": "complete"
+        },
+        {
+          "name": "Dual trade confirmation",
+          "status": "complete"
+        },
+        {
+          "name": "Trade cancellation",
+          "status": "complete"
+        },
+        {
+          "name": "Equipment/item trading",
+          "status": "pending"
+        },
+        {
+          "name": "Auction house and market listings",
+          "status": "pending"
+        },
+        {
+          "name": "Crafting and materials",
+          "status": "pending"
+        },
+        {
+          "name": "Item rarity and economy balancing",
+          "status": "partial"
+        },
+        {
+          "name": "Premium currency and payments",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "name": "Quest and Story System",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Persistent story quest progress",
+          "status": "complete"
+        },
+        {
+          "name": "One-time quest rewards",
+          "status": "complete"
+        },
+        {
+          "name": "Achievements and claims",
+          "status": "complete"
+        },
+        {
+          "name": "Daily reward loop",
+          "status": "complete"
+        },
+        {
+          "name": "NPC region dialogue",
+          "status": "complete"
+        },
+        {
+          "name": "Quest journal and detailed story UI",
+          "status": "pending"
+        },
+        {
+          "name": "Branching NPC dialogue",
+          "status": "pending"
+        },
+        {
+          "name": "Cinematic story chapters",
+          "status": "pending"
+        },
+        {
+          "name": "World and group quest chains",
+          "status": "pending"
+        },
+        {
+          "name": "100-monster story editorial rewrite",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "13",
+      "name": "Admin, Security and Operations",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Telegram Mini App initData validation",
+          "status": "complete"
+        },
+        {
+          "name": "Duplicate/malformed auth field rejection",
+          "status": "complete"
+        },
+        {
+          "name": "SQLite persistence",
+          "status": "complete"
+        },
+        {
+          "name": "Environment-based secrets configuration",
+          "status": "complete"
+        },
+        {
+          "name": "Basic application logging",
+          "status": "partial"
+        },
+        {
+          "name": "Admin dashboard and role permissions",
+          "status": "pending"
+        },
+        {
+          "name": "Anti-cheat and economy abuse detection",
+          "status": "pending"
+        },
+        {
+          "name": "Rate limiting and abuse protection audit",
+          "status": "pending"
+        },
+        {
+          "name": "Database backup and restore automation",
+          "status": "pending"
+        },
+        {
+          "name": "Privacy controls and data deletion workflow",
+          "status": "pending"
+        },
+        {
+          "name": "Production monitoring and alerting",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "14",
+      "name": "Testing and Deployment",
+      "status": "partial",
+      "items": [
+        {
+          "name": "Unit test files for game rules",
+          "status": "complete"
+        },
+        {
+          "name": "Authentication test coverage",
+          "status": "complete"
+        },
+        {
+          "name": "GitHub Actions test workflow",
+          "status": "complete"
+        },
+        {
+          "name": "Automated tests executed successfully",
+          "status": "pending"
+        },
+        {
+          "name": "Python compile/import verification",
+          "status": "pending"
+        },
+        {
+          "name": "Mini App browser/device QA",
+          "status": "pending"
+        },
+        {
+          "name": "Live Telegram bot test",
+          "status": "pending"
+        },
+        {
+          "name": "Multiplayer concurrency testing",
+          "status": "pending"
+        },
+        {
+          "name": "Security and load testing",
+          "status": "pending"
+        },
+        {
+          "name": "Render/Docker deployment configuration",
+          "status": "complete"
+        },
+        {
+          "name": "Production hosting and HTTPS launch",
+          "status": "pending"
+        },
+        {
+          "name": "Persistent production database verification",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}
