@@ -107,8 +107,8 @@ The-Peak-Adventure/
 - [x] Elemental, weapon and armor combat modifiers
 - [x] Monster AI with tactical decision-making
 - [ ] Advanced physics and pathfinding
-- [ ] Particle and spell effects
-- [ ] Sound and music engine
+- [~] Particle and spell effects (procedural weather particles and atmospheric motes; combat spell bursts pending)
+- [~] Sound and music engine (generated UI/combat effects with mute control; background music pending)
 
 ### 05. World and Map System
 
@@ -123,7 +123,7 @@ The-Peak-Adventure/
 - [ ] Portals and landmarks
 - [ ] Dungeons and secret areas
 - [ ] World unlock and fast travel
-- [ ] Weather and day/night cycle
+- [x] Weather and day/night cycle
 
 ### 06. Monster and Boss System
 
