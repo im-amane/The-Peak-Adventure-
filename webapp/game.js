@@ -228,7 +228,7 @@
     const heading=document.createElement("h3");
     heading.textContent="🗝️ Dungeon Expedition";
     ui.dungeonStatus.appendChild(heading);
-    if (dungeon) {
+    if (dungeon && dungeon.status !== "abandoned") {
       const summary=document.createElement("p");
       summary.className="small";
       summary.textContent=dungeon.name+" · Room "+dungeon.room+"/"+dungeon.room_count+" · "+dungeon.status.toUpperCase()
@@ -249,7 +249,9 @@
     }
     const intro=document.createElement("p");
     intro.className="small";
-    intro.textContent="Choose an unlocked dungeon. Each expedition has three guardian rooms.";
+    intro.textContent=dungeon && dungeon.status==="abandoned"
+      ? "Your last expedition was abandoned. Choose another dungeon or retry it."
+      : "Choose an unlocked dungeon. Each expedition has three guardian rooms.";
     ui.dungeonStatus.appendChild(intro);
     const available=(Array.isArray(choices)?choices:[]).filter(item=>item.unlocked&&!item.claimed);
     if (!available.length) {
