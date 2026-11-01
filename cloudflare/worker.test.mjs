@@ -567,3 +567,12 @@ test("world maps expose three traversable zones with a clear gate approach", () 
   assert.doesNotMatch(game, /x:w\*0\.91,y:h\*0\.76/);
   assert.match(game, /this\.cameras\.main\.setBounds\(0,0,this\.worldWidth,this\.worldHeight\)/);
 });
+
+
+test("hero faces horizontal movement and preserves facing after respawn", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /this\.heroFacing=1/);
+  assert.match(game, /const nextFacing=dx<0\?-1:1/);
+  assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX\*this\.heroFacing,1\)/);
+  assert.match(game, /scaleX:\(this\.heroBaseScaleX\|\|1\)\*\(this\.heroFacing\|\|1\)/);
+});
