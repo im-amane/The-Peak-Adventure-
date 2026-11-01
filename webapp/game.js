@@ -511,6 +511,8 @@
         "#"+trade.trade_id+" with "+trade.other_username+
         " · Your offer: "+trade.my_coins+" coins, "+trade.my_potions+" potions"+
         " · Their offer: "+trade.their_coins+" coins, "+trade.their_potions+" potions"+
+        " · Gear: "+(trade.my_weapon||"no weapon")+"/"+(trade.my_armor||"no armor")+
+        " ↔ "+(trade.their_weapon||"no weapon")+"/"+(trade.their_armor||"no armor")+
         " · Confirmations: "+(trade.my_confirmed?"✅":"⌛")+" / "+(trade.their_confirmed?"✅":"⌛")
       ));
       openTrades.forEach(trade=>{
