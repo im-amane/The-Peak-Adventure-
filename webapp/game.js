@@ -27,6 +27,7 @@
     appearanceStatus: document.getElementById("appearance-status"),
     questList: document.getElementById("quest-list"),
     dailyMissionList: document.getElementById("daily-mission-list"),
+    weeklyQuestList: document.getElementById("weekly-quest-list"),
     socialOverview: document.getElementById("social-overview"),
     dungeonStatus: document.getElementById("dungeon-status")
   };
@@ -117,6 +118,7 @@
     }
     renderQuests(data.quests || []);
     renderDailyMissions(data.daily_missions || []);
+    renderWeeklyQuests(data.weekly_quests || []);
     renderSocial(data.social || {});
     renderDungeon(data.dungeon || null, data.dungeons || []);
     renderMaterials(data.materials || {});
@@ -369,6 +371,47 @@
       }
       ui.dailyMissionList.appendChild(card);
     });
+  }
+
+  function renderWeeklyQuests(quests) {
+    if (!ui.weeklyQuestList) return;
+    ui.weeklyQuestList.replaceChildren();
+    if (!quests.length) {
+      const empty=document.createElement("p"); empty.className="small";
+      empty.textContent="No weekly quests are available right now.";
+      ui.weeklyQuestList.appendChild(empty); return;
+    }
+    quests.forEach(quest=>{
+      const card=document.createElement("article"); card.className="daily-mission-card";
+      const title=document.createElement("h4"); title.textContent=(quest.claimed?"✅ ":quest.completed?"🎁 ":"🔹 ")+quest.title;
+      const description=document.createElement("p"); description.textContent=quest.description;
+      const progress=document.createElement("p"); progress.className="small";
+      progress.textContent="Progress: "+quest.progress+"/"+quest.target+" · Reward: "+quest.coins+" coins + "+quest.potions+" potions";
+      const track=document.createElement("div"); track.className="quest-progress";
+      const fill=document.createElement("span");
+      fill.style.width=Math.max(0,Math.min(100,quest.progress/quest.target*100))+"%";
+      track.appendChild(fill); card.append(title,description,progress,track);
+      if(quest.completed&&!quest.claimed){
+        const button=document.createElement("button"); button.type="button";
+        button.className="dungeon-action"; button.dataset.weeklyQuestId=quest.id;
+        button.textContent="Claim weekly reward"; card.appendChild(button);
+      }
+      ui.weeklyQuestList.appendChild(card);
+    });
+  }
+
+  async function claimWeeklyQuest(button) {
+    if(requestInFlight||!button.dataset.weeklyQuestId)return;
+    requestInFlight=true; button.disabled=true; button.textContent="Claiming...";
+    try{
+      const result=await postApi("/api/weekly-quest/claim",{quest_id:button.dataset.weeklyQuestId});
+      applyState(result.state,result.message);
+    }catch(error){
+      ui.status.textContent=error.message;
+      button.disabled=false;button.textContent="Try again";
+    }finally{
+      requestInFlight=false;
+    }
   }
 
   async function claimDailyMission(button) {
@@ -703,6 +746,11 @@
   if(ui.dailyMissionList) ui.dailyMissionList.addEventListener("click",event=>{
     const button=event.target.closest("[data-daily-mission-id]");
     if(button) claimDailyMission(button);
+  });
+
+  if(ui.weeklyQuestList) ui.weeklyQuestList.addEventListener("click",event=>{
+    const button=event.target.closest("[data-weekly-quest-id]");
+    if(button) claimWeeklyQuest(button);
   });
 
   ui.dungeonStatus.addEventListener("click",event=>{
