@@ -11,6 +11,7 @@ ASSETS = {
     "/": (ROOT / "webapp" / "index.html", "text/html; charset=utf-8"),
     "/style.css": (ROOT / "webapp" / "style.css", "text/css; charset=utf-8"),
     "/game.js": (ROOT / "webapp" / "game.js", "application/javascript; charset=utf-8"),
+    "/pathfinding.js": (ROOT / "webapp" / "pathfinding.js", "application/javascript; charset=utf-8"),
 }
 MARKER = "const STATIC_ASSETS = "
 END_MARKER = "\n\nconst STATIC_PATHS"
@@ -29,10 +30,10 @@ def main() -> None:
     assets = json.loads(raw)
 
     for route, (path, content_type) in ASSETS.items():
-        if route not in assets:
-            raise SystemExit(f"Missing embedded fallback route: {route}")
-        assets[route]["body"] = path.read_text(encoding="utf-8")
-        assets[route]["type"] = content_type
+        assets[route] = {
+            "body": path.read_text(encoding="utf-8"),
+            "type": content_type,
+        }
 
     block = MARKER + json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
     updated = source[:start] + block + source[end:]
