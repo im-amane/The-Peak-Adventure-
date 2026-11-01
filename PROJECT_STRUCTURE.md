@@ -196,7 +196,7 @@ The-Peak-Adventure/
 - [x] Skill cooldown and potion availability UI
 - [x] Safe API response handling and request guard
 - [x] Character customization screen
-- [ ] Dedicated inventory/equipment/quest screens
+- [x] Dedicated inventory/equipment/quest screens
 - [ ] Friends, party, guild and trading screens
 - [~] Polished responsive visual design and accessibility audit
 
