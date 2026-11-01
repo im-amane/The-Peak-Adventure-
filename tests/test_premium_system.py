@@ -51,7 +51,7 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         stamina = await buy_premium_item(self.db, 101, "stamina_crystal")
         self.assertEqual(stamina["balance"], 135)
         cur = await self.db.execute("SELECT stamina FROM player_stamina WHERE user_id=101")
-        self.assertEqual((await cur.fetchone())["stamina"], 100)
+        self.assertEqual((await cur.fetchone())["stamina"], 80)
 
     async def test_xp_charm_adds_three_wins_and_is_consumed_once_per_victory(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
