@@ -1086,7 +1086,9 @@
         }
       }
       if(gameState && gameState.battle_active){clearMovementInput();ui.encounter.disabled=true;return;}
-      const baseSpeed=0.18*delta;
+      // Clamp long frames after tab suspension to prevent large movement jumps.
+      const frameDelta=Phaser.Math.Clamp(Number(delta)||0,0,50);
+      const baseSpeed=0.18*frameDelta;
       const sprintHeld=Boolean(sprintKeyboardHeld||sprintTouchHeld);
       const speed=baseSpeed*(sprintHeld?1.45:1);
       let dx=0,dy=0;
