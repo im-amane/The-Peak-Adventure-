@@ -1034,14 +1034,26 @@ async def api_action(request: web.Request):
 
 
 async def start_web_server():
+    async def serve_index(request: web.Request):
+        return web.FileResponse(WEB_DIR / "index.html")
+
+    async def serve_css(request: web.Request):
+        return web.FileResponse(WEB_DIR / "style.css")
+
+    async def serve_js(request: web.Request):
+        return web.FileResponse(WEB_DIR / "game.js")
+
+    async def healthz(request: web.Request):
+        return web.json_response({"ok": True})
+
     app = web.Application()
-    app.router.add_get("/", lambda request: web.FileResponse(WEB_DIR / "index.html"))
-    app.router.add_get("/style.css", lambda request: web.FileResponse(WEB_DIR / "style.css"))
-    app.router.add_get("/game.js", lambda request: web.FileResponse(WEB_DIR / "game.js"))
+    app.router.add_get("/", serve_index)
+    app.router.add_get("/style.css", serve_css)
+    app.router.add_get("/game.js", serve_js)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
-    app.router.add_get("/healthz", lambda request: web.json_response({"ok": True}))
+    app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
