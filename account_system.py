@@ -127,6 +127,8 @@ async def _delete_player_account_unlocked(db,user_id):
     for table, where, params in (
         ("player_reports","reporter_id=? OR target_id=?",(user_id,user_id)),
         ("security_events","user_id=?",(user_id,)),
+        ("premium_wallets","user_id=?",(user_id,)),
+        ("premium_transactions","user_id=?",(user_id,)),
         ("player_bans","user_id=?",(user_id,)),
         ("player_weekly_quests","user_id=?",(user_id,)),
         ("player_daily_missions","user_id=?",(user_id,)),
