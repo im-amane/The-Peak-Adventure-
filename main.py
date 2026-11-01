@@ -3578,10 +3578,15 @@ async def api_social(request: web.Request):
                     if set(payload) != {"action"}:
                         return web.json_response({"error": "Unexpected party leave fields."}, status=400)
                     result = {"new_leader_id": await leave_party(db, user_id)}
+                elif action in {"guild_accept", "guild_decline"}:
+                    if set(payload) != {"action", "invite_id"} or type(payload["invite_id"]) is not int:
+                        return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
+                    await respond_guild_invite(db, payload["invite_id"], user_id, action == "guild_accept")
+                    result = {"accepted": action == "guild_accept"}
                 else:
                     return web.json_response({"error": "Unsupported social action."}, status=400)
                 state = await miniapp_state(user)
-    except (FriendError, PartyError) as exc:
+    except (FriendError, PartyError, GuildFeatureError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response({"message": "Social action completed.", "result": result, "state": state})
 
