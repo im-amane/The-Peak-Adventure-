@@ -125,25 +125,28 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
             saved = await main.api_social(FakeRequest({
                 "action": "trade_offer", "trade_id": trade_id, "coins": 25, "potions": 2,
+                "offer_weapon": True, "offer_armor": False,
             }))
             too_much = await main.api_social(FakeRequest({
                 "action": "trade_offer", "trade_id": trade_id, "coins": 101, "potions": 0,
+                "offer_weapon": False, "offer_armor": False,
             }))
         with patch("main.validate_init_data", return_value={"id": outsider_id, "first_name": "TradeOutsider"}):
             denied = await main.api_social(FakeRequest({
                 "action": "trade_offer", "trade_id": trade_id, "coins": 1, "potions": 0,
+                "offer_weapon": False, "offer_armor": False,
             }))
         self.assertEqual(saved.status, 200)
         self.assertEqual(too_much.status, 409)
         self.assertEqual(denied.status, 409)
         cur = await main.db.execute(
-            "SELECT initiator_coins,initiator_potions,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
+            "SELECT initiator_coins,initiator_potions,initiator_weapon,initiator_armor,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
             (trade_id,),
         )
         trade = await cur.fetchone()
         self.assertEqual(
-            (trade["initiator_coins"],trade["initiator_potions"],trade["initiator_confirmed"],trade["partner_confirmed"]),
-            (25,2,0,0),
+            (trade["initiator_coins"],trade["initiator_potions"],trade["initiator_weapon"],trade["initiator_armor"],trade["initiator_confirmed"],trade["partner_confirmed"]),
+            (25,2,"Rusty Sword",None,0,0),
         )
 
     async def test_trade_confirmation_exchanges_balances_once(self):
