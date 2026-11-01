@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 import aiosqlite
@@ -152,6 +153,33 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
         with self.assertRaises(PartyError):
             await attack_party_battle(self.db,party_id,202,10)
+
+
+    async def test_concurrent_reward_claims_are_applied_exactly_once(self):
+        party_id = await create_party(self.db, 101)
+        battle_id = await start_party_battle(
+            self.db, party_id, 101, 1, "Concurrency Warden", 25
+        )
+        await attack_party_battle(self.db, party_id, 101, 25)
+
+        results = await asyncio.gather(
+            reward_party_battle(self.db, battle_id, 101, 75, 40),
+            reward_party_battle(self.db, battle_id, 101, 75, 40),
+            return_exceptions=True,
+        )
+
+        successes = [result for result in results if not isinstance(result, Exception)]
+        failures = [result for result in results if isinstance(result, Exception)]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        self.assertIsInstance(failures[0], PartyError)
+        cur = await self.db.execute(
+            "SELECT coins,xp FROM players WHERE user_id=?",
+            (101,),
+        )
+        player = await cur.fetchone()
+        self.assertEqual(player["coins"], 75)
+        self.assertEqual(player["xp"], 40)
 
     async def test_coop_reward_is_claimed_once_per_member(self):
         party_id=await create_party(self.db,101)
