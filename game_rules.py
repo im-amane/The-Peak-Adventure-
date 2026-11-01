@@ -106,3 +106,15 @@ def calculate_enemy_damage(
     if special:
         damage = int(damage * 1.5)
     return damage
+
+ 
+def skill_cooldown_for_class(hero_class: str) -> int:
+    """Return the stored cooldown; same-turn tick means Mage recovers sooner."""
+    return 3 if hero_class == "Mage" else 4
+
+
+def class_evades(class_speed: int, roll: int) -> bool:
+    """Resolve a class speed dodge roll where speed is the percentage chance."""
+    if not 0 <= class_speed <= 100 or not 1 <= roll <= 100:
+        raise ValueError("speed must be 0..100 and roll must be 1..100")
+    return roll <= class_speed
