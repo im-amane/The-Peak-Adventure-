@@ -178,3 +178,10 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Players begin with 100 mana. Class skills cost 30 mana.
 - Mana regenerates by 1 point per minute and restores 5 points after each completed combat turn.
 - The Telegram command `/mana` shows current mana. The Mini App HUD displays both mana and stamina.
+
+
+### Party exploration
+- Party leaders can start a shared world encounter with `/party explore`.
+- The encounter is selected from the leader's currently available world monsters.
+- The leader spends 10 stamina; party members are notified and can attack with `/party battle attack`.
+- Party members receive individual coin and XP rewards when the shared encounter is defeated.
