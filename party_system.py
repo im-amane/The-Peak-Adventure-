@@ -156,6 +156,74 @@ async def respond_to_party_invite(
     await db.commit()
 
 
+
+async def start_party_battle(db,party_id,user_id,monster_level,monster_name,monster_hp):
+    cur=await db.execute("SELECT leader_id FROM parties WHERE party_id=?",(party_id,))
+    party=await cur.fetchone()
+    if not party or party["leader_id"]!=user_id: raise PartyError("Only the party leader can start a co-op battle.")
+    if not isinstance(monster_level,int) or isinstance(monster_level,bool) or not 1<=monster_level<=100:
+        raise PartyError("Invalid co-op monster level.")
+    if not isinstance(monster_hp,int) or isinstance(monster_hp,bool) or not 1<=monster_hp<=10_000_000:
+        raise PartyError("Invalid co-op monster health.")
+    cur=await db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'",(party_id,))
+    if await cur.fetchone(): raise PartyError("Your party already has an active co-op battle.")
+    cur=await db.execute("INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp) VALUES(?,?,?,?,?)",
+      (party_id,monster_level,str(monster_name)[:80],monster_hp,monster_hp))
+    await db.commit()
+    return int(cur.lastrowid)
+
+
+async def attack_party_battle(db,party_id,user_id,damage):
+    if not isinstance(damage,int) or isinstance(damage,bool) or not 1<=damage<=10000:
+        raise PartyError("Invalid co-op attack damage.")
+    cur=await db.execute("SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",(party_id,user_id))
+    if not await cur.fetchone(): raise PartyError("Only party members can attack this monster.")
+    cur=await db.execute("SELECT * FROM party_battles WHERE party_id=? AND status='active' ORDER BY battle_id DESC LIMIT 1",(party_id,))
+    battle=await cur.fetchone()
+    if not battle: raise PartyError("There is no active co-op battle.")
+    cur=await db.execute("SELECT 1 FROM party_battle_cooldowns WHERE battle_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)",(battle["battle_id"],user_id))
+    if await cur.fetchone(): raise PartyError("Co-op attack cooldown: wait 5 seconds.")
+    hp=max(0,battle["hp"]-damage); dealt=battle["hp"]-hp; status="won" if hp==0 else "active"
+    await db.execute("UPDATE party_battles SET hp=?,status=? WHERE battle_id=? AND status='active'",(hp,status,battle["battle_id"]))
+    await db.execute("INSERT INTO party_battle_cooldowns(battle_id,user_id,last_attack_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(battle_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP",(battle["battle_id"],user_id))
+    await db.execute("""INSERT INTO party_battle_contributions(battle_id,user_id,damage) VALUES(?,?,?)
+      ON CONFLICT(battle_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(battle["battle_id"],user_id,dealt))
+    await db.commit()
+    cur=await db.execute("SELECT user_id FROM party_members WHERE party_id=? ORDER BY joined_at",(party_id,))
+    members=[row["user_id"] for row in await cur.fetchall()]
+    return {"battle_id":battle["battle_id"],"monster_name":battle["monster_name"],"hp":hp,"max_hp":battle["max_hp"],"damage":dealt,"status":status,"members":members}
+
+
+async def get_party_battle(db,party_id):
+    cur=await db.execute("SELECT * FROM party_battles WHERE party_id=? ORDER BY battle_id DESC LIMIT 1",(party_id,))
+    return await cur.fetchone()
+
+
+async def reward_party_battle(db,battle_id,user_id,coins,xp):
+    if not all(isinstance(v,int) and not isinstance(v,bool) and v>=0 for v in (battle_id,user_id,coins,xp)) or user_id<=0:
+        raise PartyError("Invalid co-op reward.")
+    cur=await db.execute("SELECT party_id,status FROM party_battles WHERE battle_id=?",(battle_id,))
+    battle=await cur.fetchone()
+    if not battle or battle["status"]!="won": raise PartyError("This co-op battle has not been won.")
+    cur=await db.execute("SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",(battle["party_id"],user_id))
+    if not await cur.fetchone(): raise PartyError("Only party members can claim co-op rewards.")
+    try:
+        await db.execute("INSERT INTO party_battle_rewards(battle_id,user_id) VALUES(?,?)",(battle_id,user_id))
+    except Exception as exc:
+        await db.rollback()
+        raise PartyError("Co-op reward already claimed.") from exc
+    cur=await db.execute("SELECT level,xp FROM players WHERE user_id=?",(user_id,))
+    player=await cur.fetchone()
+    if not player: raise PartyError("Player account not found.")
+    from game_rules import xp_required
+    level,xp_total=player["level"],player["xp"]+xp
+    while level<100 and xp_total>=xp_required(level):
+        xp_total-=xp_required(level);level+=1
+    await db.execute("UPDATE players SET coins=coins+?,level=?,xp=? WHERE user_id=?",(coins,level,xp_total,user_id))
+    await db.commit()
+    return {"coins":coins,"xp":xp,"level":level}
+
+
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not _valid_id(user_id):
         raise PartyError("Invalid player account.")
