@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: the-peak-adventure
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: DATABASE_PATH
+        value: /data/peak_adventure.db
+      - key: WEB_HOST
+        value: 0.0.0.0
+    disk:
+      name: peak-adventure-data
+      mountPath: /data
+      sizeGB: 1
