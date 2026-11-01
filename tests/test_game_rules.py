@@ -231,6 +231,21 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(nearby_monster_levels(10, boss_defeated=True), (9, 11))
         self.assertEqual(nearby_monster_levels(100, boss_defeated=True), (99,))
 
+    def test_core_rules_reject_boolean_and_fractional_numeric_inputs(self):
+        from game_rules import xp_required
+
+        for value in (True, 1.5, 0, 101):
+            with self.subTest(rule="xp_required", value=value), self.assertRaises(ValueError):
+                xp_required(value)
+            with self.subTest(rule="expected_monster_power", value=value), self.assertRaises(ValueError):
+                expected_monster_power(value)
+        for speed, roll in ((True, 1), (10, False), (10.5, 1), (10, 1.5)):
+            with self.subTest(speed=speed, roll=roll), self.assertRaises(ValueError):
+                class_evades(speed, roll)
+        for boss, hp, max_hp in ((1, 10, 100), (True, 10.5, 100), (False, 10, 100.5)):
+            with self.subTest(boss=boss, hp=hp, max_hp=max_hp), self.assertRaises(ValueError):
+                get_boss_phase(boss, hp, max_hp)
+
     def test_nearby_monster_levels_reject_invalid_player_level(self):
         for level in (0, 101, True, 1.5):
             with self.subTest(level=level), self.assertRaises(ValueError):
