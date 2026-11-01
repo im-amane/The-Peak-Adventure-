@@ -8,6 +8,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await self.db.executescript("""
   CREATE TABLE players(user_id INTEGER PRIMARY KEY,username TEXT,level INTEGER,xp INTEGER);
   CREATE TABLE security_events(event_id INTEGER PRIMARY KEY,user_id INTEGER,event_type TEXT,severity INTEGER,details TEXT,created_at TEXT);
+  CREATE TABLE premium_wallets(user_id INTEGER PRIMARY KEY,balance INTEGER);
+  CREATE TABLE premium_transactions(transaction_id INTEGER PRIMARY KEY,telegram_charge_id TEXT,user_id INTEGER,package_id TEXT,stars INTEGER,gems INTEGER);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE guild_members(user_id INTEGER PRIMARY KEY,guild_id INTEGER,role TEXT,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
@@ -98,6 +100,13 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT 1 FROM security_events WHERE event_id=2")
   self.assertIsNone(await cur.fetchone())
 
+ async def test_delete_account_removes_premium_payment_data(self):
+  await self.db.execute("INSERT INTO premium_wallets VALUES(1,50)")
+  await self.db.execute("INSERT INTO premium_transactions VALUES(1,'charge-1',1,'spark',25,50)")
+  await delete_player_account(self.db,1)
+  for table in ("premium_wallets","premium_transactions"):
+   cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table} WHERE user_id=1")
+   self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_account_removes_security_events(self):
   await self.db.execute("INSERT INTO security_events VALUES(1,1,'invalid_battle_action',2,'bad action',CURRENT_TIMESTAMP)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
