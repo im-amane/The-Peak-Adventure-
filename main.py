@@ -3290,6 +3290,8 @@ async def api_explore(request: web.Request):
         return web.json_response({"error": "Invalid JSON body."}, status=400)
     if not isinstance(payload, dict):
         return web.json_response({"error": "JSON body must be an object."}, status=400)
+    if set(payload) - {"monster_level"}:
+        return web.json_response({"error": "Unsupported exploration request fields."}, status=400)
     requested_monster_level = payload.get("monster_level")
     if requested_monster_level is not None and (type(requested_monster_level) is not int or not 1 <= requested_monster_level <= 100):
         return web.json_response({"error": "Invalid monster level."}, status=400)
@@ -3479,6 +3481,9 @@ async def api_story(request: web.Request):
         return web.json_response({"error": "Story payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or payload.get("action") not in {"choose", "claim"}:
         return web.json_response({"error": "Unsupported story action."}, status=400)
+    expected_fields = {"action", "chapter_id", "choice_id"} if payload["action"] == "choose" else {"action", "chapter_id"}
+    if set(payload) != expected_fields:
+        return web.json_response({"error": "Unsupported story request fields."}, status=400)
     chapter_id = payload.get("chapter_id")
     if not isinstance(chapter_id, int) or isinstance(chapter_id, bool):
         return web.json_response({"error": "Invalid chapter ID."}, status=400)
@@ -3658,6 +3663,8 @@ async def api_action(request: web.Request):
     if not isinstance(payload, dict):
         return web.json_response({"error": "JSON body must be an object."}, status=400)
     action = payload.get("action")
+    if set(payload) != {"action"}:
+        return web.json_response({"error": "Unsupported battle action fields."}, status=400)
     if action not in {"attack", "skill", "potion", "flee"}:
         return web.json_response({"error": "Unknown battle action."}, status=400)
     user_id = user["id"]
