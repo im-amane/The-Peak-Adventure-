@@ -86,3 +86,11 @@ button:disabled{cursor:not-allowed}
 .quest-progress span{display:block;height:100%;background:#c69a5b}
 .quest-card button{width:100%;min-height:36px;margin-top:6px;background:#684d2c;border-color:#b98c52;color:#fff1d2;font-size:12px}
 @media(max-width:520px){.inventory-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.social-panel{background:#1c2732;border:1px solid #435767;border-radius:15px;padding:13px;margin:12px 0}
+.social-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.social-card{background:#101a24;border:1px solid #334757;border-radius:10px;padding:10px;min-width:0}
+.social-card h3{font-size:13px;color:#e8d5b4;margin:0 0 7px}
+.social-card p{font-size:11px;color:#bdc8d0;margin:4px 0;overflow-wrap:anywhere}
+.social-card .social-member{padding:5px 0;border-top:1px solid #293949}
+@media(max-width:520px){.social-overview{grid-template-columns:1fr}}
