@@ -119,3 +119,5 @@ button:disabled{cursor:not-allowed}
 
 
 .stamina-line{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.9rem;color:#d7e4f4}.stamina-track{height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px}.stamina-track>div{height:100%;width:100%;background:#e5b84b;transition:width .2s ease}
+
+.mana-line{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:.9rem;color:#c8c7f5}.mana-track{height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin-top:5px}.mana-track>div{height:100%;width:100%;background:#8b8ee8;transition:width .2s ease}
