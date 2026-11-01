@@ -145,23 +145,27 @@ Run locally:
 python -m compileall -q .
 python -c "import main"
 python -m unittest discover -s tests -v
+node --check webapp/game.js
 node --test cloudflare/worker.test.mjs
 ```
 
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
 ## Remaining development and launch readiness
-Implemented in the repository: ten world biomes, level-gated travel and landmarks, three-room dungeons with Mini App controls, daily and weekly missions, party co-op encounters, guild raids and wars, player search, equipment auctions, monster evolution and elite encounters, and the authenticated Mini App HUD.
+Implemented in the repository: ten world biomes, level-gated travel with walk-up portals and landmarks, three-room dungeons with Mini App controls, daily and weekly missions, party co-op encounters, guild chat/raids/wars, player search, equipment auctions, monster evolution and elite encounters, suspicious-activity telemetry with admin review, procedural combat animations, ambient music with saved sound preferences, and the authenticated Mini App HUD. An opt-in Telegram Stars wallet and idempotent premium-gem crediting flow are also implemented.
 
 Work still needed before calling the game production-ready:
-- Expand the current biome maps into larger connected zones with visible portals, landmarks and secret areas.
-- Replace procedural character presentation with polished sprite sheets and frame-based movement/combat animations.
-- Add a complete music and sound-effects package, with user-controlled audio preferences.
-- Finish balance and economy testing across all classes, monster traits, evolved/elite variants, crafting, auctions and multiplayer rewards.
+- Expand portal-linked biomes into larger connected zones with secret areas and richer traversal.
+- Replace procedural character presentation with polished sprite sheets and complete idle/run/death/level-up animations; class-based weapon visuals and basic procedural movement/combat effects are already present.
+- Finish balance and economy testing across all classes, monster traits, evolved/elite variants, crafting, auctions, premium purchases and multiplayer rewards.
 - Run browser and real-device QA, including Android Telegram Mini App testing, reconnects, and concurrent multiplayer sessions.
 - Configure the production Python backend origin and persistent database, then verify the complete Telegram → Cloudflare Worker → backend flow.
-- Complete live Telegram bot, security, backup-restore and load testing.
+- Complete live Telegram bot, production backup-restore, security and load testing.
 - Give the 100-monster narrative catalogue a final editorial pass so every entry feels individually authored.
+
+Telegram Stars purchases are disabled by default. Enable them only after setting the package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true.
+
+The latest verified GitHub Actions run passed 295 Python tests and 18 Cloudflare Worker tests, including JavaScript syntax and portal gating checks.
 
 The Cloudflare Worker and Render deployment configuration are present, but a configured live Python backend and full production end-to-end launch have not been verified. The included Render blueprint provisions paid resources, so create it only after choosing and authorizing the hosting plan.
 
