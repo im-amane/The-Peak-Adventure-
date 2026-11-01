@@ -25,6 +25,10 @@ async def init_story_tables(db):
       user_id INTEGER NOT NULL,flag TEXT NOT NULL,value TEXT NOT NULL,
       PRIMARY KEY(user_id,flag)
     );
+    CREATE TABLE IF NOT EXISTS story_reward_claims(
+      user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(user_id,chapter_id)
+    );
     """)
     await db.commit()
 
@@ -39,10 +43,13 @@ async def get_story_chapters(db,user_id,player_level):
     result=[]
     for chapter in CHAPTERS:
         unlocked=player_level>=chapter["level"] and (chapter["id"]==1 or chapter["id"]-1 in done)
+        scene=chapter["scene"]
+        if chapter["id"]==3 and flags.get("trust_path")=="mira": scene += " Mira stands beside you. She has chosen not to run this time."
+        elif chapter["id"]==3 and flags.get("trust_path")=="wanderer": scene += " The Wanderer walks ahead, carrying the compass with both hands."
         result.append({"id":chapter["id"],"title":chapter["title"],"world":chapter["world"],"level":chapter["level"],
           "npc":chapter["npc"],"unlocked":unlocked,"completed":chapter["id"] in done,
           "choice":done.get(chapter["id"]),"requires_party":chapter.get("requires_party",False),
-          "scene":chapter["scene"],"choices":chapter["choices"],"reward":chapter["reward"],
+          "scene":scene,"choices":chapter["choices"],"reward":chapter["reward"],
           "branch_hint":flags.get("trust_path","")})
     return result
 
@@ -70,6 +77,7 @@ async def choose_story_path(db,user_id,player_level,chapter_id,choice_id):
     return {"chapter":chapter,"choice":chapter["choices"][choice_id],"reward":chapter["reward"]}
 
 async def claim_story_reward(db,user_id,chapter_id):
+    if not isinstance(chapter_id,int) or isinstance(chapter_id,bool) or not 1<=chapter_id<=len(CHAPTERS): raise StoryError("Story chapter not found.")
     cur=await db.execute("SELECT 1 FROM player_story WHERE user_id=? AND chapter_id=?",(user_id,chapter_id))
     if not await cur.fetchone():raise StoryError("Complete this chapter before claiming its reward.")
     cur=await db.execute("SELECT 1 FROM story_reward_claims WHERE user_id=? AND chapter_id=?",(user_id,chapter_id))
