@@ -1837,7 +1837,10 @@ async def help_cmd(message: Message):
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/admin - Bot administration (authorized IDs only)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
-        "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
+        "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n"
+        "/map - View your current region\n/travel - View unlocked worlds and fast travel\n"
+        "/dungeons - View dungeons\n/dungeon enter|status|abandon|claim - Dungeon controls\n"
+        "/settings - Privacy and notification settings\n/deleteaccount - Permanently delete your player account\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
 
