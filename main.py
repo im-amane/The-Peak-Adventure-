@@ -34,7 +34,7 @@ from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, avail
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
-from auction_system import AuctionError, cancel_listing, create_listing, init_auction_tables, list_active_auctions, place_bid
+from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -2013,6 +2013,23 @@ async def auction_command(message: Message):
                 return
             await cancel_listing(db, user_id, int(args[2]))
             await message.answer("Auction cancelled. Your item has been returned.")
+            return
+        if action == "stash":
+            rows = await list_stash(db, user_id)
+            if not rows:
+                await message.answer("Your equipment stash is empty.")
+                return
+            lines = ["🎒 <b>Stored Equipment</b>"]
+            lines.extend(f"#{row['stash_id']} · {escape(row['item_name'])} ({row['slot']}, +{row['item_stat']})" for row in rows)
+            lines.append("Equip an item with /auction equip ID. Your currently equipped item will be stored.")
+            await message.answer("\\n".join(lines))
+            return
+        if action == "equip":
+            if len(args) != 3 or not args[2].isdigit():
+                await message.answer("Usage: /auction equip stash_id")
+                return
+            item_name, slot, stat = await equip_stashed_item(db, user_id, int(args[2]))
+            await message.answer(f"✅ Equipped {escape(item_name)} ({slot}, +{stat}). Previous gear moved to your stash.")
             return
         rows = await list_active_auctions(db)
         if not rows:
