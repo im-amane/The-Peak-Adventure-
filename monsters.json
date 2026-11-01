@@ -1725,7 +1725,7 @@
     "advantage": "Worldroot Horror gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Worldroot Horror is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The Origin Realm is silent; even the wind waits for the first word to be spoken.",
+    "story": "[10/10 · Origin Realm] WORLDROOT HORROR stands at the silent edge of the Origin Realm, formed from every path the world refused to take. It does not attack until you speak the creator's forgotten name, because it knows the final enemy is also the one who first wished the worlds into being.",
     "trait_effect": "regenerate"
   },
   {
@@ -1744,7 +1744,7 @@
     "advantage": "Firstborn Titan gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Firstborn Titan is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The origin spark recognizes the tiny blue light from the meadow and returns it to your hand.",
+    "story": "[10/10 · Origin Realm] FIRSTBORN TITAN recognizes the tiny blue light from the meadow and returns it to your hand. It was built to protect the creator from loneliness, but its makers never taught it how to comfort someone who had lost everything.",
     "trait_effect": "fury"
   },
   {
@@ -1763,7 +1763,7 @@
     "advantage": "Chaos Architect gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Chaos Architect is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The worldroot horror is made of every path the world refused to take.",
+    "story": "[10/10 · Origin Realm] CHAOS ARCHITECT reveals that the seals were designed as a promise, not a prison: each guardian carried one memory the creator could no longer bear alone. It asks whether you gathered those memories to punish the creator or to understand it.",
     "trait_effect": "swift"
   },
   {
@@ -1782,7 +1782,7 @@
     "advantage": "Genesis Eater gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Genesis Eater is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The firstborn titan kneels, admitting that it was built to protect the creator from loneliness.",
+    "story": "[10/10 · Origin Realm] GENESIS EATER consumes the last false memory and exposes the truth beneath the story. The creator did not make monsters out of malice; the first creatures were born when its grief spilled into a world that had no name for sorrow.",
     "trait_effect": "armored"
   },
   {
@@ -1801,7 +1801,7 @@
     "advantage": "Omega Seraph gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Omega Seraph is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The chaos architect reveals the seals were made to hold back a grief too large for the world.",
+    "story": "[10/10 · Origin Realm] OMEGA SERAPH offers its wings to mend the broken sky, knowing it will never fly again. It tells you that the creator once gave every creature a choice, then sealed itself away when it believed its own pain had stolen that freedom.",
     "trait_effect": "drain"
   },
   {
@@ -1820,7 +1820,7 @@
     "advantage": "Reality Shatterer gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Reality Shatterer is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The genesis eater consumes the last false memory and exposes the truth beneath the story.",
+    "story": "[10/10 · Origin Realm] REALITY SHATTERER breaks the final barrier and shows you the world before fear existed. In that first dawn, the creator and the child who carried the blue spark made a promise to protect one another, but the child vanished before the promise could be kept.",
     "trait_effect": "poison"
   },
   {
@@ -1839,7 +1839,7 @@
     "advantage": "Apex Behemoth gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Apex Behemoth is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The omega seraph offers its wings to mend the sky, knowing it will never fly again.",
+    "story": "[10/10 · Origin Realm] APEX BEHEMOTH falls to one knee and becomes a bridge toward the final throne. Its heart contains the voices of every guardian, each asking you to remember the lives they protected rather than the battles they fought.",
     "trait_effect": "shield"
   },
   {
@@ -1858,7 +1858,7 @@
     "advantage": "The Void Emperor gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Void Emperor is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The reality shatterer breaks the final barrier and shows you the world before fear existed.",
+    "story": "[10/10 · Origin Realm] THE VOID EMPEROR guards the final chamber, but its crown is an empty circle. It reveals that the creator has no army left, only the hope that someone will arrive carrying all ten worlds' memories and choose what should happen next.",
     "trait_effect": "reflect"
   },
   {
@@ -1877,7 +1877,7 @@
     "advantage": "The Last Silence gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Last Silence is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The apex behemoth falls, but instead of vanishing it becomes a bridge toward the final throne.",
+    "story": "[10/10 · Origin Realm] THE LAST SILENCE becomes the final bridge after you defeat it. It carries the last memory of the child from the Hollow Kingdom: the child did not want the creator destroyed, only to hear that its sorrow had not made it unworthy of love.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1896,7 +1896,7 @@
     "advantage": "The Alpha God gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Alpha God is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The Alpha God awakens. Every creature was a fragment of its dream, and the last battle will decide whether that dream ends or begins again.",
+    "story": "[10/10 · Origin Realm] THE ALPHA GOD awakens before the ten gathered seals. Every creature was born from a fragment of its dream, and every guardian carried one memory it could not face alone. The final battle is not a test of strength alone: defeat the god and the dream ends, or reach the heart beneath its power and help it begin again without erasing the worlds that suffered.",
     "trait_effect": "berserk"
   }
 ]
