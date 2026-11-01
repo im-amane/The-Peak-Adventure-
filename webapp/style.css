@@ -182,3 +182,6 @@ button:disabled{cursor:not-allowed}
 
 .portal-button{background:linear-gradient(135deg,#24445a,#4b3e68);border-color:#87c9e6;color:#e9f7ff}
 .portal-button:disabled{filter:saturate(.55)}
+
+
+.gem-pill{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid #755e9d;border-radius:999px;background:rgba(77,57,112,.35);color:#eadcff;font-weight:800;font-size:12px}
