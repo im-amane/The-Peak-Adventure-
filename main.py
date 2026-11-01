@@ -1729,6 +1729,17 @@ async def start(message: Message):
 
 
 
+
+@dp.callback_query(F.data == "online")
+async def online_callback(call: CallbackQuery):
+    await call.answer()
+    count = await count_online_players(db)
+    friends = await list_online_friends(db, call.from_user.id)
+    lines = ["🌐 <b>Adventure Presence</b>", "Active players in the last 5 minutes: " + str(count), "Your online friends:"]
+    lines.extend([escape(row["username"] or "Adventurer") + " · Lv." + str(row["level"]) for row in friends] if friends else ["No friends are currently online."])
+    await call.message.answer("\n".join(lines))
+
+
 @dp.message(Command("online"))
 async def online_command(message: Message):
     count = await count_online_players(db)
