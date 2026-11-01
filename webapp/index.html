@@ -50,6 +50,15 @@
       <div class="section-heading"><div><span class="eyebrow">YOUR ALLIES</span><h2 id="social-title">Friends, Party & Guild</h2></div></div>
       <div id="social-overview" class="social-overview"><p class="small">Loading your social circle...</p></div>
     </section>
+    <section class="settings-panel" aria-labelledby="settings-title">
+      <div class="section-heading"><div><span class="eyebrow">YOUR ACCOUNT</span><h2 id="settings-title">Privacy & Notifications</h2></div></div>
+      <div class="settings-grid">
+        <label>Notifications<select id="setting-notifications"><option value="1">Enabled</option><option value="0">Disabled</option></select></label>
+        <label>Profile visibility<select id="setting-privacy"><option value="public">Public</option><option value="friends">Friends only</option></select></label>
+      </div>
+      <button id="save-settings" class="save-settings">Save settings</button>
+      <p id="settings-status" class="small" aria-live="polite">Your privacy choices are private to your account.</p>
+    </section>
     <section class="world-panel">
       <div class="world-heading"><div><span class="eyebrow">CURRENT REGION</span><h2 id="region">Loading the realm...</h2></div><span id="monster-label" class="monster-label">Nearby threat</span></div>
       <div id="game" aria-label="2D adventure map"></div>
