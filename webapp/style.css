@@ -101,3 +101,10 @@ button:disabled{cursor:not-allowed}
 
 .online-count{font-size:11px;color:#9ed5b2;white-space:nowrap;padding:5px 7px;border-radius:16px;background:#182c26;border:1px solid #355b48}
 @media(max-width:420px){.online-count{font-size:10px;padding:4px 5px}}
+
+.settings-panel{background:#1c2732;border:1px solid #435767;border-radius:15px;padding:13px;margin:12px 0}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.settings-grid label{display:grid;gap:5px;color:#d8cbb8;font-size:12px}
+.settings-grid select{min-width:0;width:100%;padding:10px 8px;border-radius:9px;border:1px solid #65576a;background:#151c29;color:#fff1d8;font:inherit}
+.save-settings{margin-top:10px;width:100%;background:#294c43;border-color:#5e8b75;color:#e1f1e4}
+@media(max-width:420px){.settings-grid{grid-template-columns:1fr}}
