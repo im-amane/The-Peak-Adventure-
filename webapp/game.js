@@ -106,6 +106,7 @@
     renderSocial(data.social || {});
     renderDungeon(data.dungeon || null);
     renderMaterials(data.materials || {});
+    renderStory(data.story || []);
     if (data.settings) {
       const notifications = document.getElementById("setting-notifications");
       const privacy = document.getElementById("setting-privacy");
@@ -147,6 +148,48 @@
 
 
 
+
+
+  function renderStory(chapters) {
+    if (!ui.storyChapters) return;
+    ui.storyChapters.replaceChildren();
+    chapters.forEach(chapter=>{
+      const card=document.createElement("article");card.className="story-chapter";
+      const title=document.createElement("h3");title.textContent=(chapter.completed?"✅ ":chapter.unlocked?"🔓 ":"🔒 ")+chapter.id+". "+chapter.title;card.appendChild(title);
+      const meta=document.createElement("p");meta.textContent=chapter.npc+" · World "+chapter.world+" · Lv."+chapter.level;card.appendChild(meta);
+      if (chapter.unlocked || chapter.completed) {
+        const scene=document.createElement("p");scene.textContent=chapter.scene;card.appendChild(scene);
+      } else {
+        const locked=document.createElement("p");locked.textContent="Reach level "+chapter.level+" and complete the previous chapter.";card.appendChild(locked);
+      }
+      const choices=document.createElement("div");choices.className="story-choices";
+      if (chapter.completed) {
+        const selected=document.createElement("p");selected.textContent="Your choice: "+chapter.choices[chapter.choice];card.appendChild(selected);
+        const claim=document.createElement("button");claim.className="story-choice";claim.textContent="Claim "+chapter.reward+" coins";
+        claim.addEventListener("click",()=>storyAction({action:"claim",chapter_id:chapter.id}));choices.appendChild(claim);
+      } else if (chapter.unlocked) {
+        Object.entries(chapter.choices).forEach(([choiceId,description])=>{
+          const button=document.createElement("button");button.className="story-choice";button.textContent=description;
+          button.addEventListener("click",()=>storyAction({action:"choose",chapter_id:chapter.id,choice_id:choiceId}));
+          choices.appendChild(button);
+        });
+      }
+      card.appendChild(choices);ui.storyChapters.appendChild(card);
+    });
+  }
+
+  async function storyAction(payload) {
+    if (requestInFlight) return;
+    requestInFlight=true;
+    try {
+      const result=await postApi("/api/story",payload);
+      applyState(result.state,result.message);
+    } catch(error) {
+      showStatus(error.message);
+    } finally {
+      requestInFlight=false;
+    }
+  }
 
   function renderMaterials(materials) {
     if (!ui.inventoryMaterials) return;
