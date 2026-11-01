@@ -33,7 +33,7 @@ async def update_settings(db,user_id,notifications_enabled=None,profile_visibili
         if not isinstance(notifications_enabled,bool): raise AccountError("Notification setting must be on or off.")
         current["notifications_enabled"]=int(notifications_enabled)
     if profile_visibility is not None:
-        if profile_visibility not in {"public","friends"}: raise AccountError("Profile visibility must be public or friends.")
+        if not isinstance(profile_visibility,str) or profile_visibility not in {"public","friends"}: raise AccountError("Profile visibility must be public or friends.")
         current["profile_visibility"]=profile_visibility
     if sound_enabled is not None:
         if not isinstance(sound_enabled,bool): raise AccountError("Sound setting must be on or off.")
