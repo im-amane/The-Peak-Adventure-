@@ -1124,6 +1124,9 @@ async def party_command(message: Message):
                 boss_defeated = await cur.fetchone() is not None
             monster_level = random.choice(world_encounter_levels(player["level"], world_id, boss_defeated))
             monster = MONSTER_BY_LEVEL[monster_level]
+            existing_battle = await get_party_battle(db, party["party_id"])
+            if existing_battle and existing_battle["status"] == "active":
+                raise PartyError("Your party already has an active co-op encounter.")
             try:
                 await consume_stamina(db, user_id, EXPLORE_COST)
             except StaminaError as exc:
@@ -1235,7 +1238,7 @@ async def party_command(message: Message):
     await message.answer(
         "Party commands: <code>/party create</code>, <code>/party invite</code> (reply to player), "
         "<code>/party accept ID</code>, <code>/party decline ID</code>, "
-        "<code>/party info</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>."
+        "<code>/party info</code>, <code>/party explore</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>."
     )
 
 
