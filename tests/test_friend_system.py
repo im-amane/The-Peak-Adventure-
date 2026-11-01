@@ -53,7 +53,7 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row["user_id"] for row in results], [202])
 
     async def test_search_escapes_wildcards_and_validates_query(self):
-        self.assertEqual(await search_players(self.db, 101, "%"), [])
+        self.assertEqual(await search_players(self.db, 101, "%%"), [])
         with self.assertRaisesRegex(FriendError, "between 2 and 32"):
             await search_players(self.db, 101, "x")
 
