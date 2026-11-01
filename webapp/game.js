@@ -56,10 +56,11 @@
     return data;
   }
 
-  function makeHero(scene, x, y) {
+  function makeHero(scene, x, y, heroClass) {
     const c = scene.add.container(x,y);
     const g = scene.add.graphics();
-    g.fillStyle(0x25374a,1); g.fillRoundedRect(-15,-5,30,29,8);
+    const cloak = {Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a;
+    g.fillStyle(cloak,1); g.fillRoundedRect(-15,-5,30,29,8);
     g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
     g.fillStyle(0xe2b98d,1); g.fillCircle(0,-15,11);
     g.fillStyle(0x382b2b,1); g.fillEllipse(0,-23,22,12);
@@ -100,14 +101,29 @@
         const x=(i*83+31)%w,y=h*0.53+(i*47)%(h*0.4);
         ground.fillStyle(palette.accent,0.24);ground.fillCircle(x,y,2+(i%3));
       }
-      for(let i=0;i<7;i++){
-        const x=25+i*145;
-        const tree=this.add.graphics();
-        tree.fillStyle(0x473d32,1);tree.fillRect(x-4,h*0.37,8,34);
-        tree.fillStyle(idx===4?0x563b35:0x345943,1);tree.fillTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);
-        tree.lineStyle(2,0x172b29,0.55);tree.strokeTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);
+      const scenery=this.add.graphics();
+      if(idx===0){
+        for(let i=0;i<8;i++){const x=28+i*118;scenery.fillStyle(0x473d32,1);scenery.fillRect(x-4,h*0.37,8,34);scenery.fillStyle(0x345943,1);scenery.fillTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);scenery.lineStyle(2,0x172b29,0.55);scenery.strokeTriangle(x-25,h*0.43,x,h*0.22,x+25,h*0.43);}
+      }else if(idx===1){
+        for(let i=0;i<9;i++){const x=i*112+20;scenery.fillStyle(0xe2bd7c,0.45);scenery.fillEllipse(x,h*0.57+(i%3)*36,120,24);scenery.fillStyle(0x47704b,1);scenery.fillRoundedRect(x-5,h*0.37,10,34,4);scenery.fillRect(x-15,h*0.43,10,5);scenery.fillRect(x+5,h*0.45,10,5);}
+      }else if(idx===2){
+        for(let i=0;i<8;i++){const x=i*125+35;scenery.fillStyle(0x526875,1);scenery.fillTriangle(x-28,h*0.55,x,h*0.24,x+35,h*0.55);scenery.lineStyle(3,0xb7d3d8,0.6);scenery.lineBetween(x,h*0.27,x+12,h*0.4);scenery.lineBetween(x+12,h*0.4,x-4,h*0.47);}
+      }else if(idx===3){
+        for(let i=0;i<7;i++){const x=i*145+35;scenery.fillStyle(0x554b61,1);scenery.fillRect(x,h*0.28,20,h*0.28);scenery.fillRect(x-8,h*0.25,36,8);scenery.fillStyle(0x29283b,1);scenery.fillRect(x+5,h*0.34,10,h*0.19);scenery.fillStyle(0xb0a0c1,0.7);scenery.fillCircle(x+5,h*0.63,3);}
+      }else if(idx===4){
+        for(let i=0;i<10;i++){const x=i*100+15;scenery.lineStyle(5,0xf09a51,0.85);scenery.beginPath();scenery.moveTo(x,h*0.48);scenery.lineTo(x+18,h*0.57);scenery.lineTo(x+8,h*0.66);scenery.lineTo(x+31,h*0.75);scenery.strokePath();scenery.fillStyle(0x3d3032,1);scenery.fillTriangle(x-20,h*0.52,x,h*0.35,x+22,h*0.52);}
+      }else if(idx===5){
+        for(let i=0;i<9;i++){const x=i*110+25;scenery.fillStyle(0xdcecef,0.9);scenery.fillTriangle(x-28,h*0.58,x,h*0.29,x+28,h*0.58);scenery.lineStyle(2,0x9bc4d1,0.8);scenery.lineBetween(x,h*0.32,x,h*0.55);scenery.fillStyle(0xffffff,0.8);scenery.fillEllipse(x+35,h*0.72,45,12);}
+      }else if(idx===6){
+        for(let i=0;i<8;i++){const x=i*130+20,y=h*0.3+(i%3)*38;scenery.fillStyle(0x554a80,0.85);scenery.fillCircle(x,y,20);scenery.lineStyle(2,0xb5a5df,0.8);scenery.strokeCircle(x,y,28);scenery.fillStyle(0x211d38,1);scenery.fillCircle(x,y,9);}
+      }else if(idx===7){
+        for(let i=0;i<24;i++){const x=(i*73)%w,y=(i*41)%(h*0.7);scenery.fillStyle(0xf2e6b4,0.85);scenery.fillCircle(x,y,1+(i%3));}for(let i=0;i<6;i++){const x=i*155+50;scenery.fillStyle(0x9eb4e0,0.7);scenery.fillTriangle(x-18,h*0.6,x,h*0.3,x+18,h*0.6);scenery.lineStyle(2,0xe0dcff,0.8);scenery.strokeTriangle(x-18,h*0.6,x,h*0.3,x+18,h*0.6);}
+      }else if(idx===8){
+        for(let i=0;i<6;i++){const x=i*165+65;scenery.lineStyle(4,0x9587ad,0.7);scenery.strokeCircle(x,h*0.56,28+i%2*8);scenery.lineBetween(x,h*0.56,x,h*0.56-18);scenery.lineBetween(x,h*0.56,x+15,h*0.56+8);}
+      }else{
+        for(let i=0;i<8;i++){const x=i*120+30;scenery.lineStyle(8,0x725c69,0.9);scenery.beginPath();scenery.moveTo(x,h*0.95);scenery.lineTo(x+20,h*0.65);scenery.lineTo(x-12,h*0.45);scenery.lineTo(x+18,h*0.25);scenery.strokePath();scenery.fillStyle(0xe2c17c,0.7);scenery.fillCircle(x+18,h*0.25,5);}
       }
-      this.hero=makeHero(this,w*0.22,h*0.7);
+      this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
       this.monster=makeMonster(this,w*0.77,h*0.68,gameState.monster.level,monsterColor);
       this.add.text(w*0.77,h*0.68-54,gameState.monster.name,{fontFamily:"Georgia",fontSize:"13px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
