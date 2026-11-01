@@ -66,7 +66,41 @@
   let phaserGame = null;
   let soundEnabled = true;
   let audioContext = null;
+  let ambientNodes = [];
+  let ambientGain = null;
 
+
+  function startAmbientMusic() {
+    if (!soundEnabled || !audioContext || audioContext.state !== "running" || ambientNodes.length) return;
+    const now = audioContext.currentTime;
+    ambientGain = audioContext.createGain();
+    ambientGain.gain.setValueAtTime(0.0001, now);
+    ambientGain.gain.exponentialRampToValueAtTime(0.012, now + 1.8);
+    ambientGain.connect(audioContext.destination);
+    [110, 164.81, 220, 329.63].forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const voiceGain = audioContext.createGain();
+      oscillator.type = index === 3 ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, now);
+      voiceGain.gain.setValueAtTime(index === 3 ? 0.12 : 0.22, now);
+      oscillator.connect(voiceGain);
+      voiceGain.connect(ambientGain);
+      oscillator.start(now);
+      ambientNodes.push(oscillator);
+    });
+  }
+
+  function stopAmbientMusic() {
+    if (!audioContext || !ambientGain) return;
+    const now = audioContext.currentTime;
+    ambientGain.gain.cancelScheduledValues(now);
+    ambientGain.gain.setTargetAtTime(0.0001, now, 0.18);
+    ambientNodes.forEach(node => {
+      try { node.stop(now + 0.8); } catch (_) {}
+    });
+    ambientNodes = [];
+    ambientGain = null;
+  }
 
   function playSound(kind) {
     if (!soundEnabled) return;
@@ -74,7 +108,8 @@
     if (!AudioContextClass) return;
     try {
       audioContext = audioContext || new AudioContextClass();
-      if (audioContext.state === "suspended") audioContext.resume().catch(() => {});
+      if (audioContext.state === "suspended") audioContext.resume().then(startAmbientMusic).catch(() => {});
+      else startAmbientMusic();
       const notes = {encounter:[260,390],attack:[180,110],skill:[330,660,880],potion:[440,620],victory:[523,659,784],error:[140]};
       const sequence = notes[kind] || [300];
       const start = audioContext.currentTime;
@@ -965,6 +1000,7 @@
     const previous = soundEnabled;
     const next = !previous;
     soundEnabled = next;
+    if (!next) stopAmbientMusic();
     requestInFlight = true;
     button.disabled = true;
     button.setAttribute("aria-pressed", String(next));
