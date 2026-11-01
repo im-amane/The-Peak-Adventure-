@@ -835,9 +835,12 @@ async def api_state(request: web.Request):
         if boss_is_defeated:
             monster_level = p["level"] - 1 if p["level"] == 100 else p["level"] + 1
     monster = MONSTER_BY_LEVEL[monster_level]
+    active = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+    battle_active = await active.fetchone() is not None
     return web.json_response({
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
         "class_selected": bool(p["class_selected"]),
+        "battle_active": battle_active,
         "hero_class": p["hero_class"],
         "weapon": p["weapon"],
         "level": p["level"],
