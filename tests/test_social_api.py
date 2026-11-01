@@ -60,6 +60,52 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
         self.assertEqual((await cur.fetchone())["status"], "open")
 
+    async def test_trade_invitation_can_be_created_only_for_an_accepted_friend(self):
+        initiator_id = 987654919
+        friend_id = 987654920
+        stranger_id = 987654921
+        for user_id, username in (
+            (initiator_id, "TradeInitiator"),
+            (friend_id, "TradeFriend"),
+            (stranger_id, "TradeStranger"),
+        ):
+            await main.get_player(user_id, username)
+            await main.db.execute(
+                "UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,)
+            )
+        low_id, high_id = sorted((initiator_id, friend_id))
+        await main.db.execute(
+            """INSERT INTO friend_requests(user_low,user_high,requester_id,target_id,status)
+               VALUES(?,?,?,?, 'accepted')""",
+            (low_id, high_id, initiator_id, friend_id),
+        )
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
+            created = await main.api_social(FakeRequest({"action": "trade_create", "target_id": friend_id}))
+            denied = await main.api_social(FakeRequest({"action": "trade_create", "target_id": stranger_id}))
+        self.assertEqual(created.status, 200)
+        created_payload = json.loads(created.text)["result"]
+        self.assertEqual(created_payload["status"], "pending")
+        self.assertEqual(denied.status, 409)
+
+        cur = await main.db.execute(
+            "SELECT initiator_id,partner_id,status FROM trades WHERE trade_id=?",
+            (created_payload["trade_id"],),
+        )
+        trade = await cur.fetchone()
+        self.assertEqual((trade["initiator_id"], trade["partner_id"], trade["status"]),
+                         (initiator_id, friend_id, "pending"))
+
+    async def test_trade_creation_rejects_self_and_invalid_target(self):
+        user_id = 987654922
+        await main.get_player(user_id, "TradeSelf")
+        with patch("main.validate_init_data", return_value={"id": user_id, "first_name": "TradeSelf"}):
+            self_response = await main.api_social(FakeRequest({"action": "trade_create", "target_id": user_id}))
+            invalid_response = await main.api_social(FakeRequest({"action": "trade_create", "target_id": True}))
+        self.assertEqual(self_response.status, 400)
+        self.assertEqual(invalid_response.status, 400)
+
     async def test_trade_can_only_be_cancelled_by_a_participant(self):
         initiator_id = 987654914
         partner_id = 987654915
