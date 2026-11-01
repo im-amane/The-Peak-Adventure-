@@ -96,3 +96,5 @@ button:disabled{cursor:not-allowed}
 @media(max-width:520px){.social-overview{grid-template-columns:1fr}}
 
 .dungeon-status{margin-top:10px;padding:9px;border-radius:9px;background:#182f36;border:1px solid #466b65;color:#d8e9d9;font-size:12px}
+
+.inventory-materials{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.material-chip{padding:5px 8px;border-radius:20px;background:#293b47;border:1px solid #526d78;color:#d7e6d8;font-size:11px}
