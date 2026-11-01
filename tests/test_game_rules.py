@@ -371,6 +371,28 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(get_boss_phase(True, 26, 100), 2)
         self.assertEqual(get_boss_phase(True, 25, 100), 3)
 
+    def test_enemy_damage_rejects_boolean_fractional_and_invalid_stats(self):
+        for field, value in (
+            ("attack_power", True), ("player_level", 1.5),
+            ("armor_defense", False), ("class_defense", 1.5),
+            ("monster_speed", True), ("random_bonus", 1.5),
+            ("fury", 1), ("special", 0),
+        ):
+            args = dict(
+                attack_power=40, player_level=1, armor_defense=0,
+                class_defense=0, monster_speed=0, random_bonus=0,
+            )
+            args[field] = value
+            with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                calculate_enemy_damage(**args)
+
+    def test_monster_tactics_reject_non_boolean_boss_flag(self):
+        from game_rules import choose_monster_tactic
+
+        for value in (0, 1, None, "yes"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                choose_monster_tactic("armored", 1, 100, 100, is_boss=value)
+
     def test_combat_phase_rejects_boolean_and_fractional_values(self):
         from game_rules import choose_monster_tactic
 
