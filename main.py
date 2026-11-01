@@ -2482,6 +2482,7 @@ async def miniapp_state(user: dict):
     trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
     pending_trades = (await trade_cur.fetchone())["total"]
     dungeon_state = await get_dungeon_state(db, user_id)
+    material_state = await get_materials(db, user_id)
     await refresh_quest_progress(user_id)
     quest_cur = await db.execute("SELECT quest_id,progress,completed,claimed FROM quest_progress WHERE user_id=?", (user_id,))
     quest_progress = {row["quest_id"]: row for row in await quest_cur.fetchall()}
@@ -2500,6 +2501,7 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "dungeon": dungeon_state,
+        "materials": material_state,
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
