@@ -8,6 +8,8 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - 100 distinct monster names, signature moves, unique-power labels and connected story entries
 - Ten monster combat traits: regeneration, fury, speed, armor, drain, poison, shield, reflection, lifesteal and berserk
 - Turn-based combat with attack, class skill, potions and escape
+- Three-phase boss encounters with escalating damage at 60% and 25% HP
+- Class passives: Knight defence, Mage's faster skill recovery and speed-based evasion
 - Elemental matchups, weapon attack bonuses and armor defence bonuses
 - Equipment shop with level-gated weapons, armor and potions
 - Persistent story quests and achievements with one-time rewards
@@ -16,7 +18,9 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
 - Player trading for coins and health potions with dual confirmation
-- Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement and in-app battle controls
+- Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement, obstacle collision and a solid Wanderer NPC
+- Multiple level-appropriate monster locations that can be selected directly on the map, with server-side encounter validation
+- Per-world NPC dialogue and in-app boss phase display
 - Telegram initData HMAC authentication for the Mini App API
 - SQLite persistence and automated catalogue/authentication tests
 
@@ -92,10 +96,10 @@ python -c "import main"
 python -m unittest discover -s tests -v
 ```
 
-The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run catalogue, authentication, combat and database integration tests on pushes and pull requests to `main`.
+The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
 ## Remaining development
-The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, co-op parties, guild invites and equipment trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
+The Mini App now includes obstacle collision, a solid NPC with ten region-specific dialogue lines, multiple level-appropriate monster encounters and selectable battle targets. Remaining work includes larger scrolling maps, polished frame-by-frame sprite sheets, richer NPC quests and branching dialogue, deeper story cinematics, sound, co-op parties, guild invites, equipment trading, deployment hardening, balance testing and live Telegram testing. The 100-monster narrative catalogue also needs a dedicated editorial pass so each entry feels individually authored rather than template-like.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
