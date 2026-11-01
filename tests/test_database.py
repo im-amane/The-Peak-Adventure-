@@ -35,6 +35,17 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(await main.claim_daily_reward(987654322))
         self.assertFalse(await main.claim_daily_reward(987654322))
 
+    async def test_new_gameplay_tables_and_elite_battle_flag_exist(self):
+        for table in ("player_stamina", "player_mana", "player_weekly_quests", "player_reports", "player_bans"):
+            cur = await main.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (table,),
+            )
+            self.assertIsNotNone(await cur.fetchone(), table)
+        cur = await main.db.execute("PRAGMA table_info(battles)")
+        columns = {row["name"] for row in await cur.fetchall()}
+        self.assertIn("is_elite", columns)
+
     async def test_multiplayer_tables_exist(self):
         for table in ("duels", "guilds", "guild_members", "trades", "quest_progress", "achievement_progress"):
             cur = await main.db.execute(
