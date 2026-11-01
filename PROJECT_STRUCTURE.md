@@ -234,7 +234,7 @@ The-Peak-Adventure/
 - [x] Duplicate/malformed auth field rejection
 - [x] SQLite persistence
 - [x] Environment-based secrets configuration
-- [~] Basic application logging
+- [x] Global Telegram error logging and operational startup/shutdown logs
 - [ ] Admin dashboard and role permissions
 - [ ] Anti-cheat and economy abuse detection
 - [ ] Rate limiting and abuse protection audit
