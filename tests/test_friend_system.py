@@ -2,12 +2,15 @@ import unittest
 
 import aiosqlite
 
+from account_system import init_account_tables, update_settings
+
 from friend_system import (
     FriendError,
     init_friend_tables,
     list_friends,
     remove_friend,
     respond_to_friend_request,
+    search_players,
     send_friend_request,
 )
 
@@ -26,6 +29,7 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
           (101,'Ash',4),(202,'Mira',8),(303,'Rook',2);
         """)
         await init_friend_tables(self.db)
+        await init_account_tables(self.db)
 
     async def asyncTearDown(self):
         await self.db.close()
@@ -35,6 +39,23 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         await respond_to_friend_request(self.db, request_id, 202, True)
         friends = await list_friends(self.db, 101)
         self.assertEqual([(row["user_id"], row["username"]) for row in friends], [(202, "Mira")])
+
+    async def test_search_returns_public_profiles(self):
+        results = await search_players(self.db, 101, "Mi")
+        self.assertEqual([row["user_id"] for row in results], [202])
+
+    async def test_search_respects_friends_only_visibility(self):
+        await update_settings(self.db, 202, profile_visibility="friends")
+        self.assertEqual(await search_players(self.db, 101, "Mira"), [])
+        request_id = await send_friend_request(self.db, 101, 202)
+        await respond_to_friend_request(self.db, request_id, 202, True)
+        results = await search_players(self.db, 101, "Mira")
+        self.assertEqual([row["user_id"] for row in results], [202])
+
+    async def test_search_escapes_wildcards_and_validates_query(self):
+        self.assertEqual(await search_players(self.db, 101, "%"), [])
+        with self.assertRaisesRegex(FriendError, "between 2 and 32"):
+            await search_players(self.db, 101, "x")
 
     async def test_self_request_is_rejected(self):
         with self.assertRaisesRegex(FriendError, "yourself"):
