@@ -69,6 +69,17 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await cur.fetchone())["potions"], 2)
         self.assertEqual(await get_premium_balance(self.db, 101), 10)
 
+    async def test_charge_id_cannot_be_replayed_for_another_account(self):
+        package = get_premium_packages()["spark"]
+        await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-replay")
+        with self.assertRaisesRegex(PremiumError, "different purchase"):
+            await credit_premium_purchase(self.db, 202, "spark", package["stars"], "charge-replay")
+        self.assertEqual(await get_premium_balance(self.db, 202), 0)
+
+    async def test_invoice_package_type_is_validated(self):
+        with self.assertRaises(PremiumError):
+            make_invoice_payload([], 101)
+
     async def test_wrong_paid_amount_and_invalid_player_are_rejected(self):
         package = get_premium_packages()["spark"]
         with self.assertRaises(PremiumError):
