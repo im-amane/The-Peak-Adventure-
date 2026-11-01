@@ -23,7 +23,7 @@ from aiogram.types import WebAppInfo
 from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
-from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
+from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
@@ -999,10 +999,41 @@ async def party_command(message: Message):
     action = args[1].lower() if len(args) > 1 else "info"
     user_id = message.from_user.id
     player = await get_player(user_id, message.from_user.username or message.from_user.full_name)
-    if action in {"create", "invite", "accept"} and not player["class_selected"]:
+    if action in {"create", "invite", "accept", "battle"} and not player["class_selected"]:
         await message.answer("Choose your hero class with /class before joining a party.")
         return
     try:
+
+        if action.startswith("battle"):
+            parts = (message.text or "").split()
+            sub = parts[2].lower() if len(parts) > 2 else "status"
+            party, members = await get_party_info(db, user_id)
+            party_id = party["party_id"]
+            if sub == "start":
+                level = min(100, max(10, ((player["level"] + 9) // 10) * 10))
+                boss = MONSTER_BY_LEVEL[level]
+                battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(members) * 2))
+                await message.answer(f"🐉 <b>Co-op Raid #{battle_id}</b>\n{escape(boss['name'])} · Lv.{level}\nAll party members can use /party battle attack.")
+                return
+            if sub == "attack":
+                result = await attack_party_battle(db, party_id, user_id, max(1, player["level"] * 5 + player["weapon_attack"]))
+                if result["status"] == "won":
+                    coins = max(20, player["level"] * 10)
+                    xp = max(40, player["level"] * 20)
+                    for member_id in result["members"]:
+                        try:
+                            reward = await reward_party_battle(db, result["battle_id"], member_id, coins, xp)
+                            try:
+                                await message.bot.send_message(member_id, "🏆 Party raid cleared! You received +" + str(reward["coins"]) + " coins and +" + str(reward["xp"]) + " XP.")
+                            except Exception:
+                                pass
+                        except PartyError:
+                            pass
+                await message.answer("⚔️ " + escape(result["monster_name"]) + ": " + str(result["hp"]) + "/" + str(result["max_hp"]) + " HP. Damage: " + str(result["damage"]) + ("\n🏆 PARTY RAID CLEARED! Rewards sent to party members." if result["status"] == "won" else ""))
+                return
+            battle = await get_party_battle(db, party_id)
+            await message.answer("No co-op battle yet. Party leader can use /party battle start." if not battle else "🐉 " + escape(battle["monster_name"]) + ": " + str(battle["hp"]) + "/" + str(battle["max_hp"]) + " HP · " + battle["status"].upper())
+            return
         if action == "create":
             party_id = await create_party(db, user_id)
             await message.answer(f"🛡️ Party #{party_id} created. You are the leader.")
@@ -1058,7 +1089,7 @@ async def party_command(message: Message):
     await message.answer(
         "Party commands: <code>/party create</code>, <code>/party invite</code> (reply to player), "
         "<code>/party accept ID</code>, <code>/party decline ID</code>, "
-        "<code>/party info</code>, <code>/party leave</code>, <code>/party disband</code>."
+        "<code>/party info</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>."
     )
 
 
