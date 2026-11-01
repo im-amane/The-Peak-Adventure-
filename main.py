@@ -1517,7 +1517,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
     await db.commit()
     if new_hp == 0:
         result = await finish_battle(user_id, False)
-        await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu())
+        await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     enemy_action = f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!" if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
     await send_battle(call.message, user_id, f"{action_line}\n{enemy_action}", edit=True)
