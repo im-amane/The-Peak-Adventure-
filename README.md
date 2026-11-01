@@ -12,7 +12,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Equipment shop with level-gated weapons, armor and potions
 - Persistent story quests and achievements with one-time rewards
 - Daily rewards with a UTC 24-hour claim cooldown
-- One-time boss clears, player XP/levels, coins, HP and leaderboard
+- One-time boss clears, player XP/levels, coins, HP and leaderboards\n- Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement and in-app battle controls
 - Telegram initData HMAC authentication for the Mini App API
 - SQLite persistence and automated catalogue/authentication tests
@@ -73,7 +73,7 @@ python -m unittest discover -s tests -v
 The repository includes a GitHub Actions workflow configured to run these checks on pushes and pull requests to `main`.
 
 ## Remaining development
-The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, multiplayer parties/PvP/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
+The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, co-op parties/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
