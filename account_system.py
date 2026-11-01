@@ -90,7 +90,7 @@ async def delete_player_account(db,user_id):
     await db.execute("DELETE FROM group_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM duels WHERE challenger_id=? OR opponent_id=?",(user_id,user_id))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
-    for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards"):
+    for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards","player_materials","crafted_items"):
         await db.execute(f"DELETE FROM {table} WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM players WHERE user_id=?",(user_id,))
     await db.commit()
