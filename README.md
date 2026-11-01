@@ -107,6 +107,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily login reward
 - `/premium` - View Peak Gems and Telegram Stars packages (disabled until owner enables them)
+- `/premium shop` - Browse gem items; `/premium buy ITEM_ID` - Buy stamina crystals, potion bundles or XP charms
 - `/missions` - View daily objectives and claim completed rewards with `/missions claim MISSION_ID`
 - `/weekly` - View weekly objectives and claim with `/weekly claim QUEST_ID`
 - `/stamina` and `/mana` - View combat resources
@@ -245,7 +246,7 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 
 
 ## Telegram Stars premium currency
-- Premium wallet balances and Stars transactions are stored in SQLite.
+- Premium wallet balances and Stars transactions are stored in SQLite. Gems can be spent on stamina crystals, potion bundles and three-win XP charms.
 - Telegram charge IDs are unique, so duplicate successful-payment updates cannot credit gems twice.
 - Payment handling validates invoice owner, package, currency and Stars amount before crediting.
 - Purchases are disabled by default. The owner must set `ENABLE_TELEGRAM_STARS=true` and confirm package prices in `.env` before exposing invoices.
