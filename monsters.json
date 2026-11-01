@@ -205,7 +205,7 @@
     "advantage": "Dust Scorpion gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Dust Scorpion is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] Beyond the meadow, the sand remembers a river that vanished overnight.",
+    "story": "[2/10 · Ashen Desert] DUST SCORPION dragged a silver canteen across the dunes, leaving a trail toward the riverbed that vanished the night the first seal awakened. Its pincers were stained blue from trying to dig the water back out.",
     "trait_effect": "regenerate"
   },
   {
@@ -224,7 +224,7 @@
     "advantage": "Dune Stalker gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Dune Stalker is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A small desert wanderer trades its last drop of water for a child's lost toy.",
+    "story": "[2/10 · Ashen Desert] DUNE STALKER had followed a child's wooden sun across the desert for seven years. The child was one of the missing villagers, and the toy was warm whenever the buried river stirred beneath the sand.",
     "trait_effect": "fury"
   },
   {
@@ -243,7 +243,7 @@
     "advantage": "Glasswing Viper gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Glasswing Viper is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The dunes shift into the shape of a map whenever this creature closes its eyes.",
+    "story": "[2/10 · Ashen Desert] GLASSWING VIPER saw the desert's hidden waterways reflected in its transparent wings. It attacked anyone who followed the map because the river did not lead to an oasis; it led to a door beneath the dunes.",
     "trait_effect": "swift"
   },
   {
@@ -262,7 +262,7 @@
     "advantage": "Sand Wraith gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Sand Wraith is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A glass-scaled hunter protects a buried well from creatures that drink memories.",
+    "story": "[2/10 · Ashen Desert] SAND WRAITH guarded the last underground well, where the missing villagers' memories drifted like pale fish. It had forgotten its own face, but remembered every name it had sworn to protect.",
     "trait_effect": "armored"
   },
   {
@@ -281,7 +281,7 @@
     "advantage": "Canyon Brute gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Canyon Brute is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The desert wind repeats the voice of someone you have not met yet.",
+    "story": "[2/10 · Ashen Desert] CANYON BRUTE heard a voice from the sealed tomb calling it by a name older than the desert. Each time it answered, the canyon walls cracked, revealing murals of the blue spark being carried from the meadow.",
     "trait_effect": "drain"
   },
   {
@@ -300,7 +300,7 @@
     "advantage": "Sunscale Lizard gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Sunscale Lizard is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A stone sentinel bears the names of a thousand travelers who never reached the oasis.",
+    "story": "[2/10 · Ashen Desert] SUNSCALE LIZARD warmed the stone tablets at the edge of the buried river. As the writing appeared, the lizard showed you the truth: the second seal was built to imprison a creature that drank memories to keep the world asleep.",
     "trait_effect": "poison"
   },
   {
@@ -319,7 +319,7 @@
     "advantage": "Mirage Djinn gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Mirage Djinn is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The mirage shows a green valley, but every step toward it makes the real world drier.",
+    "story": "[2/10 · Ashen Desert] MIRAGE DJINN offered to restore the villagers' stolen memories, but demanded the memory of your first victory in return. It was not cruel; it had made the same bargain long ago and could no longer remember whom it had saved.",
     "trait_effect": "shield"
   },
   {
@@ -338,7 +338,7 @@
     "advantage": "Buried Sentinel gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Buried Sentinel is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A djinn offers to reveal the truth in exchange for one memory you cannot afford to lose.",
+    "story": "[2/10 · Ashen Desert] BURIED SENTINEL broke its stone silence when the well began to run black. Its ancient command was simple: keep the tomb closed, even if every living soul outside forgot why it mattered.",
     "trait_effect": "reflect"
   },
   {
@@ -357,7 +357,7 @@
     "advantage": "Minotaur Warden gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Minotaur Warden is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The buried guardian breaks its chains and begs you not to open the tomb below.",
+    "story": "[2/10 · Ashen Desert] MINOTAUR WARDEN tore free of the chains binding it to the tomb entrance. It begged you not to mistake its prison guard's duty for loyalty to the thing below; it had stayed for centuries so the forgotten villagers could keep their names.",
     "trait_effect": "lifesteal"
   },
   {
@@ -376,7 +376,7 @@
     "advantage": "Ancient Minotaur gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Ancient Minotaur is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The second seal cracks. Beneath the sand, something answers with a thunderous heartbeat.",
+    "story": "[2/10 · Ashen Desert] Ancient Minotaur emerged from the tomb with the stolen memories circling its horns like a crown. When you defeated it, the second seal opened, and the creature beneath the desert whispered your name in a voice that sounded exactly like the first blue spark.",
     "trait_effect": "berserk"
   },
   {
