@@ -3941,6 +3941,7 @@ async def api_social(request: web.Request):
                                initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
                             (payload["coins"],payload["potions"],payload["trade_id"]),
                         )
+                    await db.commit()
                     result = {"trade_id":payload["trade_id"],"status":"open","offer_updated":True}
                 elif action == "trade_confirm":
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
@@ -4018,6 +4019,7 @@ async def api_social(request: web.Request):
                         result = {"trade_id":payload["trade_id"],"status":"completed"}
                     else:
                         result = {"trade_id":payload["trade_id"],"status":"open","waiting_for_other_player":True}
+                    await db.commit()
                 elif action == "trade_cancel":
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
