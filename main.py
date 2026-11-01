@@ -465,9 +465,15 @@ async def heal(message: Message):
     elif p["coins"] < 30:
         await message.answer("🪙 You need 30 coins to heal.")
     else:
-        await db.execute("UPDATE players SET coins=coins-30, hp=max_hp WHERE user_id=? AND coins>=30", (message.from_user.id,))
+        debit = await db.execute(
+            "UPDATE players SET coins=coins-30, hp=max_hp WHERE user_id=? AND coins>=30",
+            (message.from_user.id,),
+        )
         await db.commit()
-        await message.answer("✨ Your HP has been fully restored.")
+        if debit.rowcount:
+            await message.answer("✨ Your HP has been fully restored.")
+        else:
+            await message.answer("🪙 You need 30 coins to heal.")
 
 
 @dp.message(Command("map"))
