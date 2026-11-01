@@ -57,7 +57,12 @@
     const battle = data.battle;
     ui.battlePanel.hidden = !battle;
     document.querySelectorAll("[data-action]").forEach(button => {
-      button.disabled = !battle || requestInFlight;
+      const action = button.dataset.action;
+      button.disabled = !battle || requestInFlight
+        || (action === "skill" && data.skill_cd > 0)
+        || (action === "potion" && (data.potions <= 0 || data.hp >= data.max_hp));
+      if (action === "skill") button.textContent = data.skill_cd > 0 ? "⏳ Skill (" + data.skill_cd + ")" : "✨ Skill";
+      if (action === "potion") button.textContent = "🧪 Potion (" + data.potions + ")";
     });
     if (battle) {
       ui.battleName.textContent = battle.name + " · Lv." + battle.level + (battle.phase > 1 ? " · Phase " + battle.phase : "");
