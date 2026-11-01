@@ -35,6 +35,7 @@ from crafting_system import MATERIALS, CraftingError, award_material_drop, craft
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
+from rate_limit import SlidingWindowRateLimiter
 from db_backup import create_backup
 
 load_dotenv()
@@ -3158,6 +3159,29 @@ async def database_backup_loop():
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
 
 
+api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
+
+
+@web.middleware
+async def miniapp_rate_limit(request: web.Request, handler):
+    if not request.path.startswith("/api/"):
+        return await handler(request)
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError:
+        # The route returns the canonical authentication error.
+        return await handler(request)
+    limit = 120 if request.method == "GET" else 40
+    allowed, retry_after = api_rate_limiter.allow(f"telegram:{user['id']}", limit)
+    if not allowed:
+        return web.json_response(
+            {"error": "Too many requests. Please slow down and try again."},
+            status=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+    return await handler(request)
+
+
 async def start_web_server():
     async def serve_index(request: web.Request):
         return web.FileResponse(WEB_DIR / "index.html")
@@ -3171,7 +3195,7 @@ async def start_web_server():
     async def healthz(request: web.Request):
         return web.json_response({"ok": True})
 
-    app = web.Application(client_max_size=4096)
+    app = web.Application(client_max_size=4096, middlewares=[miniapp_rate_limit])
     app.router.add_get("/", serve_index)
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
