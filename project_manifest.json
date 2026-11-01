@@ -724,7 +724,7 @@
         },
         {
           "name": "Database backup and restore automation",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Privacy controls and data deletion workflow",
