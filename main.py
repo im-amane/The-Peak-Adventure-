@@ -3747,7 +3747,19 @@ async def start_web_server():
         return web.FileResponse(WEB_DIR / "game.js")
 
     async def healthz(request: web.Request):
-        return web.json_response({"ok": True})
+        if db is None:
+            return web.json_response({"ok": False, "database": "unavailable"}, status=503)
+        try:
+            async with db_lock:
+                cur = await db.execute("SELECT 1")
+                await cur.fetchone()
+        except Exception:
+            log.exception("Health check database probe failed")
+            return web.json_response({"ok": False, "database": "unavailable"}, status=503)
+        return web.json_response(
+            {"ok": True, "service": "peak-adventure", "database": "ok"},
+            headers={"Cache-Control": "no-store"},
+        )
 
     app = web.Application(client_max_size=4096, middlewares=[miniapp_rate_limit])
     app.router.add_get("/", serve_index)
