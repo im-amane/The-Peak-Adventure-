@@ -100,6 +100,17 @@ class GameRulesTests(unittest.TestCase):
         self.assertIn("eighth seal", seventh_world[-1]["story"])
         self.assertTrue(seventh_world[-1]["boss"])
 
+    def test_eighth_world_stories_name_their_monster_and_reveal_the_creator(self):
+        eighth_world = self.monsters[70:80]
+        for monster in eighth_world:
+            self.assertIn(monster["name"].casefold(), monster["story"].casefold())
+            self.assertIn("Celestial Ruins", monster["story"])
+        self.assertIn("eighth seal", eighth_world[3]["story"])
+        self.assertIn("ninth seal", eighth_world[4]["story"])
+        self.assertIn("eighth seal", eighth_world[-1]["story"])
+        self.assertIn("ninth seal", eighth_world[-1]["story"])
+        self.assertTrue(eighth_world[-1]["boss"])
+
     def test_all_ten_combat_traits_are_used(self):
         expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
         self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
