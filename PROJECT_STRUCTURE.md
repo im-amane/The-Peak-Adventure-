@@ -148,7 +148,7 @@ The-Peak-Adventure/
 - [x] Turn-based PvP actions
 - [x] Surrender and PvP ranking
 - [x] Friend requests and friend list
-- [ ] Online presence
+- [x] Recent online presence with five-minute activity window and friend visibility
 - [x] Party creation and invitations
 - [x] Party membership management and leader handoff
 - [ ] Co-op exploration
