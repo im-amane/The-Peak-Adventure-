@@ -23,4 +23,5 @@ jobs:
         with:
           node-version: "20"
       - run: node --check webapp/game.js
+      - run: node --test webapp/pathfinding.test.mjs
       - run: node --test cloudflare/worker.test.mjs
