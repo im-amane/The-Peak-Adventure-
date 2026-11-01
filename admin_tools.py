@@ -105,11 +105,22 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "dungeon_runs":("SELECT * FROM dungeon_runs WHERE user_id=?",(user_id,)),
         "dungeon_rewards":("SELECT * FROM dungeon_rewards WHERE user_id=?",(user_id,)),
         "security_events":("SELECT event_type,severity,details,created_at FROM security_events WHERE user_id=? ORDER BY event_id DESC",(user_id,)),
+        "premium_wallet":("SELECT balance,updated_at FROM premium_wallets WHERE user_id=?",(user_id,)),
+        "premium_transactions":("SELECT package_id,stars,gems,created_at FROM premium_transactions WHERE user_id=? ORDER BY transaction_id DESC",(user_id,)),
+        "premium_purchases":("SELECT item_id,gems_spent,created_at FROM premium_shop_purchases WHERE user_id=? ORDER BY purchase_id DESC",(user_id,)),
+        "xp_boost":("SELECT remaining_wins FROM player_xp_boosts WHERE user_id=?",(user_id,)),
     }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
-        if key=="security_events":
-            cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='security_events'")
+        if key in {"security_events","premium_wallet","premium_transactions","premium_purchases","xp_boost"}:
+            optional_tables = {
+                "security_events":"security_events",
+                "premium_wallet":"premium_wallets",
+                "premium_transactions":"premium_transactions",
+                "premium_purchases":"premium_shop_purchases",
+                "xp_boost":"player_xp_boosts",
+            }
+            cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(optional_tables[key],))
             if not await cur.fetchone():
                 result["data"][key]=[]
                 continue
