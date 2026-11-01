@@ -12,7 +12,13 @@
     region: document.getElementById("region"),
     monster: document.getElementById("monster-label"),
     status: document.getElementById("status"),
-    encounter: document.getElementById("encounter")
+    encounter: document.getElementById("encounter"),
+    battlePanel: document.getElementById("battle-panel"),
+    battleName: document.getElementById("battle-name"),
+    battleHp: document.getElementById("battle-hp"),
+    battleHpFill: document.getElementById("battle-hp-fill"),
+    battleMessage: document.getElementById("battle-message"),
+    potionCount: document.getElementById("potion-count")
   };
   const worldPalettes = [
     {sky:0x8fae91,ground:0x5d8059,accent:0xd6c98b},
@@ -32,6 +38,33 @@
   let touchDirection = {x:0,y:0};
   let nearMonster = false;
 
+  function applyState(data, message) {
+    gameState = data;
+    ui.name.textContent = data.first_name || "Adventurer";
+    ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
+    ui.level.textContent = "Lv. " + data.level;
+    ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
+    ui.coins.textContent = data.coins;
+    ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
+    ui.region.textContent = data.region;
+    ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
+    const battle = data.battle;
+    ui.battlePanel.hidden = !battle;
+    if (battle) {
+      ui.battleName.textContent = battle.name + " · Lv." + battle.level;
+      ui.battleHp.textContent = "❤️ " + battle.hp + " / " + battle.max_hp;
+      ui.battleHpFill.style.width = Math.max(0, battle.hp / battle.max_hp * 100) + "%";
+      ui.potionCount.textContent = "Health potions: " + data.potions + " · " + battle.special_move;
+      ui.battleMessage.textContent = message || battle.story;
+    }
+    ui.status.textContent = message || (battle
+      ? "Battle in progress. Choose your action below."
+      : data.class_selected ? "The wilds are waiting. Find the creature on the map."
+      : "Choose a hero class in the Telegram chat before exploring.");
+    ui.encounter.disabled = !nearMonster || !data.class_selected || data.battle_active;
+    ui.encounter.textContent = data.battle_active ? "⚔️ Battle in progress" : nearMonster ? "⚔️ Challenge Monster" : "⚔️ Find the monster";
+  }
+
   async function loadState() {
     if (!initData) {
       ui.status.textContent = "Open this game from the Telegram bot's private chat.";
@@ -43,17 +76,44 @@
       return null;
     }
     const data = await response.json();
-    gameState = data;
-    ui.name.textContent = data.first_name || "Adventurer";
-    ui.heroClass.textContent = data.hero_class + " · " + data.weapon;
-    ui.level.textContent = "Lv. " + data.level;
-    ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
-    ui.coins.textContent = data.coins;
-    ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
-    ui.region.textContent = data.region;
-    ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
-    ui.status.textContent = data.class_selected ? "The wilds are waiting. Find the creature on the map." : "Choose a hero class in the bot chat before exploring.";
+    applyState(data);
     return data;
+  }
+
+  async function postApi(path, body) {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Telegram-Init-Data": initData},
+      body: JSON.stringify(body || {})
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "The game request failed.");
+    return data;
+  }
+
+  async function startEncounter() {
+    if (!gameState.class_selected) { ui.status.textContent = "Choose your class in the Telegram chat first."; return; }
+    if (gameState.battle_active) { ui.status.textContent = "You already have an active battle."; return; }
+    ui.encounter.disabled = true;
+    try {
+      const result = await postApi("/api/explore", {});
+      applyState(result.state, result.message);
+    } catch (error) {
+      ui.status.textContent = error.message;
+      ui.encounter.disabled = false;
+    }
+  }
+
+  async function performBattleAction(action) {
+    document.querySelectorAll("[data-action]").forEach(button => button.disabled = true);
+    try {
+      const result = await postApi("/api/action", {action});
+      applyState(result.state, result.message);
+    } catch (error) {
+      ui.battleMessage.textContent = error.message;
+    } finally {
+      document.querySelectorAll("[data-action]").forEach(button => button.disabled = false);
+    }
   }
 
   function makeHero(scene, x, y, heroClass) {
@@ -134,12 +194,11 @@
       this.physics=null;
     }
     challenge(){
-      if(!gameState.class_selected){ui.status.textContent="Choose your class in the Telegram chat first.";return;} if(gameState.battle_active){ui.status.textContent="You already have an active battle in the chat.";return;}
-      if(tg){tg.sendData(JSON.stringify({action:"explore"}));ui.status.textContent="Returning to the chat to start your battle...";}
-      else{ui.status.textContent="Telegram Mini App session required to start a battle.";}
+      startEncounter();
     }
     update(_,delta){
       if(!this.hero)return;
+      if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
       const speed=0.18*delta;
       let dx=0,dy=0;
       if(this.cursors.left.isDown||this.keys.A.isDown||touchDirection.x<0)dx=-1;
@@ -163,6 +222,7 @@
     new Phaser.Game(config);
   }
   document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
+  document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
   document.querySelectorAll("[data-dir]").forEach(button=>{
     const dir=button.dataset.dir;
     const vector={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[dir];
