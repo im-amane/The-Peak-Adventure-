@@ -3594,6 +3594,25 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
                     await respond_guild_invite(db, payload["invite_id"], user_id, action == "guild_accept")
                     result = {"accepted": action == "guild_accept"}
+                elif action in {"guild_chat", "guild_send"}:
+                    expected = {"action", "message"} if action == "guild_send" else {"action"}
+                    if set(payload) != expected:
+                        return web.json_response({"error": "Invalid guild chat request fields."}, status=400)
+                    if action == "guild_send" and (not isinstance(payload.get("message"), str) or len(payload["message"]) > 500):
+                        return web.json_response({"error": "Guild messages must contain 1 to 500 characters."}, status=400)
+                    cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
+                    membership = await cur.fetchone()
+                    if not membership:
+                        raise GuildFeatureError("Join a guild before using guild chat.")
+                    if action == "guild_send":
+                        await send_guild_message(db, membership["guild_id"], user_id, payload["message"])
+                    rows = await get_guild_chat(db, membership["guild_id"], user_id, limit=30)
+                    result = {"messages": [
+                        {"message_id":row["message_id"],"user_id":row["user_id"],
+                         "username":row["username"] or "Adventurer","message":row["message"],
+                         "created_at":row["created_at"]}
+                        for row in rows
+                    ]}
                 else:
                     return web.json_response({"error": "Unsupported social action."}, status=400)
                 state = await miniapp_state(user)
