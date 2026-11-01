@@ -16,10 +16,13 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
 
+from game_rules import validate_monster_catalogue
+
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
 MONSTERS = json.loads(Path(__file__).with_name("monsters.json").read_text(encoding="utf-8"))
+validate_monster_catalogue(MONSTERS)
 MONSTER_BY_LEVEL = {m["level"]: m for m in MONSTERS}
 BOSS_LEVELS = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 
@@ -351,6 +354,9 @@ async def _battle_action_unlocked(call: CallbackQuery):
     p = await get_player(user_id, call.from_user.username)
     m = MONSTER_BY_LEVEL[b["monster_level"]]
     action = call.data.split(":", 1)[1]
+    if action not in {"attack", "skill", "potion", "flee"}:
+        await call.message.answer("Unknown battle action. Please use the battle buttons.")
+        return
     if action == "flee":
         result = await finish_battle(user_id, False, escaped=True)
         await call.message.edit_text(result, reply_markup=menu())
