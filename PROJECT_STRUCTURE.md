@@ -56,8 +56,8 @@ The-Peak-Adventure/
 - [x] /achievements and reward claims
 - [x] /daily rewards
 - [x] /leaderboard and PvP rankings
-- [~] Inline callback battle controls
-- [~] Bot error handling and operational logging
+- [x] Inline callback battle controls for attack, skill, potion and escape
+- [x] Global Telegram update exception logging and operational startup logs
 - [x] Admin command panel
 - [x] Broadcast and announcement system
 
