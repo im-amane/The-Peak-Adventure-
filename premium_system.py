@@ -9,6 +9,30 @@ class PremiumError(ValueError):
     pass
 
 
+async def _begin_atomic(db, savepoint_name):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint_name}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db, nested, savepoint_name):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db, nested, savepoint_name):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+    else:
+        await db.rollback()
+
+
 PREMIUM_SHOP_ITEMS = {
     "stamina_crystal": {"cost": 25, "title": "Stamina Crystal", "description": "Restore up to 50 stamina."},
     "potion_bundle": {"cost": 40, "title": "Potion Bundle", "description": "Receive 5 healing potions."},
@@ -102,8 +126,8 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
         raise PremiumError("Invalid Telegram payment charge ID.")
     telegram_charge_id = telegram_charge_id.strip()
     provider_charge_id = str(provider_charge_id or "")[:255]
+    nested = await _begin_atomic(db, "premium_credit")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
         if not await cur.fetchone():
             raise PremiumError("Player account not found.")
@@ -115,7 +139,7 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
         if previous:
             if previous["user_id"] != user_id or previous["package_id"] != package_id or previous["stars"] != stars:
                 raise PremiumError("This Telegram charge ID is already linked to a different purchase.")
-            await db.commit()
+            await _commit_atomic(db, nested, "premium_credit")
             return {"credited": False, "balance": await get_premium_balance(db, user_id), "gems": 0}
         await db.execute(
             "INSERT INTO premium_wallets(user_id,balance) VALUES(?,0) ON CONFLICT(user_id) DO NOTHING",
@@ -131,10 +155,10 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
             "UPDATE premium_wallets SET balance=balance+?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
             (package["gems"], user_id),
         )
-        await db.commit()
+        await _commit_atomic(db, nested, "premium_credit")
         return {"credited": True, "balance": await get_premium_balance(db, user_id), "gems": package["gems"]}
     except Exception:
-        await db.rollback()
+        await _rollback_atomic(db, nested, "premium_credit")
         raise
 
 
@@ -144,8 +168,8 @@ async def buy_premium_item(db, user_id, item_id):
     if not isinstance(item_id, str) or item_id not in PREMIUM_SHOP_ITEMS:
         raise PremiumError("Unknown premium shop item.")
     item = PREMIUM_SHOP_ITEMS[item_id]
+    nested = await _begin_atomic(db, "premium_shop")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
         if not await cur.fetchone():
             raise PremiumError("Player account not found.")
@@ -185,11 +209,11 @@ async def buy_premium_item(db, user_id, item_id):
             "INSERT INTO premium_shop_purchases(user_id,item_id,gems_spent) VALUES(?,?,?)",
             (user_id, item_id, item["cost"]),
         )
-        await db.commit()
+        await _commit_atomic(db, nested, "premium_shop")
         return {"item_id": item_id, "title": item["title"], "cost": item["cost"],
                 "balance": balance - item["cost"]}
     except Exception:
-        await db.rollback()
+        await _rollback_atomic(db, nested, "premium_shop")
         raise
 
 
