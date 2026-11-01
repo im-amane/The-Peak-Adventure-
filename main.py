@@ -240,6 +240,7 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         candidates = [candidate for candidate in candidates if candidate not in BOSS_LEVELS]
         monster_level = random.choice(candidates or [max(1, level - 1)])
     m = MONSTER_BY_LEVEL[monster_level]
+    await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
     await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
                      (user_id, monster_level, m["hp"]))
     await db.commit()
@@ -361,7 +362,8 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     if new_level >= 100:
         new_level = 100
         new_xp = 0
-    new_max = 120 + (new_level - 1) * 20
+    class_hp_bonus = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])["hp"]
+    new_max = 120 + (new_level - 1) * 20 + class_hp_bonus
     await db.execute("""UPDATE players SET xp=?, level=?, coins=coins+?, wins=wins+1,
         max_hp=?, hp=min(?, ?) WHERE user_id=?""",
         (new_xp, new_level, reward_coins, new_max, p["hp"] + 25, new_max, user_id))
