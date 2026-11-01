@@ -2858,10 +2858,8 @@ async def premium_pre_checkout(query: PreCheckoutQuery):
 @dp.message(F.successful_payment)
 async def premium_successful_payment(message: Message):
     payment = message.successful_payment
-    if not PREMIUM_PAYMENTS_ENABLED:
-        await message.answer("Payment received, but premium crediting is disabled. Contact the bot administrator.")
-        log.error("Received Stars payment while premium payments are disabled for user %s", message.from_user.id)
-        return
+    # A successful Telegram charge must be credited even if new purchases were
+    # disabled after the invoice was issued or after Telegram completed checkout.
     try:
         package_id, owner_id = parse_invoice_payload(payment.invoice_payload)
         package = get_premium_packages()[package_id]
