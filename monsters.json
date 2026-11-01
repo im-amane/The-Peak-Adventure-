@@ -15,7 +15,8 @@
     "advantage": "Baby Slime gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Baby Slime is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The meadow's smallest creatures have begun gathering around a blue spark that fell from the sky."
+    "story": "[1/10 · Whispering Meadow] The meadow's smallest creatures have begun gathering around a blue spark that fell from the sky.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 2,
@@ -33,7 +34,8 @@
     "advantage": "Meadow Moth gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Meadow Moth is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A lost field mouse leaves crumbs beside the trail, hoping the frightened creature will follow them home."
+    "story": "[1/10 · Whispering Meadow] A lost field mouse leaves crumbs beside the trail, hoping the frightened creature will follow them home.",
+    "trait_effect": "fury"
   },
   {
     "level": 3,
@@ -51,7 +53,8 @@
     "advantage": "Dewdrop Sprite gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Dewdrop Sprite is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The village children recognize this creature's glow from a lullaby their grandparents stopped singing."
+    "story": "[1/10 · Whispering Meadow] The village children recognize this creature's glow from a lullaby their grandparents stopped singing.",
+    "trait_effect": "swift"
   },
   {
     "level": 4,
@@ -69,7 +72,8 @@
     "advantage": "Mossling gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Mossling is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A tiny guardian carries a broken bell; each time it rings, one missing villager remembers the way home."
+    "story": "[1/10 · Whispering Meadow] A tiny guardian carries a broken bell; each time it rings, one missing villager remembers the way home.",
+    "trait_effect": "armored"
   },
   {
     "level": 5,
@@ -87,7 +91,8 @@
     "advantage": "Pebble Toad gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Pebble Toad is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The forest's old paths rearrange themselves whenever this creature cries out."
+    "story": "[1/10 · Whispering Meadow] The forest's old paths rearrange themselves whenever this creature cries out.",
+    "trait_effect": "drain"
   },
   {
     "level": 6,
@@ -105,7 +110,8 @@
     "advantage": "Bramble Fox gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Bramble Fox is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A wounded fox refuses to flee, guarding a nest that is not its own."
+    "story": "[1/10 · Whispering Meadow] A wounded fox refuses to flee, guarding a nest that is not its own.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 7,
@@ -123,7 +129,8 @@
     "advantage": "Glowcap Mushroom gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Glowcap Mushroom is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The mushrooms whisper a name no living villager remembers, then go silent as you approach."
+    "story": "[1/10 · Whispering Meadow] The mushrooms whisper a name no living villager remembers, then go silent as you approach.",
+    "trait_effect": "fury"
   },
   {
     "level": 8,
@@ -141,7 +148,8 @@
     "advantage": "Bark Beetle gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Bark Beetle is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A gentle beast has been marked by a dark thread that seems to pull toward the northern hills."
+    "story": "[1/10 · Whispering Meadow] A gentle beast has been marked by a dark thread that seems to pull toward the northern hills.",
+    "trait_effect": "swift"
   },
   {
     "level": 9,
@@ -159,7 +167,8 @@
     "advantage": "Whisper Wolf gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Whisper Wolf is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The forest guardian asks you to spare its corrupted kin, even as the corruption takes its voice."
+    "story": "[1/10 · Whispering Meadow] The forest guardian asks you to spare its corrupted kin, even as the corruption takes its voice.",
+    "trait_effect": "armored"
   },
   {
     "level": 10,
@@ -177,7 +186,8 @@
     "advantage": "Stone Golem gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Stone Golem is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The first seal is hidden beneath the roots. Its guardian knows the spark chose you, but will not say why."
+    "story": "[1/10 · Whispering Meadow] The first seal is hidden beneath the roots. Its guardian knows the spark chose you, but will not say why.",
+    "trait_effect": "drain"
   },
   {
     "level": 11,
@@ -195,7 +205,8 @@
     "advantage": "Dust Scorpion gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Dust Scorpion is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] Beyond the meadow, the sand remembers a river that vanished overnight."
+    "story": "[2/10 · Ashen Desert] Beyond the meadow, the sand remembers a river that vanished overnight.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 12,
@@ -213,7 +224,8 @@
     "advantage": "Dune Stalker gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Dune Stalker is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A small desert wanderer trades its last drop of water for a child's lost toy."
+    "story": "[2/10 · Ashen Desert] A small desert wanderer trades its last drop of water for a child's lost toy.",
+    "trait_effect": "fury"
   },
   {
     "level": 13,
@@ -231,7 +243,8 @@
     "advantage": "Glasswing Viper gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Glasswing Viper is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The dunes shift into the shape of a map whenever this creature closes its eyes."
+    "story": "[2/10 · Ashen Desert] The dunes shift into the shape of a map whenever this creature closes its eyes.",
+    "trait_effect": "swift"
   },
   {
     "level": 14,
@@ -249,7 +262,8 @@
     "advantage": "Sand Wraith gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Sand Wraith is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A glass-scaled hunter protects a buried well from creatures that drink memories."
+    "story": "[2/10 · Ashen Desert] A glass-scaled hunter protects a buried well from creatures that drink memories.",
+    "trait_effect": "armored"
   },
   {
     "level": 15,
@@ -267,7 +281,8 @@
     "advantage": "Canyon Brute gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Canyon Brute is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The desert wind repeats the voice of someone you have not met yet."
+    "story": "[2/10 · Ashen Desert] The desert wind repeats the voice of someone you have not met yet.",
+    "trait_effect": "drain"
   },
   {
     "level": 16,
@@ -285,7 +300,8 @@
     "advantage": "Sunscale Lizard gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Sunscale Lizard is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A stone sentinel bears the names of a thousand travelers who never reached the oasis."
+    "story": "[2/10 · Ashen Desert] A stone sentinel bears the names of a thousand travelers who never reached the oasis.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 17,
@@ -303,7 +319,8 @@
     "advantage": "Mirage Djinn gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Mirage Djinn is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The mirage shows a green valley, but every step toward it makes the real world drier."
+    "story": "[2/10 · Ashen Desert] The mirage shows a green valley, but every step toward it makes the real world drier.",
+    "trait_effect": "fury"
   },
   {
     "level": 18,
@@ -321,7 +338,8 @@
     "advantage": "Buried Sentinel gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Buried Sentinel is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] A djinn offers to reveal the truth in exchange for one memory you cannot afford to lose."
+    "story": "[2/10 · Ashen Desert] A djinn offers to reveal the truth in exchange for one memory you cannot afford to lose.",
+    "trait_effect": "swift"
   },
   {
     "level": 19,
@@ -339,7 +357,8 @@
     "advantage": "Minotaur Warden gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Minotaur Warden is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The buried guardian breaks its chains and begs you not to open the tomb below."
+    "story": "[2/10 · Ashen Desert] The buried guardian breaks its chains and begs you not to open the tomb below.",
+    "trait_effect": "armored"
   },
   {
     "level": 20,
@@ -357,7 +376,8 @@
     "advantage": "Ancient Minotaur gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Ancient Minotaur is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] The second seal cracks. Beneath the sand, something answers with a thunderous heartbeat."
+    "story": "[2/10 · Ashen Desert] The second seal cracks. Beneath the sand, something answers with a thunderous heartbeat.",
+    "trait_effect": "drain"
   },
   {
     "level": 21,
@@ -375,7 +395,8 @@
     "advantage": "Storm Harpy gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Storm Harpy is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] Storm clouds gather even though the sky above the highlands has been clear for a hundred years."
+    "story": "[3/10 · Stormglass Highlands] Storm clouds gather even though the sky above the highlands has been clear for a hundred years.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 22,
@@ -393,7 +414,8 @@
     "advantage": "Volt Hound gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Volt Hound is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A little spark-beast follows your footsteps, mistaking your shadow for its missing parent."
+    "story": "[3/10 · Stormglass Highlands] A little spark-beast follows your footsteps, mistaking your shadow for its missing parent.",
+    "trait_effect": "fury"
   },
   {
     "level": 23,
@@ -411,7 +433,8 @@
     "advantage": "Cloud Serpent gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Cloud Serpent is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The mountain birds fly in circles around a tower that no map records."
+    "story": "[3/10 · Stormglass Highlands] The mountain birds fly in circles around a tower that no map records.",
+    "trait_effect": "swift"
   },
   {
     "level": 24,
@@ -429,7 +452,8 @@
     "advantage": "Tempest Wisp gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Tempest Wisp is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A cloud serpent carries a message sealed inside a feather made of lightning."
+    "story": "[3/10 · Stormglass Highlands] A cloud serpent carries a message sealed inside a feather made of lightning.",
+    "trait_effect": "armored"
   },
   {
     "level": 25,
@@ -447,7 +471,8 @@
     "advantage": "Skybreaker Roc gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Skybreaker Roc is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The storm wraith remembers a kingdom that was erased between two heartbeats."
+    "story": "[3/10 · Stormglass Highlands] The storm wraith remembers a kingdom that was erased between two heartbeats.",
+    "trait_effect": "drain"
   },
   {
     "level": 26,
@@ -465,7 +490,8 @@
     "advantage": "Lightning Ogre gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Lightning Ogre is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A giant refuses to strike first; it is waiting for the thunder to stop calling its name."
+    "story": "[3/10 · Stormglass Highlands] A giant refuses to strike first; it is waiting for the thunder to stop calling its name.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 27,
@@ -483,7 +509,8 @@
     "advantage": "Stormcaller Witch gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Stormcaller Witch is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The harpy's song reveals that the storms are being summoned from underground."
+    "story": "[3/10 · Stormglass Highlands] The harpy's song reveals that the storms are being summoned from underground.",
+    "trait_effect": "fury"
   },
   {
     "level": 28,
@@ -501,7 +528,8 @@
     "advantage": "Thunder Colossus gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Thunder Colossus is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The witch has been collecting the final words of every creature lost to the storm."
+    "story": "[3/10 · Stormglass Highlands] The witch has been collecting the final words of every creature lost to the storm.",
+    "trait_effect": "swift"
   },
   {
     "level": 29,
@@ -519,7 +547,8 @@
     "advantage": "Storm Wyrm gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Storm Wyrm is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The colossus falls, and the clouds briefly reveal a second moon hanging beneath the world."
+    "story": "[3/10 · Stormglass Highlands] The colossus falls, and the clouds briefly reveal a second moon hanging beneath the world.",
+    "trait_effect": "armored"
   },
   {
     "level": 30,
@@ -537,7 +566,8 @@
     "advantage": "Thunder Dragon gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Thunder Dragon is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The thunder seal breaks. A voice in the lightning calls you the heir of a forgotten promise."
+    "story": "[3/10 · Stormglass Highlands] The thunder seal breaks. A voice in the lightning calls you the heir of a forgotten promise.",
+    "trait_effect": "drain"
   },
   {
     "level": 31,
@@ -555,7 +585,8 @@
     "advantage": "Grave Lantern gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Grave Lantern is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The road into the Hollow Kingdom is lined with lanterns that burn without flame."
+    "story": "[4/10 · Hollow Kingdom] The road into the Hollow Kingdom is lined with lanterns that burn without flame.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 32,
@@ -573,7 +604,8 @@
     "advantage": "Hollow Knight gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Hollow Knight is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A grave-lantern lights the way for spirits who cannot remember their own deaths."
+    "story": "[4/10 · Hollow Kingdom] A grave-lantern lights the way for spirits who cannot remember their own deaths.",
+    "trait_effect": "fury"
   },
   {
     "level": 33,
@@ -591,7 +623,8 @@
     "advantage": "Ashen Banshee gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Ashen Banshee is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The hollow knight kneels before you, though its armor bears the crest of your village."
+    "story": "[4/10 · Hollow Kingdom] The hollow knight kneels before you, though its armor bears the crest of your village.",
+    "trait_effect": "swift"
   },
   {
     "level": 34,
@@ -609,7 +642,8 @@
     "advantage": "Crypt Spider gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Crypt Spider is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A banshee sings a lullaby that matches the melody from the meadow's first bell."
+    "story": "[4/10 · Hollow Kingdom] A banshee sings a lullaby that matches the melody from the meadow's first bell.",
+    "trait_effect": "armored"
   },
   {
     "level": 35,
@@ -627,7 +661,8 @@
     "advantage": "Dread Hound gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Dread Hound is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The crypt spider has woven a tapestry showing every battle you have fought, including one that has not happened."
+    "story": "[4/10 · Hollow Kingdom] The crypt spider has woven a tapestry showing every battle you have fought, including one that has not happened.",
+    "trait_effect": "drain"
   },
   {
     "level": 36,
@@ -645,7 +680,8 @@
     "advantage": "Soul Leech gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Soul Leech is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The dread hound guards a doorway and whimpers whenever the darkness behind it moves."
+    "story": "[4/10 · Hollow Kingdom] The dread hound guards a doorway and whimpers whenever the darkness behind it moves.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 37,
@@ -663,7 +699,8 @@
     "advantage": "Blackthorn Reaper gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Blackthorn Reaper is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A soul leech feeds on sorrow, but leaves one memory untouched: the face of its old friend."
+    "story": "[4/10 · Hollow Kingdom] A soul leech feeds on sorrow, but leaves one memory untouched: the face of its old friend.",
+    "trait_effect": "fury"
   },
   {
     "level": 38,
@@ -681,7 +718,8 @@
     "advantage": "Moonless Horror gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Moonless Horror is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The reaper reveals that the monsters are not invading the world; they are fleeing something."
+    "story": "[4/10 · Hollow Kingdom] The reaper reveals that the monsters are not invading the world; they are fleeing something.",
+    "trait_effect": "swift"
   },
   {
     "level": 39,
@@ -699,7 +737,8 @@
     "advantage": "Shadow Wyrm gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Shadow Wyrm is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The moonless horror wears the shadow of a child who vanished before the first seal was made."
+    "story": "[4/10 · Hollow Kingdom] The moonless horror wears the shadow of a child who vanished before the first seal was made.",
+    "trait_effect": "armored"
   },
   {
     "level": 40,
@@ -717,7 +756,8 @@
     "advantage": "Ancient Shadow Dragon gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Ancient Shadow Dragon is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The fourth seal opens. The kingdom's dead speak together: the true enemy was once its protector."
+    "story": "[4/10 · Hollow Kingdom] The fourth seal opens. The kingdom's dead speak together: the true enemy was once its protector.",
+    "trait_effect": "drain"
   },
   {
     "level": 41,
@@ -735,7 +775,8 @@
     "advantage": "Cinder Beetle gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Cinder Beetle is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] Heat rises from cracks in the earth, and the stars above the volcano begin to turn red."
+    "story": "[5/10 · Ember Abyss] Heat rises from cracks in the earth, and the stars above the volcano begin to turn red.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 42,
@@ -753,7 +794,8 @@
     "advantage": "Magma Serpent gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Magma Serpent is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The ember imp steals a coal to keep a cold nest warm."
+    "story": "[5/10 · Ember Abyss] The ember imp steals a coal to keep a cold nest warm.",
+    "trait_effect": "fury"
   },
   {
     "level": 43,
@@ -771,7 +813,8 @@
     "advantage": "Ashen Brute gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Ashen Brute is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] A magma serpent coils around a bridge, protecting the only path away from the eruption."
+    "story": "[5/10 · Ember Abyss] A magma serpent coils around a bridge, protecting the only path away from the eruption.",
+    "trait_effect": "swift"
   },
   {
     "level": 44,
@@ -789,7 +832,8 @@
     "advantage": "Flame Revenant gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Flame Revenant is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The ash brute carries a melted crown and calls it the last gift from its queen."
+    "story": "[5/10 · Ember Abyss] The ash brute carries a melted crown and calls it the last gift from its queen.",
+    "trait_effect": "armored"
   },
   {
     "level": 45,
@@ -807,7 +851,8 @@
     "advantage": "Lava Warden gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Lava Warden is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The flame revenant recognizes the blue spark and bows before attacking."
+    "story": "[5/10 · Ember Abyss] The flame revenant recognizes the blue spark and bows before attacking.",
+    "trait_effect": "drain"
   },
   {
     "level": 46,
@@ -825,7 +870,8 @@
     "advantage": "Inferno Witch gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Inferno Witch is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The lava warden has held the gate shut for centuries, keeping a sleeping fire from waking."
+    "story": "[5/10 · Ember Abyss] The lava warden has held the gate shut for centuries, keeping a sleeping fire from waking.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 47,
@@ -843,7 +889,8 @@
     "advantage": "Obsidian Behemoth gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Obsidian Behemoth is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The inferno witch offers to extinguish the volcano, but the price is the memory of your first victory."
+    "story": "[5/10 · Ember Abyss] The inferno witch offers to extinguish the volcano, but the price is the memory of your first victory.",
+    "trait_effect": "fury"
   },
   {
     "level": 48,
@@ -861,7 +908,8 @@
     "advantage": "Caldera Tyrant gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Caldera Tyrant is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The obsidian behemoth is made from the broken armor of guardians who failed before you."
+    "story": "[5/10 · Ember Abyss] The obsidian behemoth is made from the broken armor of guardians who failed before you.",
+    "trait_effect": "swift"
   },
   {
     "level": 49,
@@ -879,7 +927,8 @@
     "advantage": "Obsidian Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Obsidian Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The caldera tyrant reveals that each seal is also a lock on the world's heart."
+    "story": "[5/10 · Ember Abyss] The caldera tyrant reveals that each seal is also a lock on the world's heart.",
+    "trait_effect": "armored"
   },
   {
     "level": 50,
@@ -897,7 +946,8 @@
     "advantage": "World Destroyer Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "World Destroyer Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The fifth seal breaks. A warm voice from inside the fire calls you by a name you have never heard."
+    "story": "[5/10 · Ember Abyss] The fifth seal breaks. A warm voice from inside the fire calls you by a name you have never heard.",
+    "trait_effect": "drain"
   },
   {
     "level": 51,
@@ -915,7 +965,8 @@
     "advantage": "Icebound Stag gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Icebound Stag is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The snow begins falling upward, drawing every footprint toward the highest peak."
+    "story": "[6/10 · Frostfang Peaks] The snow begins falling upward, drawing every footprint toward the highest peak.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 52,
@@ -933,7 +984,8 @@
     "advantage": "Snow Wraith gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Snow Wraith is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] A frostling keeps a tiny frozen flower alive inside its chest."
+    "story": "[6/10 · Frostfang Peaks] A frostling keeps a tiny frozen flower alive inside its chest.",
+    "trait_effect": "fury"
   },
   {
     "level": 53,
@@ -951,7 +1003,8 @@
     "advantage": "Glacier Troll gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Glacier Troll is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The icebound stag leads lost travelers to shelter, even after the blizzard blinds it."
+    "story": "[6/10 · Frostfang Peaks] The icebound stag leads lost travelers to shelter, even after the blizzard blinds it.",
+    "trait_effect": "swift"
   },
   {
     "level": 54,
@@ -969,7 +1022,8 @@
     "advantage": "Rimefang gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Rimefang is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] A snow wraith preserves the last winter song of a kingdom erased by the thaw."
+    "story": "[6/10 · Frostfang Peaks] A snow wraith preserves the last winter song of a kingdom erased by the thaw.",
+    "trait_effect": "armored"
   },
   {
     "level": 55,
@@ -987,7 +1041,8 @@
     "advantage": "Whiteout Harpy gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Whiteout Harpy is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The glacier troll carries a cracked mirror that shows the world before the corruption."
+    "story": "[6/10 · Frostfang Peaks] The glacier troll carries a cracked mirror that shows the world before the corruption.",
+    "trait_effect": "drain"
   },
   {
     "level": 56,
@@ -1005,7 +1060,8 @@
     "advantage": "Frost Revenant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Frost Revenant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The whiteout harpy guards a nest of eggs that will hatch only when the sky is healed."
+    "story": "[6/10 · Frostfang Peaks] The whiteout harpy guards a nest of eggs that will hatch only when the sky is healed.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 57,
@@ -1023,7 +1079,8 @@
     "advantage": "Permafrost Giant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Permafrost Giant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The frost revenant remembers the face of the one who sealed the mountain gates."
+    "story": "[6/10 · Frostfang Peaks] The frost revenant remembers the face of the one who sealed the mountain gates.",
+    "trait_effect": "fury"
   },
   {
     "level": 58,
@@ -1041,7 +1098,8 @@
     "advantage": "Winter'S Maw gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Winter'S Maw is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The permafrost giant has been holding back an avalanche with its own frozen body."
+    "story": "[6/10 · Frostfang Peaks] The permafrost giant has been holding back an avalanche with its own frozen body.",
+    "trait_effect": "swift"
   },
   {
     "level": 59,
@@ -1059,7 +1117,8 @@
     "advantage": "Astral Wyrm gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Astral Wyrm is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] Winter's Maw asks you to end its endless watch; it has guarded the sixth seal for too long."
+    "story": "[6/10 · Frostfang Peaks] Winter's Maw asks you to end its endless watch; it has guarded the sixth seal for too long.",
+    "trait_effect": "armored"
   },
   {
     "level": 60,
@@ -1077,7 +1136,8 @@
     "advantage": "Celestial Dragon God gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Celestial Dragon God is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The sixth seal opens. Under the ice, a heartbeat answers yours in perfect rhythm."
+    "story": "[6/10 · Frostfang Peaks] The sixth seal opens. Under the ice, a heartbeat answers yours in perfect rhythm.",
+    "trait_effect": "drain"
   },
   {
     "level": 61,
@@ -1095,7 +1155,8 @@
     "advantage": "Rift Stalker gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Stalker is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The Primordial Rift does not lead to another place; it leads to the moment before places existed."
+    "story": "[7/10 · Primordial Rift] The Primordial Rift does not lead to another place; it leads to the moment before places existed.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 62,
@@ -1113,7 +1174,8 @@
     "advantage": "Abyssal Hound gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Hound is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] A voidling follows you without a shadow, repeating the words you have not yet spoken."
+    "story": "[7/10 · Primordial Rift] A voidling follows you without a shadow, repeating the words you have not yet spoken.",
+    "trait_effect": "fury"
   },
   {
     "level": 63,
@@ -1131,7 +1193,8 @@
     "advantage": "Null Siren gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Null Siren is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The rift stalker appears only in reflections, always standing closer than before."
+    "story": "[7/10 · Primordial Rift] The rift stalker appears only in reflections, always standing closer than before.",
+    "trait_effect": "swift"
   },
   {
     "level": 64,
@@ -1149,7 +1212,8 @@
     "advantage": "Starved Horror gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Starved Horror is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The abyssal hound guards a path made from abandoned possibilities."
+    "story": "[7/10 · Primordial Rift] The abyssal hound guards a path made from abandoned possibilities.",
+    "trait_effect": "armored"
   },
   {
     "level": 65,
@@ -1167,7 +1231,8 @@
     "advantage": "Eclipse Knight gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Eclipse Knight is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The null siren sings of a world where none of the monsters were ever born."
+    "story": "[7/10 · Primordial Rift] The null siren sings of a world where none of the monsters were ever born.",
+    "trait_effect": "drain"
   },
   {
     "level": 66,
@@ -1185,7 +1250,8 @@
     "advantage": "Void Devourer gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Void Devourer is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The starved horror wears the faces of creatures you saved, asking why you left them behind."
+    "story": "[7/10 · Primordial Rift] The starved horror wears the faces of creatures you saved, asking why you left them behind.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 67,
@@ -1203,7 +1269,8 @@
     "advantage": "Rift Colossus gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Colossus is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The eclipse knight challenges you to prove that strength can protect rather than consume."
+    "story": "[7/10 · Primordial Rift] The eclipse knight challenges you to prove that strength can protect rather than consume.",
+    "trait_effect": "fury"
   },
   {
     "level": 68,
@@ -1221,7 +1288,8 @@
     "advantage": "Abyss Monarch gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyss Monarch is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The void devourer swallows the light of the seventh seal and discovers it cannot digest hope."
+    "story": "[7/10 · Primordial Rift] The void devourer swallows the light of the seventh seal and discovers it cannot digest hope.",
+    "trait_effect": "swift"
   },
   {
     "level": 69,
@@ -1239,7 +1307,8 @@
     "advantage": "Abyssal Deity gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Deity is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The abyss monarch reveals that the corruption is a wound, not a weapon."
+    "story": "[7/10 · Primordial Rift] The abyss monarch reveals that the corruption is a wound, not a weapon.",
+    "trait_effect": "armored"
   },
   {
     "level": 70,
@@ -1257,7 +1326,8 @@
     "advantage": "God Of Destruction gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "God Of Destruction is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The seventh seal opens. For the first time, the darkness sounds afraid."
+    "story": "[7/10 · Primordial Rift] The seventh seal opens. For the first time, the darkness sounds afraid.",
+    "trait_effect": "drain"
   },
   {
     "level": 71,
@@ -1275,7 +1345,8 @@
     "advantage": "Astral Chimera gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Astral Chimera is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The Celestial Ruins drift above the world, connected by bridges made of forgotten wishes."
+    "story": "[8/10 · Celestial Ruins] The Celestial Ruins drift above the world, connected by bridges made of forgotten wishes.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 72,
@@ -1293,7 +1364,8 @@
     "advantage": "Comet Wyrm gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Comet Wyrm is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] A fallen seraph hides a broken wing beneath a cloak woven from starlight."
+    "story": "[8/10 · Celestial Ruins] A fallen seraph hides a broken wing beneath a cloak woven from starlight.",
+    "trait_effect": "fury"
   },
   {
     "level": 73,
@@ -1311,7 +1383,8 @@
     "advantage": "Nebula Witch gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Nebula Witch is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The astral chimera carries three memories that belong to the same person."
+    "story": "[8/10 · Celestial Ruins] The astral chimera carries three memories that belong to the same person.",
+    "trait_effect": "swift"
   },
   {
     "level": 74,
@@ -1329,7 +1402,8 @@
     "advantage": "Star Eater gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Star Eater is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The comet wyrm draws a trail across the sky, marking the route to the first dawn."
+    "story": "[8/10 · Celestial Ruins] The comet wyrm draws a trail across the sky, marking the route to the first dawn.",
+    "trait_effect": "armored"
   },
   {
     "level": 75,
@@ -1347,7 +1421,8 @@
     "advantage": "Cosmic Behemoth gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Cosmic Behemoth is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The nebula witch has mapped every possible ending and crossed out the ones where you survive."
+    "story": "[8/10 · Celestial Ruins] The nebula witch has mapped every possible ending and crossed out the ones where you survive.",
+    "trait_effect": "drain"
   },
   {
     "level": 76,
@@ -1365,7 +1440,8 @@
     "advantage": "Astral Reaper gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Astral Reaper is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The star eater consumes constellations to keep a sleeping world from waking too soon."
+    "story": "[8/10 · Celestial Ruins] The star eater consumes constellations to keep a sleeping world from waking too soon.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 77,
@@ -1383,7 +1459,8 @@
     "advantage": "Nova Titan gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Nova Titan is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The cosmic behemoth is chained by promises made by heroes whose names have been erased."
+    "story": "[8/10 · Celestial Ruins] The cosmic behemoth is chained by promises made by heroes whose names have been erased.",
+    "trait_effect": "fury"
   },
   {
     "level": 78,
@@ -1401,7 +1478,8 @@
     "advantage": "Eternity Maw gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Eternity Maw is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The astral reaper offers to trade its immortality for one more chance to see the sunrise."
+    "story": "[8/10 · Celestial Ruins] The astral reaper offers to trade its immortality for one more chance to see the sunrise.",
+    "trait_effect": "swift"
   },
   {
     "level": 79,
@@ -1419,7 +1497,8 @@
     "advantage": "Void Dragon gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Void Dragon is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] Eternity's Maw speaks with the voice of every guardian you have defeated."
+    "story": "[8/10 · Celestial Ruins] Eternity's Maw speaks with the voice of every guardian you have defeated.",
+    "trait_effect": "armored"
   },
   {
     "level": 80,
@@ -1437,7 +1516,8 @@
     "advantage": "Primordial Dragon God gains an edge in Celestial Ruins terrain and against unprepared foes.",
     "disadvantage": "Primordial Dragon God is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
-    "story": "[8/10 · Celestial Ruins] The eighth seal breaks. The stars rearrange into a portrait of the one who created the seals."
+    "story": "[8/10 · Celestial Ruins] The eighth seal breaks. The stars rearrange into a portrait of the one who created the seals.",
+    "trait_effect": "drain"
   },
   {
     "level": 81,
@@ -1455,7 +1535,8 @@
     "advantage": "Doom Herald gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Doom Herald is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] Time fractures around the Eternal Hour, and yesterday's rain falls from tomorrow's clouds."
+    "story": "[9/10 · Eternal Hour] Time fractures around the Eternal Hour, and yesterday's rain falls from tomorrow's clouds.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 82,
@@ -1473,7 +1554,8 @@
     "advantage": "Eternal Shade gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Shade is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The time wraith appears as a younger version of a monster you once spared."
+    "story": "[9/10 · Eternal Hour] The time wraith appears as a younger version of a monster you once spared.",
+    "trait_effect": "fury"
   },
   {
     "level": 83,
@@ -1491,7 +1573,8 @@
     "advantage": "Fate Breaker gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Fate Breaker is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The doom herald announces a defeat that has not happened, then begs you to change it."
+    "story": "[9/10 · Eternal Hour] The doom herald announces a defeat that has not happened, then begs you to change it.",
+    "trait_effect": "swift"
   },
   {
     "level": 84,
@@ -1509,7 +1592,8 @@
     "advantage": "Chrono Hydra gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Chrono Hydra is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The eternal shade steals seconds from your life to replay a forgotten conversation."
+    "story": "[9/10 · Eternal Hour] The eternal shade steals seconds from your life to replay a forgotten conversation.",
+    "trait_effect": "armored"
   },
   {
     "level": 85,
@@ -1527,7 +1611,8 @@
     "advantage": "Oblivion Knight gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Oblivion Knight is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The fate breaker cuts the thread connecting each monster to the corruption."
+    "story": "[9/10 · Eternal Hour] The fate breaker cuts the thread connecting each monster to the corruption.",
+    "trait_effect": "drain"
   },
   {
     "level": 86,
@@ -1545,7 +1630,8 @@
     "advantage": "Ruin Emperor gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Ruin Emperor is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The chrono hydra grows a new head for every future it has already witnessed."
+    "story": "[9/10 · Eternal Hour] The chrono hydra grows a new head for every future it has already witnessed.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 87,
@@ -1563,7 +1649,8 @@
     "advantage": "Endless Devourer gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Endless Devourer is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The oblivion knight remembers a timeline where you became the final enemy."
+    "story": "[9/10 · Eternal Hour] The oblivion knight remembers a timeline where you became the final enemy.",
+    "trait_effect": "fury"
   },
   {
     "level": 88,
@@ -1581,7 +1668,8 @@
     "advantage": "Eternal Sovereign gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Sovereign is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The ruin emperor has ruled a thousand endings and fears this one most of all."
+    "story": "[9/10 · Eternal Hour] The ruin emperor has ruled a thousand endings and fears this one most of all.",
+    "trait_effect": "swift"
   },
   {
     "level": 89,
@@ -1599,7 +1687,8 @@
     "advantage": "Eternal Tyrant gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Tyrant is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The endless devourer reveals that every loop began with a single act of mercy."
+    "story": "[9/10 · Eternal Hour] The endless devourer reveals that every loop began with a single act of mercy.",
+    "trait_effect": "armored"
   },
   {
     "level": 90,
@@ -1617,7 +1706,8 @@
     "advantage": "Eternal Overlord gains an edge in Eternal Hour terrain and against unprepared foes.",
     "disadvantage": "Eternal Overlord is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
-    "story": "[9/10 · Eternal Hour] The ninth seal opens. Time stops, and every creature you met turns toward the same distant light."
+    "story": "[9/10 · Eternal Hour] The ninth seal opens. Time stops, and every creature you met turns toward the same distant light.",
+    "trait_effect": "drain"
   },
   {
     "level": 91,
@@ -1635,7 +1725,8 @@
     "advantage": "Worldroot Horror gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Worldroot Horror is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The Origin Realm is silent; even the wind waits for the first word to be spoken."
+    "story": "[10/10 · Origin Realm] The Origin Realm is silent; even the wind waits for the first word to be spoken.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 92,
@@ -1653,7 +1744,8 @@
     "advantage": "Firstborn Titan gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Firstborn Titan is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The origin spark recognizes the tiny blue light from the meadow and returns it to your hand."
+    "story": "[10/10 · Origin Realm] The origin spark recognizes the tiny blue light from the meadow and returns it to your hand.",
+    "trait_effect": "fury"
   },
   {
     "level": 93,
@@ -1671,7 +1763,8 @@
     "advantage": "Chaos Architect gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Chaos Architect is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The worldroot horror is made of every path the world refused to take."
+    "story": "[10/10 · Origin Realm] The worldroot horror is made of every path the world refused to take.",
+    "trait_effect": "swift"
   },
   {
     "level": 94,
@@ -1689,7 +1782,8 @@
     "advantage": "Genesis Eater gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Genesis Eater is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The firstborn titan kneels, admitting that it was built to protect the creator from loneliness."
+    "story": "[10/10 · Origin Realm] The firstborn titan kneels, admitting that it was built to protect the creator from loneliness.",
+    "trait_effect": "armored"
   },
   {
     "level": 95,
@@ -1707,7 +1801,8 @@
     "advantage": "Omega Seraph gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Omega Seraph is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The chaos architect reveals the seals were made to hold back a grief too large for the world."
+    "story": "[10/10 · Origin Realm] The chaos architect reveals the seals were made to hold back a grief too large for the world.",
+    "trait_effect": "drain"
   },
   {
     "level": 96,
@@ -1725,7 +1820,8 @@
     "advantage": "Reality Shatterer gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Reality Shatterer is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The genesis eater consumes the last false memory and exposes the truth beneath the story."
+    "story": "[10/10 · Origin Realm] The genesis eater consumes the last false memory and exposes the truth beneath the story.",
+    "trait_effect": "regenerate"
   },
   {
     "level": 97,
@@ -1743,7 +1839,8 @@
     "advantage": "Apex Behemoth gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "Apex Behemoth is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The omega seraph offers its wings to mend the sky, knowing it will never fly again."
+    "story": "[10/10 · Origin Realm] The omega seraph offers its wings to mend the sky, knowing it will never fly again.",
+    "trait_effect": "fury"
   },
   {
     "level": 98,
@@ -1761,7 +1858,8 @@
     "advantage": "The Void Emperor gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Void Emperor is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The reality shatterer breaks the final barrier and shows you the world before fear existed."
+    "story": "[10/10 · Origin Realm] The reality shatterer breaks the final barrier and shows you the world before fear existed.",
+    "trait_effect": "swift"
   },
   {
     "level": 99,
@@ -1779,7 +1877,8 @@
     "advantage": "The Last Silence gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Last Silence is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The apex behemoth falls, but instead of vanishing it becomes a bridge toward the final throne."
+    "story": "[10/10 · Origin Realm] The apex behemoth falls, but instead of vanishing it becomes a bridge toward the final throne.",
+    "trait_effect": "armored"
   },
   {
     "level": 100,
@@ -1797,6 +1896,7 @@
     "advantage": "The Alpha God gains an edge in Origin Realm terrain and against unprepared foes.",
     "disadvantage": "The Alpha God is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
-    "story": "[10/10 · Origin Realm] The Alpha God awakens. Every creature was a fragment of its dream, and the last battle will decide whether that dream ends or begins again."
+    "story": "[10/10 · Origin Realm] The Alpha God awakens. Every creature was a fragment of its dream, and the last battle will decide whether that dream ends or begins again.",
+    "trait_effect": "drain"
   }
 ]
