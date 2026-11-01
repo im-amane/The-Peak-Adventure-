@@ -63,6 +63,7 @@
   const worldNames = ["Whispering Meadow","Ashen Desert","Stormglass Highlands","Hollow Kingdom","Ember Abyss","Frostfang Peaks","Primordial Rift","Celestial Ruins","Eternal Hour","Origin Realm"];
   let gameState = null;
   let sceneRef = null;
+  let pendingSceneEffects = [];
   const pressedDirections = new Set();
   let nearMonster = false;
   let nearNpc = false;
@@ -132,21 +133,25 @@
     } catch (_) { /* Audio is optional; gameplay must never depend on it. */ }
   }
 
+  function flushSceneEffects() {
+    if(!sceneRef || !sceneRef.hero || !pendingSceneEffects.length)return;
+    const effects=pendingSceneEffects.splice(0);
+    effects.forEach(effect=>{
+      if(effect==="levelup"&&sceneRef.playLevelUpAnimation)sceneRef.playLevelUpAnimation();
+      if(effect==="death"&&sceneRef.playDeathAnimation)sceneRef.playDeathAnimation();
+      if(effect==="respawn"&&sceneRef.playRespawnAnimation)sceneRef.playRespawnAnimation();
+    });
+  }
+
   function applyState(data, message) {
     const previousRegion = gameState ? gameState.region : null;
     const previousMonster = gameState ? gameState.monster.level : null;
     const previousLevel = gameState ? gameState.level : null;
     const previousHp = gameState ? gameState.hp : null;
     gameState = data;
-    if(previousLevel !== null && data.level > previousLevel && sceneRef && sceneRef.playLevelUpAnimation){
-      sceneRef.playLevelUpAnimation();
-    }
-    if(previousHp !== null && previousHp > 0 && data.hp <= 0 && sceneRef && sceneRef.playDeathAnimation){
-      sceneRef.playDeathAnimation();
-    }
-    if(previousHp !== null && previousHp <= 0 && data.hp > 0 && sceneRef && sceneRef.playRespawnAnimation){
-      sceneRef.playRespawnAnimation();
-    }
+    if(previousLevel !== null && data.level > previousLevel)pendingSceneEffects.push("levelup");
+    if(previousHp !== null && previousHp > 0 && data.hp <= 0)pendingSceneEffects.push("death");
+    if(previousHp !== null && previousHp <= 0 && data.hp > 0)pendingSceneEffects.push("respawn");
     ui.name.textContent = data.first_name || "Adventurer";
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
     ui.level.textContent = "Lv. " + data.level;
@@ -232,6 +237,8 @@
     ui.encounter.textContent = data.battle_active ? "⚔️ Battle in progress" : nearMonster ? "⚔️ Challenge Monster" : "⚔️ Find the monster";
     if (sceneRef && previousRegion && (previousRegion !== data.region || previousMonster !== data.monster.level)) {
       sceneRef.scene.restart();
+    } else {
+      flushSceneEffects();
     }
   }
 
@@ -947,6 +954,7 @@
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
       this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
+      if(pendingSceneEffects.length)this.time.delayedCall(80,flushSceneEffects);
       this.input.on("pointerdown",pointer=>{
         if(gameState&&gameState.battle_active||requestInFlight)return;
         if(nearMonster){this.challenge();return;}
