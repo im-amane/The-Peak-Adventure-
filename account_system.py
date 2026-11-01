@@ -71,6 +71,9 @@ async def delete_player_account(db,user_id):
                 await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
     await db.execute("DELETE FROM guild_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
     await db.execute("DELETE FROM guild_announcements WHERE author_id=?",(user_id,))
+    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='guild_chat_messages'")
+    if await cur.fetchone():
+        await db.execute("DELETE FROM guild_chat_messages WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM guild_raid_contributions WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM guild_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id))
