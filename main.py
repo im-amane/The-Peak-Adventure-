@@ -23,8 +23,8 @@ from aiogram.types import WebAppInfo
 
 from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
-from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, search_players, send_friend_request
-from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
+from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
+from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
@@ -3128,6 +3128,16 @@ async def miniapp_state(user: dict):
 
     friend_rows = await list_friends(db, user_id)
     social_friends = [{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"]} for row in friend_rows]
+    friend_requests = [
+        {"request_id":row["request_id"],"requester_id":row["requester_id"],
+         "username":row["username"] or "Adventurer","level":row["level"]}
+        for row in await list_pending_friend_requests(db, user_id)
+    ]
+    party_invites = [
+        {"invite_id":row["invite_id"],"party_id":row["party_id"],"inviter_id":row["inviter_id"],
+         "username":row["username"] or "Adventurer","level":row["level"]}
+        for row in await list_pending_party_invites(db, user_id)
+    ]
     social_party = None
     try:
         party_info, party_members = await get_party_info(db, user_id)
@@ -3170,7 +3180,7 @@ async def miniapp_state(user: dict):
         "hero_class": p["hero_class"],
         "appearance": appearance,
         "quests": quest_state,
-        "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
+        "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
@@ -3482,6 +3492,91 @@ async def api_story(request: web.Request):
     return web.json_response({"message":message,"result":result,"state":state})
 
 
+async def api_social(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 4096:
+        return web.json_response({"error": "Social request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Social payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str):
+        return web.json_response({"error": "A social action is required."}, status=400)
+    action = payload["action"]
+    user_id = user["id"]
+    try:
+        async with db_lock:
+            async with player_locks[user_id]:
+                player = await get_player(user_id, user.get("username") or user.get("first_name"))
+                if action == "friend_search":
+                    if set(payload) != {"action", "query"} or not isinstance(payload["query"], str):
+                        return web.json_response({"error": "A player search query is required."}, status=400)
+                    rows = await search_players(db, user_id, payload["query"], limit=10)
+                    result = {"players": [{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"]} for row in rows]}
+                elif action == "friend_request":
+                    if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int:
+                        return web.json_response({"error": "A valid target_id is required."}, status=400)
+                    target_id = payload["target_id"]
+                    cur = await db.execute(
+                        """SELECT p.user_id,COALESCE(s.profile_visibility,'public') AS visibility
+                           FROM players p LEFT JOIN player_settings s ON s.user_id=p.user_id
+                           WHERE p.user_id=?""", (target_id,),
+                    )
+                    target = await cur.fetchone()
+                    if not target or target["visibility"] != "public":
+                        raise FriendError("That player's profile is not publicly available.")
+                    result = {"request_id": await send_friend_request(db, user_id, target_id)}
+                elif action in {"friend_accept", "friend_decline"}:
+                    if set(payload) != {"action", "request_id"} or type(payload["request_id"]) is not int:
+                        return web.json_response({"error": "A valid request_id is required."}, status=400)
+                    await respond_to_friend_request(db, payload["request_id"], user_id, action == "friend_accept")
+                    result = {"accepted": action == "friend_accept"}
+                elif action == "friend_remove":
+                    if set(payload) != {"action", "friend_id"} or type(payload["friend_id"]) is not int:
+                        return web.json_response({"error": "A valid friend_id is required."}, status=400)
+                    await remove_friend(db, user_id, payload["friend_id"])
+                    result = {"removed": True}
+                elif action == "party_create":
+                    if set(payload) != {"action"}:
+                        return web.json_response({"error": "Unexpected party creation fields."}, status=400)
+                    if not player["class_selected"]:
+                        raise PartyError("Choose a hero class before creating a party.")
+                    result = {"party_id": await create_party(db, user_id)}
+                elif action == "party_invite":
+                    if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int:
+                        return web.json_response({"error": "A valid target_id is required."}, status=400)
+                    party, _ = await get_party_info(db, user_id)
+                    target = await get_player(payload["target_id"])
+                    if not target["class_selected"]:
+                        raise PartyError("That player must choose a hero class first.")
+                    cur = await db.execute(
+                        """SELECT 1 FROM friend_requests
+                           WHERE user_low=MIN(?,?) AND user_high=MAX(?,?) AND status='accepted'""",
+                        (user_id,payload["target_id"],user_id,payload["target_id"]),
+                    )
+                    if not await cur.fetchone():
+                        raise PartyError("You can invite accepted friends to your party.")
+                    result = {"invite_id": await invite_to_party(db, party["party_id"], user_id, payload["target_id"])}
+                elif action in {"party_accept", "party_decline"}:
+                    if set(payload) != {"action", "invite_id"} or type(payload["invite_id"]) is not int:
+                        return web.json_response({"error": "A valid invite_id is required."}, status=400)
+                    await respond_to_party_invite(db, payload["invite_id"], user_id, action == "party_accept")
+                    result = {"accepted": action == "party_accept"}
+                elif action == "party_leave":
+                    if set(payload) != {"action"}:
+                        return web.json_response({"error": "Unexpected party leave fields."}, status=400)
+                    result = {"new_leader_id": await leave_party(db, user_id)}
+                else:
+                    return web.json_response({"error": "Unsupported social action."}, status=400)
+                state = await miniapp_state(user)
+    except (FriendError, PartyError) as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({"message": "Social action completed.", "result": result, "state": state})
+
+
 async def api_settings(request: web.Request):
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
@@ -3768,6 +3863,7 @@ async def start_web_server():
     app.router.add_post("/api/daily-mission/claim", api_daily_mission_claim)
     app.router.add_post("/api/weekly-quest/claim", api_weekly_quest_claim)
     app.router.add_post("/api/world", api_world)
+    app.router.add_post("/api/social", api_social)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
