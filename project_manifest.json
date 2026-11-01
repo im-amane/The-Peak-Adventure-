@@ -571,7 +571,7 @@
         },
         {
           "name": "Dedicated inventory/equipment/quest screens",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Friends, party, guild and trading screens",
@@ -790,16 +790,16 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 109,
+    "complete_items": 110,
     "partial_items": 12,
-    "pending_items": 49,
+    "pending_items": 48,
     "fully_implemented_percent": 64,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 109,
+    "complete": 110,
     "partial": 12,
-    "pending": 49,
+    "pending": 48,
     "total": 170,
     "percentage": 64
   }
