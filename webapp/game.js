@@ -514,9 +514,25 @@
         " · Confirmations: "+(trade.my_confirmed?"✅":"⌛")+" / "+(trade.their_confirmed?"✅":"⌛")
       ));
       openTrades.forEach(trade=>{
-        const note=document.createElement("p");note.className="small";
-        note.textContent="Edit offers in the Telegram bot with /offer "+trade.trade_id+" COINS POTIONS, then confirm with /confirmtrade "+trade.trade_id+".";
-        card.appendChild(note);
+        const form=document.createElement("form");form.className="social-trade-offer-form";
+        const coinsLabel=document.createElement("label");coinsLabel.textContent="Coins to offer";
+        const coinsInput=document.createElement("input");coinsInput.type="number";coinsInput.min="0";coinsInput.step="1";coinsInput.required=true;coinsInput.value=String(trade.my_coins);coinsInput.inputMode="numeric";
+        const potionsLabel=document.createElement("label");potionsLabel.textContent="Potions to offer";
+        const potionsInput=document.createElement("input");potionsInput.type="number";potionsInput.min="0";potionsInput.step="1";potionsInput.required=true;potionsInput.value=String(trade.my_potions);potionsInput.inputMode="numeric";
+        const save=document.createElement("button");save.type="submit";save.textContent="Save offer";
+        form.append(coinsLabel,coinsInput,potionsLabel,potionsInput,save);
+        form.addEventListener("submit",async event=>{
+          event.preventDefault();
+          const coins=Number(coinsInput.value),potions=Number(potionsInput.value);
+          if(!Number.isSafeInteger(coins)||coins<0||!Number.isSafeInteger(potions)||potions<0){
+            ui.status.textContent="Enter valid whole-number amounts for your trade offer.";return;
+          }
+          save.disabled=true;
+          try{await runSocialAction({action:"trade_offer",trade_id:trade.trade_id,coins,potions});}
+          catch(_){save.disabled=false;}
+        });
+        card.appendChild(form);
+        addAction(card,trade.my_confirmed?"Confirmed":"Confirm trade #"+trade.trade_id,"trade_confirm",{tradeId:trade.trade_id});
         addAction(card,"Cancel trade #"+trade.trade_id,"trade_cancel",{tradeId:trade.trade_id});
       });
     }
@@ -1379,7 +1395,7 @@
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
     if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
-    if(action==="trade_accept"||action==="trade_decline"||action==="trade_cancel")payload.trade_id=Number(button.dataset.tradeId);
+    if(action==="trade_accept"||action==="trade_decline"||action==="trade_cancel"||action==="trade_confirm")payload.trade_id=Number(button.dataset.tradeId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
   });
