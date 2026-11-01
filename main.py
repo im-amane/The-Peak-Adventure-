@@ -1104,10 +1104,50 @@ async def party_command(message: Message):
     action = args[1].lower() if len(args) > 1 else "info"
     user_id = message.from_user.id
     player = await get_player(user_id, message.from_user.username or message.from_user.full_name)
-    if action in {"create", "invite", "accept", "battle"} and not player["class_selected"]:
+    if action in {"create", "invite", "accept", "battle", "explore"} and not player["class_selected"]:
         await message.answer("Choose your hero class with /class before joining a party.")
         return
     try:
+
+        if action == "explore":
+            party, members = await get_party_info(db, user_id)
+            if party["leader_id"] != user_id:
+                raise PartyError("Only the party leader can start a shared exploration.")
+            world_id = await get_current_world(db, user_id, player["level"])
+            boss_level = world_id * 10
+            boss_defeated = False
+            if player["level"] >= boss_level and boss_level in BOSS_LEVELS:
+                cur = await db.execute(
+                    "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
+                    (user_id, boss_level),
+                )
+                boss_defeated = await cur.fetchone() is not None
+            monster_level = random.choice(world_encounter_levels(player["level"], world_id, boss_defeated))
+            monster = MONSTER_BY_LEVEL[monster_level]
+            try:
+                await consume_stamina(db, user_id, EXPLORE_COST)
+            except StaminaError as exc:
+                state = await get_stamina(db, user_id)
+                await message.answer(escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}.")
+                return
+            battle_id = await start_party_battle(
+                db, party["party_id"], user_id, monster_level, monster["name"],
+                monster["hp"] * max(2, len(members) * 2),
+            )
+            notice = (
+                f"🧭 <b>Party expedition #{battle_id}</b>\\n"
+                f"{escape(monster['name'])} · Lv.{monster_level} · World {world_id}\\n"
+                "The party has found a shared encounter. Use /party battle attack to fight."
+            )
+            await message.answer(notice)
+            for member in members:
+                if member["user_id"] == user_id:
+                    continue
+                try:
+                    await message.bot.send_message(member["user_id"], notice)
+                except Exception:
+                    pass
+            return
 
         if action.startswith("battle"):
             parts = (message.text or "").split()
