@@ -246,6 +246,51 @@ class GameRulesTests(unittest.TestCase):
             with self.subTest(boss=boss, hp=hp, max_hp=max_hp), self.assertRaises(ValueError):
                 get_boss_phase(boss, hp, max_hp)
 
+    def test_shared_player_attack_applies_elemental_and_trait_modifiers(self):
+        from game_rules import resolve_player_attack
+
+        damage, effects = resolve_player_attack(
+            "attack", player_level=1, class_attack=8, weapon_attack=0,
+            monster_defense=6, class_element="Fire", monster_element="Nature",
+            monster_weakness="Fire", trait_effect="shield", next_turn=1,
+            random_bonus=5,
+        )
+        self.assertEqual(damage, 23)
+        self.assertEqual(effects, ("weakness", "shield"))
+
+    def test_shared_player_skill_and_potion_damage(self):
+        from game_rules import resolve_player_attack
+
+        skill_damage, effects = resolve_player_attack(
+            "skill", player_level=1, class_attack=8, weapon_attack=0,
+            monster_defense=6, class_element="Astral", monster_element="Nature",
+            monster_weakness="Fire", trait_effect="armored", next_turn=2,
+            random_bonus=0,
+        )
+        self.assertEqual(skill_damage, 95)
+        self.assertEqual(effects, ("armored",))
+        potion_damage, potion_effects = resolve_player_attack(
+            "potion", player_level=1, class_attack=8, weapon_attack=0,
+            monster_defense=6, class_element="Astral", monster_element="Nature",
+            monster_weakness="Fire", trait_effect="poison", next_turn=1,
+            random_bonus=0,
+        )
+        self.assertEqual((potion_damage, potion_effects), (0, ()))
+
+    def test_shared_player_attack_rejects_invalid_numeric_types(self):
+        from game_rules import resolve_player_attack
+
+        args = dict(
+            action="attack", player_level=1, class_attack=8, weapon_attack=0,
+            monster_defense=6, class_element="Fire", monster_element="Nature",
+            monster_weakness="Fire", trait_effect="armored", next_turn=1,
+            random_bonus=5,
+        )
+        with self.assertRaises(ValueError):
+            resolve_player_attack(**{**args, "player_level": True})
+        with self.assertRaises(ValueError):
+            resolve_player_attack(**{**args, "next_turn": 1.0})
+
     def test_shared_enemy_turn_resolution_applies_traits_and_returns_consistent_state(self):
         from game_rules import resolve_enemy_turn
 
