@@ -515,6 +515,21 @@
 
   function makeHero(scene, x, y, heroClass, appearance = {}) {
     const c = scene.add.container(x,y);
+    const makeLimb=(px,py,color,width,height)=>{
+      const limb=scene.add.container(px,py);
+      const shape=scene.add.graphics();
+      shape.fillStyle(color,1); shape.fillRoundedRect(-width/2,0,width,height,Math.min(5,width/2));
+      shape.lineStyle(2,0x172334,0.9); shape.strokeRoundedRect(-width/2,0,width,height,Math.min(5,width/2));
+      limb.add(shape); c.add(limb); return limb;
+    };
+    const limbColor={Knight:0x4d5b72,Mage:0x49375f,Archer:0x36563f,Berserker:0x6e332d}[heroClass]||0x344d68;
+    const limbs={
+      leftArm:makeLimb(-13,1,limbColor,8,19),
+      rightArm:makeLimb(13,1,limbColor,8,19),
+      leftLeg:makeLimb(-7,19,0x29313c,8,13),
+      rightLeg:makeLimb(7,19,0x29313c,8,13)
+    };
+    c.limbs=limbs;
     const g = scene.add.graphics();
     const cloak = {traveler:0x344d68,knight:0x596a86,mage:0x654b88,ranger:0x41684f}[appearance.outfit] || ({Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a);
     const skin = {fair:0xf1d2b5,warm:0xe2b98d,tan:0xb97850,deep:0x70442f}[appearance.skin] || 0xe2b98d;
@@ -708,6 +723,19 @@
       if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
       const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
       if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
+      const walking=Boolean(dx||dy);
+      const gait=walking?Math.sin(this.time.now/75)*0.48:Math.sin(this.time.now/430)*0.055;
+      if(this.hero.limbs){
+        this.hero.limbs.leftArm.rotation=-gait;
+        this.hero.limbs.rightArm.rotation=gait;
+        this.hero.limbs.leftLeg.rotation=gait*0.72;
+        this.hero.limbs.rightLeg.rotation=-gait*0.72;
+      }
+      if(this.npc && this.npc.limbs){
+        const idle=Math.sin(this.time.now/520)*0.045;
+        this.npc.limbs.leftArm.rotation=idle;
+        this.npc.limbs.rightArm.rotation=-idle;
+      }
       let closest=null,closestDistance=Infinity;
       this.monsters.forEach(entry=>{
         const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,entry.sprite.x,entry.sprite.y);
