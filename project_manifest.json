@@ -146,19 +146,19 @@
         },
         {
           "name": "Race selection",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Character appearance editor",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Hair, face and body customization",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Armor and outfit visuals",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Weapon appearance visuals",
@@ -567,7 +567,7 @@
         },
         {
           "name": "Character customization screen",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Dedicated inventory/equipment/quest screens",
@@ -790,17 +790,17 @@
   ],
   "progress_summary": {
     "total_items": 170,
-    "complete_items": 105,
-    "partial_items": 8,
-    "pending_items": 57,
-    "fully_implemented_percent": 61,
+    "complete_items": 108,
+    "partial_items": 10,
+    "pending_items": 52,
+    "fully_implemented_percent": 63,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 105,
-    "partial": 8,
-    "pending": 57,
+    "complete": 108,
+    "partial": 10,
+    "pending": 52,
     "total": 170,
-    "percentage": 61
+    "percentage": 63
   }
 }
