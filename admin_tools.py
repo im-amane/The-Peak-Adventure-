@@ -91,6 +91,7 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "materials":("SELECT * FROM player_materials WHERE user_id=?",(user_id,)),
         "crafted_items":("SELECT * FROM crafted_items WHERE user_id=?",(user_id,)),
         "world_progress":("SELECT * FROM player_worlds WHERE user_id=?",(user_id,)),
+        "presence":("SELECT * FROM player_presence WHERE user_id=?",(user_id,)),
         "dungeon_runs":("SELECT * FROM dungeon_runs WHERE user_id=?",(user_id,)),
         "dungeon_rewards":("SELECT * FROM dungeon_rewards WHERE user_id=?",(user_id,)),
     }
