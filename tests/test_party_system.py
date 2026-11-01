@@ -11,6 +11,7 @@ from party_system import (
     invite_to_party,
     leave_party,
     respond_to_party_invite,
+    start_party_battle, attack_party_battle, get_party_battle, reward_party_battle,
 )
 
 
@@ -20,7 +21,8 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         self.db.row_factory = aiosqlite.Row
         await self.db.executescript("""
         CREATE TABLE players (
-          user_id INTEGER PRIMARY KEY, username TEXT, level INTEGER NOT NULL DEFAULT 1
+          user_id INTEGER PRIMARY KEY, username TEXT, level INTEGER NOT NULL DEFAULT 1,
+          xp INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0
         );
         INSERT INTO players(user_id,username,level) VALUES
           (101,'Ash',4),(202,'Mira',8),(303,'Rook',2),(404,'Vale',5),(505,'Nyx',3);
@@ -103,6 +105,55 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(PartyError, "no longer active"):
             await respond_to_party_invite(self.db, invite_id, 202, True)
 
+
+
+    async def test_party_leader_can_start_coop_battle(self):
+        party_id=await create_party(self.db,101)
+        battle_id=await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
+        self.assertGreater(battle_id,0)
+
+    async def test_only_party_leader_can_start_coop_battle(self):
+        party_id=await create_party(self.db,101)
+        invite=await invite_to_party(self.db,party_id,101,202)
+        await respond_to_party_invite(self.db,invite,202,True)
+        with self.assertRaises(PartyError):
+            await start_party_battle(self.db,party_id,202,10,"Root Warden",100)
+
+    async def test_party_member_can_attack_shared_boss(self):
+        party_id=await create_party(self.db,101)
+        invite=await invite_to_party(self.db,party_id,101,202)
+        await respond_to_party_invite(self.db,invite,202,True)
+        await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
+        result=await attack_party_battle(self.db,party_id,202,100)
+        self.assertEqual(result["status"],"won")
+        self.assertEqual(result["members"],[101,202])
+
+    async def test_nonmember_cannot_attack_coop_battle(self):
+        party_id=await create_party(self.db,101)
+        await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
+        with self.assertRaises(PartyError):
+            await attack_party_battle(self.db,party_id,202,10)
+
+    async def test_coop_reward_is_claimed_once_per_member(self):
+        party_id=await create_party(self.db,101)
+        invite=await invite_to_party(self.db,party_id,101,202)
+        await respond_to_party_invite(self.db,invite,202,True)
+        battle_id=await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
+        await attack_party_battle(self.db,party_id,101,100)
+        reward=await reward_party_battle(self.db,battle_id,101,50,100)
+        self.assertEqual(reward["coins"],50)
+        with self.assertRaises(PartyError):
+            await reward_party_battle(self.db,battle_id,101,50,100)
+        await reward_party_battle(self.db,battle_id,202,50,100)
+        cur=await self.db.execute("SELECT coins FROM players WHERE user_id=202")
+        self.assertEqual((await cur.fetchone())["coins"],50)
+
+    async def test_coop_attack_cooldown(self):
+        party_id=await create_party(self.db,101)
+        await start_party_battle(self.db,party_id,101,10,"Root Warden",1000)
+        await attack_party_battle(self.db,party_id,101,10)
+        with self.assertRaises(PartyError):
+            await attack_party_battle(self.db,party_id,101,10)
 
 if __name__ == "__main__":
     unittest.main()
