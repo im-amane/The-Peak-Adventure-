@@ -157,21 +157,35 @@ async def respond_to_party_invite(
 
 
 
-async def start_party_battle(db,party_id,user_id,monster_level,monster_name,monster_hp):
-    cur=await db.execute("SELECT leader_id FROM parties WHERE party_id=?",(party_id,))
-    party=await cur.fetchone()
-    if not party or party["leader_id"]!=user_id: raise PartyError("Only the party leader can start a co-op battle.")
-    if not isinstance(monster_level,int) or isinstance(monster_level,bool) or not 1<=monster_level<=100:
+async def start_party_battle(db, party_id, user_id, monster_level, monster_name, monster_hp):
+    if not _valid_id(party_id) or not _valid_id(user_id):
+        raise PartyError("Invalid party or player account.")
+    if not isinstance(monster_level, int) or isinstance(monster_level, bool) or not 1 <= monster_level <= 100:
         raise PartyError("Invalid co-op monster level.")
-    if not isinstance(monster_hp,int) or isinstance(monster_hp,bool) or not 1<=monster_hp<=10_000_000:
+    if not isinstance(monster_hp, int) or isinstance(monster_hp, bool) or not 1 <= monster_hp <= 10_000_000:
         raise PartyError("Invalid co-op monster health.")
-    cur=await db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'",(party_id,))
-    if await cur.fetchone(): raise PartyError("Your party already has an active co-op battle.")
-    cur=await db.execute("INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp) VALUES(?,?,?,?,?)",
-      (party_id,monster_level,str(monster_name)[:80],monster_hp,monster_hp))
-    await db.commit()
-    return int(cur.lastrowid)
-
+    clean_name = " ".join(str(monster_name or "").split())[:80]
+    if not clean_name:
+        raise PartyError("A monster name is required.")
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+        party = await cur.fetchone()
+        if not party or party["leader_id"] != user_id:
+            raise PartyError("Only the party leader can start a co-op battle.")
+        cur = await db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        if await cur.fetchone():
+            raise PartyError("Your party already has an active co-op battle.")
+        cur = await db.execute(
+            "INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp) VALUES(?,?,?,?,?)",
+            (party_id, monster_level, clean_name, monster_hp, monster_hp),
+        )
+        battle_id = int(cur.lastrowid)
+        await db.commit()
+        return battle_id
+    except Exception:
+        await db.rollback()
+        raise
 
 async def attack_party_battle(db,party_id,user_id,damage):
     if not isinstance(damage,int) or isinstance(damage,bool) or not 1<=damage<=10000:
