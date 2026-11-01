@@ -47,7 +47,7 @@ from moderation_system import ModerationError, ban_player, get_active_ban, init_
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
 from security_system import get_security_events, get_suspicious_players, init_security_tables, record_security_event
-from premium_system import PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase, get_premium_balance, get_premium_packages, init_premium_tables, make_invoice_payload, parse_invoice_payload
+from premium_system import PREMIUM_SHOP_ITEMS, PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase, get_premium_balance, get_premium_packages, init_premium_tables, make_invoice_payload, parse_invoice_payload
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 
