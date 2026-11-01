@@ -825,14 +825,15 @@ async def api_state(request: web.Request):
         "Eternal Hour", "Origin Realm",
     ]
     region_index = min(9, (p["level"] - 1) // 10)
-    monster_level = min(100, p["level"] + 1)
+    monster_level = p["level"]
     if p["level"] in BOSS_LEVELS:
         cur = await db.execute(
             "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
             (user_id, p["level"]),
         )
-        if not await cur.fetchone():
-            monster_level = p["level"]
+        boss_is_defeated = await cur.fetchone() is not None
+        if boss_is_defeated:
+            monster_level = p["level"] - 1 if p["level"] == 100 else p["level"] + 1
     monster = MONSTER_BY_LEVEL[monster_level]
     return web.json_response({
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
