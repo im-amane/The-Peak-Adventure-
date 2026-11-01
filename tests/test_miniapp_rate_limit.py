@@ -54,6 +54,14 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
         social_response = await self.call_middleware("/api/social")
         self.assertEqual(social_response.status, 200)
 
+    async def test_global_write_limit_still_applies_across_different_routes(self):
+        for path, count in (("/api/action", 15), ("/api/explore", 15), ("/api/social", 10)):
+            for _ in range(count):
+                response = await self.call_middleware(path)
+                self.assertEqual(response.status, 200)
+        blocked = await self.call_middleware("/api/world")
+        self.assertEqual(blocked.status, 429)
+
     async def test_repeated_blocked_requests_only_write_one_security_event_per_window(self):
         main.db = object()
         with patch("main.validate_init_data", return_value={"id": 987654321}):
