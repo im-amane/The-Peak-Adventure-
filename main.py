@@ -40,6 +40,7 @@ from db_backup import create_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
+from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
@@ -260,6 +261,7 @@ async def init_db():
     await init_stamina_tables(db)
     await init_report_tables(db)
     await init_weekly_tables(db)
+    await init_daily_mission_tables(db)
     await init_moderation_tables(db)
     await init_mana_tables(db)
 
@@ -646,6 +648,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
     await record_weekly_progress(db, user_id, "wins")
+    await record_daily_progress(db, user_id, "wins")
     if m["boss"]:
         await record_weekly_progress(db, user_id, "bosses")
     await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
@@ -2014,6 +2017,39 @@ async def account_deletion_callback(call: CallbackQuery):
         await call.message.edit_text(escape(str(exc)))
 
 
+@dp.message(Command("missions"))
+async def daily_missions_command(message: Message):
+    args = (message.text or "").split(maxsplit=2)
+    user_id = message.from_user.id
+    if len(args) >= 3 and args[1].lower() == "claim":
+        try:
+            reward = await claim_daily_mission(db, user_id, args[2].strip().lower())
+            await message.answer(
+                f"🎁 <b>{escape(reward['title'])}</b> reward claimed: "
+                f"+{reward['coins']} coins and +{reward['potions']} potions."
+            )
+        except DailyMissionError as exc:
+            await message.answer(escape(str(exc)))
+        return
+    try:
+        rows = await get_daily_missions(db, user_id)
+    except DailyMissionError as exc:
+        await message.answer(escape(str(exc)))
+        return
+    lines = ["📆 <b>Daily Missions</b> · Reset at 00:00 UTC"]
+    for mission in rows:
+        marker = "✅" if mission["claimed"] else ("🎁" if mission["completed"] else "🔹")
+        lines.append(
+            f"{marker} <b>{escape(mission['title'])}</b> · "
+            f"{mission['progress']}/{mission['target']}\\n"
+            f"{escape(mission['description'])}\\n"
+            f"Reward: {mission['coins']} coins · {mission['potions']} potions"
+        )
+        if mission["completed"] and not mission["claimed"]:
+            lines.append(f"Claim: /missions claim {mission['id']}")
+    await message.answer("\\n\\n".join(lines))
+
+
 @dp.message(Command("weekly"))
 async def weekly_command(message: Message):
     args=(message.text or "").split(maxsplit=2)
@@ -2384,6 +2420,7 @@ async def craft_command(message: Message):
     try:
         recipe = await craft_item(db, message.from_user.id, player["level"], args[1].strip().lower())
         await record_weekly_progress(db, message.from_user.id, "crafts")
+        await record_daily_progress(db, message.from_user.id, "crafts")
         stat = "+" + str(recipe["attack"]) + " ATK" if recipe["slot"] == "weapon" else "+" + str(recipe["defense"]) + " DEF"
         await message.answer("⚒️ Crafted <b>" + recipe["name"] + "</b> and equipped it. " + stat)
     except CraftingError as exc:
@@ -2515,6 +2552,7 @@ async def discover_command(message: Message):
     try:
         reward = await discover_world_landmark(db, message.from_user.id, player["level"], world_id)
         await record_weekly_progress(db, message.from_user.id, "landmarks")
+        await record_daily_progress(db, message.from_user.id, "landmarks")
         await message.answer("✨ <b>Landmark discovered!</b>\n" + escape(reward["landmark"]) + "\n🪙 +" + str(reward["coins"]) + " coins · 🧪 +" + str(reward["potions"]) + " potions.")
     except WorldError as exc:
         await message.answer(escape(str(exc)))
