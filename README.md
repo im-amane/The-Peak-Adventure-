@@ -165,3 +165,10 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Exploring costs 10 stamina; stamina regenerates by 1 point every five minutes.
 - Stamina persists in SQLite and is exposed to the Mini App state API.
 - Use `/stamina` to inspect current stamina and regeneration timing.
+
+
+## Weekly quests and player reports
+- Four weekly objectives rotate on the ISO calendar week (UTC): monster victories, boss defeats, crafting and landmark discoveries.
+- Weekly progress is saved per player and week; rewards can only be claimed once with `/weekly claim QUEST_ID`.
+- Use `/weekly` to view objectives and progress.
+- Players can submit a report with `/report PLAYER_ID reason`. Administrators can review reports with `/admin reports` and resolve them with `/admin resolve REPORT_ID reviewed|dismissed [note]`.
