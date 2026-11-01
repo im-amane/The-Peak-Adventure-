@@ -129,6 +129,9 @@ async def delete_player_account(db,user_id):
         ("security_events","user_id=?",(user_id,)),
         ("player_bans","user_id=?",(user_id,)),
         ("player_weekly_quests","user_id=?",(user_id,)),
+        ("player_daily_missions","user_id=?",(user_id,)),
+        ("player_monster_mastery","user_id=?",(user_id,)),
+        ("roaming_event_participants","user_id=?",(user_id,)),
         ("player_stamina","user_id=?",(user_id,)),
         ("player_mana","user_id=?",(user_id,)),
     ):
