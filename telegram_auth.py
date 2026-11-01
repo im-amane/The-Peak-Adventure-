@@ -8,8 +8,10 @@ from urllib.parse import parse_qsl
 
 
 def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> dict:
-    if not init_data or not bot_token:
+    if not isinstance(init_data, str) or not isinstance(bot_token, str) or not init_data or not bot_token:
         raise ValueError("Missing Telegram initData or bot token")
+    if type(max_age) is not int or max_age <= 0:
+        raise ValueError("max_age must be a positive integer")
     if len(init_data) > 8192:
         raise ValueError("Telegram initData is too large")
     try:
@@ -41,6 +43,7 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> 
     now = int(time.time())
     if auth_date > now + 60 or now - auth_date > max_age:
         raise ValueError("Telegram initData has expired")
-    if not isinstance(user, dict) or not isinstance(user.get("id"), int):
+    user_id = user.get("id") if isinstance(user, dict) else None
+    if type(user_id) is not int or user_id <= 0:
         raise ValueError("Telegram initData has no valid user")
     return user
