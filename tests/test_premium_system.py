@@ -106,6 +106,8 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
     async def test_charge_id_cannot_be_replayed_for_another_account(self):
         package = get_premium_packages()["spark"]
         await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-replay")
+        await self.db.execute("INSERT INTO players(user_id,potions) VALUES(202,0)")
+        await self.db.commit()
         with self.assertRaisesRegex(PremiumError, "different purchase"):
             await credit_premium_purchase(self.db, 202, "spark", package["stars"], "charge-replay")
         self.assertEqual(await get_premium_balance(self.db, 202), 0)
