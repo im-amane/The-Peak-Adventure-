@@ -18,6 +18,12 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO guild_members VALUES(?,?,?,CURRENT_TIMESTAMP)",(4,20,"leader"))
   await init_guild_features(self.db)
  async def asyncTearDown(self): await self.db.close()
+ async def test_pending_guild_invites_are_listed_for_target_only(self):
+  invite_id=await create_guild_invite(self.db,10,1,3)
+  rows=await list_pending_guild_invites(self.db,3)
+  self.assertEqual([row["invite_id"] for row in rows],[invite_id])
+  self.assertEqual(rows[0]["guild_name"],"Peak")
+  self.assertEqual(await list_pending_guild_invites(self.db,2),[])
  async def test_leader_can_invite_and_target_accepts(self):
   invite=await create_guild_invite(self.db,10,1,3)
   self.assertEqual(await respond_guild_invite(self.db,invite,3,True),10)
