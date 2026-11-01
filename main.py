@@ -25,6 +25,23 @@ MONSTERS = json.loads(Path(__file__).with_name("monsters.json").read_text(encodi
 validate_monster_catalogue(MONSTERS)
 MONSTER_BY_LEVEL = {m["level"]: m for m in MONSTERS}
 BOSS_LEVELS = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+HERO_CLASSES = {
+    "Knight": {"hp": 40, "attack": 8, "defense": 12, "speed": 0, "element": "Earth", "skill": "Shield Break"},
+    "Mage": {"hp": 0, "attack": 18, "defense": 0, "speed": 3, "element": "Astral", "skill": "Arcane Nova"},
+    "Archer": {"hp": 10, "attack": 12, "defense": 4, "speed": 10, "element": "Nature", "skill": "Piercing Volley"},
+    "Berserker": {"hp": 25, "attack": 22, "defense": -3, "speed": 4, "element": "Fire", "skill": "Rage Cleave"},
+}
+SHOP_ITEMS = {
+    "iron_sword": {"name": "Iron Sword", "type": "weapon", "cost": 40, "bonus": 8, "level": 2},
+    "steel_sword": {"name": "Steel Sword", "type": "weapon", "cost": 150, "bonus": 20, "level": 5},
+    "flame_sword": {"name": "Flame Sword", "type": "weapon", "cost": 450, "bonus": 45, "level": 15},
+    "dragon_slayer": {"name": "Dragon Slayer", "type": "weapon", "cost": 1500, "bonus": 90, "level": 40},
+    "leather_armor": {"name": "Leather Armor", "type": "armor", "cost": 30, "bonus": 5, "level": 2},
+    "iron_armor": {"name": "Iron Armor", "type": "armor", "cost": 150, "bonus": 18, "level": 10},
+    "frostguard_armor": {"name": "Frostguard Armor", "type": "armor", "cost": 500, "bonus": 35, "level": 25},
+    "celestial_armor": {"name": "Celestial Armor", "type": "armor", "cost": 1400, "bonus": 60, "level": 60},
+    "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1},
+}
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("peak-adventure")
@@ -43,7 +60,11 @@ async def init_db():
       xp INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0,
       hp INTEGER NOT NULL DEFAULT 120, max_hp INTEGER NOT NULL DEFAULT 120,
       potions INTEGER NOT NULL DEFAULT 3, wins INTEGER NOT NULL DEFAULT 0,
-      skill_cd INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      skill_cd INTEGER NOT NULL DEFAULT 0,
+      hero_class TEXT NOT NULL DEFAULT 'Knight', class_selected INTEGER NOT NULL DEFAULT 0,
+      weapon TEXT NOT NULL DEFAULT 'Rusty Sword', weapon_attack INTEGER NOT NULL DEFAULT 0,
+      armor TEXT NOT NULL DEFAULT 'Traveler Clothes', armor_defense INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS battles (
       user_id INTEGER PRIMARY KEY, monster_level INTEGER NOT NULL,
@@ -60,10 +81,20 @@ async def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
-    try:
-        await db.execute("ALTER TABLE battles ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0")
-    except aiosqlite.OperationalError:
-        pass
+    migrations = [
+        "ALTER TABLE battles ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN hero_class TEXT NOT NULL DEFAULT 'Knight'",
+        "ALTER TABLE players ADD COLUMN class_selected INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN weapon TEXT NOT NULL DEFAULT 'Rusty Sword'",
+        "ALTER TABLE players ADD COLUMN weapon_attack INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN armor TEXT NOT NULL DEFAULT 'Traveler Clothes'",
+        "ALTER TABLE players ADD COLUMN armor_defense INTEGER NOT NULL DEFAULT 0",
+    ]
+    for migration in migrations:
+        try:
+            await db.execute(migration)
+        except aiosqlite.OperationalError:
+            pass
     await db.commit()
 
 
@@ -83,9 +114,30 @@ def menu():
          InlineKeyboardButton(text="👤 Profile", callback_data="profile")],
         [InlineKeyboardButton(text="🎒 Inventory", callback_data="inventory"),
          InlineKeyboardButton(text="📜 Quests", callback_data="quests")],
+        [InlineKeyboardButton(text="🛒 Shop", callback_data="shop"),
+         InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ])
+
+
+def class_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🛡️ Knight", callback_data="class:Knight"),
+         InlineKeyboardButton(text="🔮 Mage", callback_data="class:Mage")],
+        [InlineKeyboardButton(text="🏹 Archer", callback_data="class:Archer"),
+         InlineKeyboardButton(text="🪓 Berserker", callback_data="class:Berserker")],
+    ])
+
+
+def shop_keyboard():
+    rows = []
+    for item_id, item in SHOP_ITEMS.items():
+        rows.append([InlineKeyboardButton(
+            text=f"{item['name']} · {item['cost']} coins · Lv.{item['level']}",
+            callback_data=f"buy:{item_id}",
+        )])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def battle_keyboard():
@@ -103,6 +155,9 @@ def xp_needed(level: int) -> int:
 
 async def player_text(p):
     return (f"👤 <b>{p['username'] or 'Adventurer'}</b>\n"
+            f"🧙 Class: <b>{p['hero_class']}</b>\n"
+            f"⚔️ Weapon: <b>{p['weapon']}</b> (+{p['weapon_attack']} ATK)\n"
+            f"🛡️ Armor: <b>{p['armor']}</b> (+{p['armor_defense']} DEF)\n"
             f"⭐ Level: <b>{p['level']}/100</b>\n"
             f"✨ XP: <b>{p['xp']}/{xp_needed(p['level'])}</b>\n"
             f"❤️ HP: <b>{p['hp']}/{p['max_hp']}</b>\n"
@@ -142,6 +197,9 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
     cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
     if await cur.fetchone():
         await send_target.answer("⚔️ Tumhari battle pehle se chal rahi hai. Uske buttons use karo.")
+        return
+    if not p["class_selected"]:
+        await send_target.answer("🧙 Choose your hero class before entering the adventure.", reply_markup=class_keyboard())
         return
     if p["hp"] <= 0:
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
@@ -222,7 +280,17 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
 
 @dp.message(Command("start"))
 async def start(message: Message):
-    await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    p = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    if not p["class_selected"]:
+        await message.answer(
+            "🌟 <b>Choose Your Hero Class</b>\n\n"
+            "🛡️ Knight: high HP and defence.\n"
+            "🔮 Mage: powerful magic attacks.\n"
+            "🏹 Archer: fast and precise.\n"
+            "🪓 Berserker: massive damage, lower defence.",
+            reply_markup=class_keyboard(),
+        )
+        return
     await message.answer(
         "🌌 <b>THE PEAK ADVENTURE</b>\n\n"
         "A quiet world is breaking. Strange creatures are changing, old kingdoms have fallen, "
@@ -239,7 +307,8 @@ async def help_cmd(message: Message):
         "/start - Main menu\n/profile - Your hero stats\n/explore - Find a monster\n"
         "/inventory - Potions and items\n/map - World and boss milestones\n"
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
-        "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n\n"
+        "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
+        "/class - View hero classes\n/shop - Buy weapons, armor and potions\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
 
@@ -257,7 +326,31 @@ async def explore(message: Message):
 @dp.message(Command("inventory"))
 async def inventory(message: Message):
     p = await get_player(message.from_user.id)
-    await message.answer(f"🎒 <b>Inventory</b>\n🧪 Health Potions: {p['potions']}\n🪙 Coins: {p['coins']}\n\nUse /heal to restore HP for 30 coins.")
+    await message.answer(
+        f"🎒 <b>Inventory</b>\n🧪 Health Potions: {p['potions']}\n🪙 Coins: {p['coins']}\n"
+        f"⚔️ Weapon: {p['weapon']} (+{p['weapon_attack']} ATK)\n"
+        f"🛡️ Armor: {p['armor']} (+{p['armor_defense']} DEF)\n\n"
+        "Use /shop to upgrade your gear or /heal to restore HP."
+    )
+
+
+@dp.message(Command("class"))
+async def show_classes(message: Message):
+    p = await get_player(message.from_user.id)
+    await message.answer(
+        f"🧙 Current class: <b>{p['hero_class']}</b>\n"
+        "Knight: HP +40, ATK +8, DEF +12\n"
+        "Mage: ATK +18, faster Arcane Nova\n"
+        "Archer: ATK +12, DEF +4, SPEED +10\n"
+        "Berserker: HP +25, ATK +22, DEF -3\n\n"
+        "Class choice is permanent in this version."
+    )
+
+
+@dp.message(Command("shop"))
+async def shop(message: Message):
+    await get_player(message.from_user.id, message.from_user.username)
+    await message.answer("🛒 <b>Adventurer's Shop</b>\nBuy stronger gear as you level up.", reply_markup=shop_keyboard())
 
 
 @dp.message(Command("heal"))
@@ -327,6 +420,85 @@ async def cb_explore(call: CallbackQuery):
     await start_battle(call.from_user.id, call.from_user.username, call.message)
 
 
+@dp.callback_query(F.data == "class_menu")
+async def cb_class_menu(call: CallbackQuery):
+    await call.answer()
+    p = await get_player(call.from_user.id, call.from_user.username)
+    if p["class_selected"]:
+        await call.message.answer(f"🧙 Your class is <b>{p['hero_class']}</b>. Class changes are locked in this version.")
+    else:
+        await call.message.answer("Choose your hero class:", reply_markup=class_keyboard())
+
+
+@dp.callback_query(F.data.startswith("class:"))
+async def cb_choose_class(call: CallbackQuery):
+    await call.answer()
+    user_id = call.from_user.id
+    chosen = call.data.split(":", 1)[1]
+    if chosen not in HERO_CLASSES:
+        await call.message.answer("Unknown class.")
+        return
+    p = await get_player(user_id, call.from_user.username)
+    if p["class_selected"]:
+        await call.message.answer("Your hero class has already been chosen.")
+        return
+    stats = HERO_CLASSES[chosen]
+    new_max = p["max_hp"] + stats["hp"]
+    await db.execute(
+        "UPDATE players SET hero_class=?, class_selected=1, max_hp=?, hp=hp+? WHERE user_id=?",
+        (chosen, new_max, stats["hp"], user_id),
+    )
+    await db.commit()
+    await call.message.answer(
+        f"✨ You are now a <b>{chosen}</b>!\n"
+        f"Class skill: {stats['skill']}\nElement: {stats['element']}\n"
+        "Your adventure begins now.",
+        reply_markup=menu(),
+    )
+
+
+@dp.callback_query(F.data == "shop")
+async def cb_shop(call: CallbackQuery):
+    await call.answer()
+    await call.message.answer("🛒 <b>Adventurer's Shop</b>\nChoose an item to buy:", reply_markup=shop_keyboard())
+
+
+@dp.callback_query(F.data.startswith("buy:"))
+async def cb_buy_item(call: CallbackQuery):
+    await call.answer()
+    user_id = call.from_user.id
+    item_id = call.data.split(":", 1)[1]
+    item = SHOP_ITEMS.get(item_id)
+    if not item:
+        await call.message.answer("That shop item does not exist.")
+        return
+    p = await get_player(user_id, call.from_user.username)
+    if not p["class_selected"]:
+        await call.message.answer("Choose your hero class first.")
+        return
+    if p["level"] < item["level"]:
+        await call.message.answer(f"🔒 You need level {item['level']} to buy {item['name']}.")
+        return
+    if p["coins"] < item["cost"]:
+        await call.message.answer(f"🪙 You need {item['cost']} coins for {item['name']}.")
+        return
+    if item["type"] == "weapon" and item["bonus"] <= p["weapon_attack"]:
+        await call.message.answer("Your current weapon is already as strong or stronger.")
+        return
+    if item["type"] == "armor" and item["bonus"] <= p["armor_defense"]:
+        await call.message.answer("Your current armor is already as strong or stronger.")
+        return
+    await db.execute("UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?", (item["cost"], user_id, item["cost"]))
+    if item["type"] == "weapon":
+        await db.execute("UPDATE players SET weapon=?, weapon_attack=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
+    elif item["type"] == "armor":
+        await db.execute("UPDATE players SET armor=?, armor_defense=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
+    else:
+        await db.execute("UPDATE players SET potions=potions+? WHERE user_id=?", (item["bonus"], user_id))
+    await db.commit()
+    await call.message.answer(f"✅ Purchased <b>{item['name']}</b> for {item['cost']} coins.")
+
+
 @dp.callback_query(F.data == "profile")
 async def cb_profile(call: CallbackQuery):
     await call.answer()
@@ -379,6 +551,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         return
     p = await get_player(user_id, call.from_user.username)
     m = MONSTER_BY_LEVEL[b["monster_level"]]
+    class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     action = call.data.split(":", 1)[1]
     if action not in {"attack", "skill", "potion", "flee"}:
         await call.message.answer("Unknown battle action. Please use the battle buttons.")
@@ -402,11 +575,11 @@ async def _battle_action_unlocked(call: CallbackQuery):
         if p["skill_cd"] > 0:
             await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
             return
-        damage = max(25, (p["level"] * 13 + 30) - m["defense"] // 2) * 2
+        damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
         await db.execute("UPDATE players SET skill_cd=3 WHERE user_id=?", (user_id,))
-        action_line = f"🔥 <b>Peak Strike!</b> You deal {damage} damage."
+        action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
     else:
-        damage = max(8, p["level"] * 10 + random.randint(5, 18) - m["defense"] // 3)
+        damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
         action_line = f"⚔️ You strike for {damage} damage."
     if m["trait_effect"] == "armored":
         damage = max(1, int(damage * 0.85))
@@ -423,7 +596,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu())
         return
     p = await get_player(user_id)
-    enemy_damage = max(3, m["attack_power"] - p["level"] * 2 + m["speed"] // 12 + random.randint(-3, 6))
+    enemy_damage = max(3, m["attack_power"] - p["level"] * 2 - p["armor_defense"] + class_stats["defense"] + m["speed"] // 12 + random.randint(-3, 6))
     if m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3):
         enemy_damage = int(enemy_damage * 1.25)
     special_turn = turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0
