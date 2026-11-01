@@ -3233,6 +3233,9 @@ async def api_dungeon(request: web.Request):
     if not isinstance(payload, dict) or payload.get("action") not in {"enter", "abandon", "claim"}:
         return web.json_response({"error": "Choose enter, abandon or claim."}, status=400)
     action = payload["action"]
+    expected_fields = {"action", "dungeon_id"} if action == "enter" else {"action"}
+    if set(payload) != expected_fields:
+        return web.json_response({"error": "Unsupported dungeon request fields."}, status=400)
     dungeon_id = payload.get("dungeon_id")
     if action == "enter" and (not isinstance(dungeon_id, int) or isinstance(dungeon_id, bool) or not 1 <= dungeon_id <= 10):
         return web.json_response({"error": "A valid dungeon ID is required."}, status=400)
