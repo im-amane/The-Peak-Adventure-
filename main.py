@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, class_evades, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 
 load_dotenv()
@@ -1507,11 +1507,14 @@ async def _battle_action_unlocked(call: CallbackQuery):
         return
     p = await get_player(user_id)
     special_turn = turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0
+    previous_boss_phase = get_boss_phase(m["boss"], b["monster_hp"], m["hp"])
+    current_boss_phase = get_boss_phase(m["boss"], new_enemy_hp, m["hp"])
     enemy_damage = calculate_enemy_damage(
         m["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
         m["speed"], random.randint(-3, 6),
         fury=m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3),
         special=special_turn,
+        boss_phase=current_boss_phase,
     )
     if m["trait_effect"] == "berserk" and new_enemy_hp <= int(m["hp"] * 0.5):
         enemy_damage = int(enemy_damage * 1.35)
@@ -1522,6 +1525,8 @@ async def _battle_action_unlocked(call: CallbackQuery):
     poison_damage = max(1, p["max_hp"] // 40) if m["trait_effect"] == "poison" else 0
     new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
     effect_notes = []
+    if current_boss_phase > previous_boss_phase:
+        effect_notes.append(f"👑 {m['name']} enters BOSS PHASE {current_boss_phase}!")
     if evaded:
         effect_notes.append(f"💨 Your {p['hero_class']} speed dodges the monster's strike.")
     if reflect_damage:
@@ -1601,6 +1606,7 @@ async def miniapp_state(user: dict):
             "trait_effect": active_monster["trait_effect"],
             "story": active_monster["story"],
             "weakness": active_monster["weakness"],
+            "phase": get_boss_phase(active_monster["boss"], battle_row["monster_hp"], active_monster["hp"]),
         }
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     return {
@@ -1765,11 +1771,14 @@ async def api_action(request: web.Request):
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
         special_turn = turn_count % (2 if monster["trait_effect"] == "swift" else 3) == 0
+        previous_boss_phase = get_boss_phase(monster["boss"], battle["monster_hp"], monster["hp"])
+        current_boss_phase = get_boss_phase(monster["boss"], new_enemy_hp, monster["hp"])
         enemy_damage = calculate_enemy_damage(
             monster["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
             monster["speed"], random.randint(-3, 6),
             fury=monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3),
             special=special_turn,
+            boss_phase=current_boss_phase,
         )
         if monster["trait_effect"] == "berserk" and new_enemy_hp <= int(monster["hp"] * 0.5):
             enemy_damage = int(enemy_damage * 1.35)
@@ -1780,6 +1789,8 @@ async def api_action(request: web.Request):
         poison_damage = max(1, p["max_hp"] // 40) if monster["trait_effect"] == "poison" else 0
         new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
         effect_notes = []
+        if current_boss_phase > previous_boss_phase:
+            effect_notes.append(f"{monster['name']} enters BOSS PHASE {current_boss_phase}!")
         if evaded:
             effect_notes.append(f"Your {p['hero_class']} speed dodges the monster's strike.")
         if reflect_damage:
