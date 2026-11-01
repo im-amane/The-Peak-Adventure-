@@ -9,6 +9,10 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE players(user_id INTEGER PRIMARY KEY,username TEXT,level INTEGER,xp INTEGER);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE guild_members(user_id INTEGER PRIMARY KEY,guild_id INTEGER,role TEXT,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
+  CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
+  CREATE TABLE guild_announcements(guild_id INTEGER PRIMARY KEY,message TEXT,author_id INTEGER);
+  CREATE TABLE guild_raid_contributions(raid_id INTEGER,user_id INTEGER,damage INTEGER);
+  CREATE TABLE guild_raid_cooldowns(raid_id INTEGER,user_id INTEGER,last_attack_at TEXT);
   CREATE TABLE group_profiles(chat_id INTEGER PRIMARY KEY,owner_id INTEGER);
   CREATE TABLE group_admins(chat_id INTEGER,user_id INTEGER,role TEXT);
   CREATE TABLE group_players(chat_id INTEGER,user_id INTEGER);
