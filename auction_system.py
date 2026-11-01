@@ -57,7 +57,8 @@ async def _settle_due(db, now):
                     await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
                       (row["highest_bidder"],column,row["item_name"],row["item_stat"],row["listing_id"],now))
                 else:
-                    if equipped and (equipped[column] != default_name or equipped[stat_column] != default_stat):
+                    if equipped:
+                        # Preserve even starter gear so every equipment swap is reversible.
                         await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
                           (row["highest_bidder"],column,equipped[column],equipped[stat_column],row["listing_id"],now))
                     await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["highest_bidder"]))
