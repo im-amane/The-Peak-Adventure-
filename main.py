@@ -3129,7 +3129,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text("This battle has ended. Use /explore to find another monster.")
         return
     p = await get_player(user_id, call.from_user.username)
-    m = await build_battle_monster(user_id, b)
+    m = build_battle_monster(b)
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     action = call.data.split(":", 1)[1]
     if action not in {"attack", "skill", "potion", "flee"}:
