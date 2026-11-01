@@ -2172,12 +2172,15 @@ async def api_appearance(request: web.Request):
         return web.json_response({"error": "Appearance request is too large."}, status=413)
     try:
         payload = await request.json()
-        appearance = await save_appearance(db, user["id"], payload)
-    except (ValueError, AppearanceError) as exc:
-        return web.json_response({"error": str(exc)}, status=400)
+    except ValueError:
+        return web.json_response({"error": "Appearance payload must be valid JSON."}, status=400)
     async with db_lock:
-        return web.json_response({"message": "Character appearance saved.", "state": await miniapp_state(user)})
-
+        try:
+            await save_appearance(db, user["id"], payload)
+            state = await miniapp_state(user)
+        except AppearanceError as exc:
+            return web.json_response({"error": str(exc)}, status=400)
+    return web.json_response({"message": "Character appearance saved.", "state": state})
 
 async def api_action(request: web.Request):
     try:
@@ -2338,7 +2341,7 @@ async def start_web_server():
     async def healthz(request: web.Request):
         return web.json_response({"ok": True})
 
-    app = web.Application()
+    app = web.Application(client_max_size=4096)
     app.router.add_get("/", serve_index)
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
