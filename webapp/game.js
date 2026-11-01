@@ -315,6 +315,8 @@
     addCard("Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party. Use /party create."]);
     const guild=social.guild;
     addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create."]);
+    const guildInvites=(social.pending_guild_invites||[]).map(x=>x.guild_name+" · Invite #"+x.invite_id+" from "+x.inviter_name+" · /guild accept "+x.invite_id);
+    addCard("Guild Invitations",guildInvites);
     if (social.pending_trades) {
       const note=document.createElement("p"); note.className="small"; note.textContent="🤝 Pending trades: "+social.pending_trades;
       ui.socialOverview.appendChild(note);
