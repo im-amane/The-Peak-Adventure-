@@ -3,9 +3,9 @@ import aiosqlite
 from unittest.mock import patch
 
 from premium_system import (
-    PremiumError, credit_premium_purchase, get_premium_balance,
-    get_premium_packages, init_premium_tables, make_invoice_payload,
-    parse_invoice_payload,
+    PREMIUM_SHOP_ITEMS, PremiumError, buy_premium_item, consume_xp_boost,
+    credit_premium_purchase, get_premium_balance, get_premium_packages,
+    init_premium_tables, make_invoice_payload, parse_invoice_payload,
 )
 
 
@@ -13,6 +13,10 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = await aiosqlite.connect(":memory:")
         self.db.row_factory = aiosqlite.Row
+        await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY,potions INTEGER NOT NULL DEFAULT 0)")
+        await self.db.execute("CREATE TABLE player_stamina(user_id INTEGER PRIMARY KEY,stamina INTEGER NOT NULL,max_stamina INTEGER NOT NULL)")
+        await self.db.execute("INSERT INTO players(user_id,potions) VALUES(101,2)")
+        await self.db.execute("INSERT INTO player_stamina VALUES(101,30,100)")
         await init_premium_tables(self.db)
 
     async def asyncTearDown(self):
@@ -36,6 +40,34 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await get_premium_balance(self.db, 101), package["gems"])
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
         self.assertEqual((await cur.fetchone())["total"], 1)
+
+    async def test_shop_purchases_apply_effects_and_deduct_gems(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,200)")
+        potion = await buy_premium_item(self.db, 101, "potion_bundle")
+        self.assertEqual(potion["balance"], 160)
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 7)
+        stamina = await buy_premium_item(self.db, 101, "stamina_crystal")
+        self.assertEqual(stamina["balance"], 135)
+        cur = await self.db.execute("SELECT stamina FROM player_stamina WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["stamina"], 80)
+
+    async def test_xp_charm_adds_three_wins_and_is_consumed_once_per_victory(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await buy_premium_item(self.db, 101, "xp_charm")
+        self.assertTrue(await consume_xp_boost(self.db, 101))
+        self.assertTrue(await consume_xp_boost(self.db, 101))
+        self.assertTrue(await consume_xp_boost(self.db, 101))
+        self.assertFalse(await consume_xp_boost(self.db, 101))
+        await self.db.commit()
+
+    async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
+        with self.assertRaises(PremiumError):
+            await buy_premium_item(self.db, 101, "potion_bundle")
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, 101), 10)
 
     async def test_wrong_paid_amount_and_invalid_player_are_rejected(self):
         package = get_premium_packages()["spark"]
