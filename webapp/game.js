@@ -134,9 +134,13 @@
     const previousRegion = gameState ? gameState.region : null;
     const previousMonster = gameState ? gameState.monster.level : null;
     const previousLevel = gameState ? gameState.level : null;
+    const previousHp = gameState ? gameState.hp : null;
     gameState = data;
     if(previousLevel !== null && data.level > previousLevel && sceneRef && sceneRef.playLevelUpAnimation){
       sceneRef.playLevelUpAnimation();
+    }
+    if(previousHp !== null && previousHp <= 0 && data.hp > 0 && sceneRef && sceneRef.playRespawnAnimation){
+      sceneRef.playRespawnAnimation();
     }
     ui.name.textContent = data.first_name || "Adventurer";
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
@@ -956,6 +960,10 @@
       }else if(action==="victory"){
         this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
       }
+    }
+    playRespawnAnimation(){
+      if(!this.hero)return;
+      this.tweens.add({targets:this.hero,alpha:1,angle:0,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
     }
     playLevelUpAnimation(){
       if(!this.hero)return;
