@@ -106,6 +106,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/achievements` - View achievements
 - `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily login reward
+- `/premium` - View Peak Gems and Telegram Stars packages (disabled until owner enables them)
 - `/missions` - View daily objectives and claim completed rewards with `/missions claim MISSION_ID`
 - `/weekly` - View weekly objectives and claim with `/weekly claim QUEST_ID`
 - `/stamina` and `/mana` - View combat resources
@@ -237,3 +238,10 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Malformed battle, world, dungeon, story and social requests are recorded in a bounded-detail security event log.
 - Administrators can review aggregated suspicious activity with `/admin security` or inspect a player with `/admin security PLAYER_ID`.
 - Security telemetry is reviewed for investigation and does not automatically ban players.
+
+
+## Telegram Stars premium currency
+- Premium wallet balances and Stars transactions are stored in SQLite.
+- Telegram charge IDs are unique, so duplicate successful-payment updates cannot credit gems twice.
+- Payment handling validates invoice owner, package, currency and Stars amount before crediting.
+- Purchases are disabled by default. The owner must set `ENABLE_TELEGRAM_STARS=true` and confirm package prices in `.env` before exposing invoices.
