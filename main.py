@@ -90,7 +90,7 @@ async def player_text(p):
             f"🏆 Victories: <b>{p['wins']}</b>")
 
 
-async def send_battle(target, user_id: int, intro: str = ""):
+async def send_battle(target, user_id: int, intro: str = "", edit: bool = False):
     assert db is not None
     cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
     battle = await cur.fetchone()
@@ -106,7 +106,7 @@ async def send_battle(target, user_id: int, intro: str = ""):
         f"<i>{m['story']}</i>\n"
         f"✨ Special: {m['special_move']}"
     )
-    if hasattr(target, "message_id"):
+    if edit:
         await target.edit_text(text, reply_markup=battle_keyboard())
     else:
         sent = await target.answer(text, reply_markup=battle_keyboard())
