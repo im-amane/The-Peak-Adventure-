@@ -346,9 +346,9 @@
     }
     const guild=social.guild;
     addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
-    const guildInvites=social.guild_invites||[];
+    const guildInvites=social.pending_guild_invites||[];
     if(guildInvites.length){
-      const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.username));
+      const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
       guildInvites.forEach(invite=>{
         addAction(card,"Accept","guild_accept",{inviteId:invite.invite_id});
         addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
