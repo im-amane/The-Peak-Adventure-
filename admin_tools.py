@@ -67,14 +67,17 @@ async def dashboard_stats(db: aiosqlite.Connection) -> dict:
         "registered_groups":"SELECT COUNT(*) AS n FROM group_profiles",
         "active_duels":"SELECT COUNT(*) AS n FROM duels WHERE status='active'",
         "security_events_24h":"SELECT COUNT(*) AS n FROM security_events WHERE created_at >= datetime('now','-24 hours')",
+        "stars_received":"SELECT COALESCE(SUM(stars),0) AS n FROM premium_transactions",
+        "premium_gems_issued":"SELECT COALESCE(SUM(gems),0) AS n FROM premium_transactions",
     }
     result={}
-    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='security_events'")
-    has_security_table=await cur.fetchone() is not None
+    optional_tables={"security_events_24h":"security_events","stars_received":"premium_transactions","premium_gems_issued":"premium_transactions"}
     for key,query in queries.items():
-        if key=="security_events_24h" and not has_security_table:
-            result[key]=0
-            continue
+        if key in optional_tables:
+            cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(optional_tables[key],))
+            if not await cur.fetchone():
+                result[key]=0
+                continue
         cur=await db.execute(query)
         result[key]=(await cur.fetchone())["n"]
     return result
