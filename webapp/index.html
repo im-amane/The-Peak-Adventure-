@@ -56,6 +56,17 @@
     </section>
     <section class="social-panel" aria-labelledby="social-title">
       <div class="section-heading"><div><span class="eyebrow">YOUR ALLIES</span><h2 id="social-title">Friends, Party & Guild</h2></div></div>
+      <form id="social-search-form" class="social-search-form">
+        <label for="social-player-search">Find public players</label>
+        <div><input id="social-player-search" type="search" minlength="2" maxlength="32" placeholder="Telegram username" autocomplete="off" required><button type="submit">Search</button></div>
+      </form>
+      <div id="social-search-results" class="social-search-results" aria-live="polite"></div>
+      <div class="party-tools">
+        <button id="party-create" type="button">🛡️ Create party</button>
+        <label for="party-target-id">Invite an accepted friend by player ID</label>
+        <div><input id="party-target-id" type="number" min="1" step="1" inputmode="numeric" placeholder="Player ID"><button id="party-invite" type="button">Invite</button></div>
+        <button id="party-leave" type="button" hidden>Leave party</button>
+      </div>
       <div id="social-overview" class="social-overview"><p class="small">Loading your social circle...</p></div>
     </section>
     <section class="story-panel" aria-labelledby="story-title">
