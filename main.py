@@ -25,7 +25,7 @@ from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
 from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
@@ -201,6 +201,7 @@ async def init_db():
     await init_group_tables(db)
     await init_character_tables(db)
     await init_account_tables(db)
+    await init_admin_tables(db)
     await init_guild_features(db)
     await init_world_tables(db)
     await init_dungeon_tables(db)
@@ -1788,7 +1789,7 @@ async def admin_command(message: Message):
         if len(parts)!=2 or not parts[0].isdigit() or not re.fullmatch(r"-?\d+",parts[1]):
             await message.answer("Usage: /admin coins player_id amount_delta"); return
         try:
-            balance=await adjust_player_coins(db,int(parts[0]),int(parts[1]))
+            balance=await adjust_player_coins(db,int(parts[0]),int(parts[1]),message.from_user.id)
             await message.answer(f"✅ Player <code>{parts[0]}</code> coin balance is now {balance}.")
         except AdminError as exc: await message.answer(escape(str(exc)))
         return
