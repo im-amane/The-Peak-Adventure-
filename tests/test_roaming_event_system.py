@@ -12,7 +12,7 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
         self.db = await aiosqlite.connect(":memory:")
         self.db.row_factory = aiosqlite.Row
         await self.db.execute(
-            "CREATE TABLE players(user_id INTEGER PRIMARY KEY,level INTEGER NOT NULL,xp INTEGER NOT NULL,coins INTEGER NOT NULL DEFAULT 0)"
+            "CREATE TABLE players(user_id INTEGER PRIMARY KEY,level INTEGER NOT NULL,xp INTEGER NOT NULL,coins INTEGER NOT NULL DEFAULT 0,hp INTEGER NOT NULL DEFAULT 120,max_hp INTEGER NOT NULL DEFAULT 120,hero_class TEXT NOT NULL DEFAULT 'Knight')"
         )
         await self.db.executemany("INSERT INTO players(user_id,level,xp) VALUES(?,?,?)", [(1,1,0),(2,1,0)])
         await init_roaming_event_tables(self.db)
