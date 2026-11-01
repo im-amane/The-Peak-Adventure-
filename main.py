@@ -2214,7 +2214,7 @@ async def help_cmd(message: Message):
         "<b>📖 Adventure Guide</b>\n"
         "/start - Main menu\n/profile - Your hero stats\n/stamina - Check stamina\n/explore - Find a monster (10 stamina)\n"
         "/inventory - Potions and items\n/map - World and boss milestones\n"
-        "/quests - Current objectives\n/weekly - Weekly objectives and rewards\n/daily - Daily coins and potion\n"
+        "/quests - Current objectives\n/missions - Daily objectives and rewards\n/weekly - Weekly objectives and rewards\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
         "/claimquest quest_id - Claim a completed quest reward\n"
