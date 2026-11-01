@@ -237,6 +237,7 @@
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
       this.npc.setScale(0.9);
+      this.obstacles.push({x:this.npc.x,y:this.npc.y,width:34,height:34});
       this.npcLabel = this.add.text(w*0.49,h*0.7-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
       this.npcDialog = [
         "The blue spark you carry once guided the first guardian home.",
