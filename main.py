@@ -3260,7 +3260,7 @@ async def api_dungeon(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Dungeon payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or payload.get("action") not in {"enter", "abandon", "claim"}:
+    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in {"enter", "abandon", "claim"}:
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_dungeon_action", "unsupported action", 2)
         return web.json_response({"error": "Choose enter, abandon or claim."}, status=400)
@@ -3507,7 +3507,9 @@ async def api_story(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Story payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or payload.get("action") not in {"choose", "claim"}:
+    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in {"choose", "claim"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_world_action", "unsupported story action", 2)
         return web.json_response({"error": "Unsupported story action."}, status=400)
     expected_fields = {"action", "chapter_id", "choice_id"} if payload["action"] == "choose" else {"action", "chapter_id"}
     if set(payload) != expected_fields:
@@ -3715,7 +3717,7 @@ async def api_action(request: web.Request):
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_battle_action", "unexpected action fields", 2)
         return web.json_response({"error": "Unsupported battle action fields."}, status=400)
-    if action not in {"attack", "skill", "potion", "flee"}:
+    if not isinstance(action, str) or action not in {"attack", "skill", "potion", "flee"}:
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_battle_action", str(action)[:80], 2)
         return web.json_response({"error": "Unknown battle action."}, status=400)
