@@ -37,14 +37,18 @@ async def get_stamina(db, user_id, now=None):
     gained = min(MAX_STAMINA - row["stamina"], elapsed // REGEN_SECONDS)
     stamina = row["stamina"] + gained
     updated_at = row["updated_at"] + gained * REGEN_SECONDS if gained else row["updated_at"]
-    if gained:
+    if stamina >= MAX_STAMINA:
+        # A full bar must not bank idle time for instant regeneration after spending.
+        updated_at = now
+    if gained or updated_at != row["updated_at"]:
         await db.execute(
             "UPDATE player_stamina SET stamina=?,updated_at=? WHERE user_id=?",
             (stamina, updated_at, user_id),
         )
     await db.commit()
+    elapsed_since_tick = max(0, now - updated_at)
     return {"stamina": stamina, "max_stamina": MAX_STAMINA,
-            "next_regen_seconds": 0 if stamina >= MAX_STAMINA else REGEN_SECONDS - ((now - updated_at) % REGEN_SECONDS)}
+            "next_regen_seconds": 0 if stamina >= MAX_STAMINA else REGEN_SECONDS - (elapsed_since_tick % REGEN_SECONDS)}
 
 
 async def consume_stamina(db, user_id, amount, now=None):
