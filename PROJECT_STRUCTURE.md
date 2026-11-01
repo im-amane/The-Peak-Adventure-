@@ -246,14 +246,14 @@ The-Peak-Adventure/
 - [x] Unit test files for game rules
 - [x] Authentication test coverage
 - [x] GitHub Actions test workflow
-- [ ] Automated tests executed successfully
-- [ ] Python compile/import verification
+- [x] Automated tests executed successfully (100 Python tests and 10 Worker tests passed in GitHub Actions)
+- [x] Python compile/import verification (CI passed)
 - [ ] Mini App browser/device QA
 - [ ] Live Telegram bot test
 - [ ] Multiplayer concurrency testing
 - [ ] Security and load testing
 - [x] Render/Docker deployment configuration
-- [ ] Production hosting and HTTPS launch
+- [~] Cloudflare Worker edge deployed; Python backend origin and Telegram end-to-end launch pending
 - [ ] Persistent production database verification
 
 ## Audited implementation progress
