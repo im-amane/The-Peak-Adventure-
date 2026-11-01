@@ -52,14 +52,24 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         row=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
         self.assertEqual((await row.fetchone())["weapon"],"Stormblade")
     async def test_cancel_without_bid(self):
-        listing=await create_listing(self.db,1,"armor",100,now=1000)
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await cancel_listing(self.db,1,listing,now=1001)
-        row=await self.db.execute("SELECT armor,armor_defense FROM players WHERE user_id=1")
-        self.assertEqual(tuple(await row.fetchone()),("Traveler Clothes",0))
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
     async def test_cannot_cancel_after_bid(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
         with self.assertRaises(AuctionError): await cancel_listing(self.db,1,listing,now=1002)
+    async def test_buyer_old_equipment_is_preserved_in_stash(self):
+        listing=await create_listing(self.db,1,"weapon",100,1,now=1000)
+        await place_bid(self.db,2,listing,100,now=1001)
+        await list_active_auctions(self.db,now=4601)
+        stash=await list_stash(self.db,2)
+        self.assertEqual(len(stash),1)
+        self.assertEqual((stash[0]["item_name"],stash[0]["item_stat"]),("Rusty Sword",0))
+        name,slot,stat=await equip_stashed_item(self.db,2,stash[0]["stash_id"])
+        self.assertEqual((name,slot,stat),("Rusty Sword","weapon",0))
+
     async def test_invalid_listing_duration(self):
         with self.assertRaises(AuctionError): await create_listing(self.db,1,"weapon",100,169,now=1000)
 
