@@ -14,7 +14,7 @@ from pathlib import Path
 import aiosqlite
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, LabeledPrice, PreCheckoutQuery
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
@@ -47,10 +47,12 @@ from moderation_system import ModerationError, ban_player, get_active_ban, init_
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
 from security_system import get_security_events, get_suspicious_players, init_security_tables, record_security_event
+from premium_system import PremiumError, credit_premium_purchase, get_premium_balance, get_premium_packages, init_premium_tables, make_invoice_payload, parse_invoice_payload
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
+PREMIUM_PAYMENTS_ENABLED = os.getenv("ENABLE_TELEGRAM_STARS", "false").strip().lower() in {"1", "true", "yes", "on"}
 ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", str(Path(DB_PATH).parent / "backups"))
@@ -270,6 +272,7 @@ async def init_db():
     await init_roaming_event_tables(db)
     await init_evolution_tables(db)
     await init_security_tables(db)
+    await init_premium_tables(db)
     await init_moderation_tables(db)
     await init_mana_tables(db)
 
@@ -2774,6 +2777,115 @@ async def claimquest(message: Message):
         return
     result = await claim_quest_reward(message.from_user.id, message.command[1])
     await message.answer(result)
+
+
+@dp.message(Command("premium"))
+async def premium_command(message: Message):
+    balance = await get_premium_balance(db, message.from_user.id)
+    if message.chat.type != "private":
+        await message.answer("Open a private chat with the bot to view your premium wallet.")
+        return
+    if not PREMIUM_PAYMENTS_ENABLED:
+        await message.answer(
+            f"💎 <b>Peak Gems</b>\\nWallet: {balance} gems\\n"
+            "Stars purchases are currently disabled by the bot owner."
+        )
+        return
+    packages = get_premium_packages()
+    rows = [[InlineKeyboardButton(
+        text=f"{item['title']} · {item['stars']} ⭐ → {item['gems']} gems",
+        callback_data=f"premium:buy:{package_id}",
+    )] for package_id, item in packages.items()]
+    await message.answer(
+        f"💎 <b>Peak Gems</b>\\nWallet: {balance} gems\\n"
+        "Choose a Telegram Stars package. Purchases are credited once per Telegram charge.",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+    )
+
+
+@dp.callback_query(F.data.startswith("premium:buy:"))
+async def premium_buy_callback(callback: CallbackQuery):
+    if not PREMIUM_PAYMENTS_ENABLED:
+        await callback.answer("Premium purchases are disabled.", show_alert=True)
+        return
+    package_id = callback.data.rsplit(":", 1)[-1]
+    package = get_premium_packages().get(package_id)
+    if not package:
+        await callback.answer("Unknown premium package.", show_alert=True)
+        return
+    try:
+        payload = make_invoice_payload(package_id, callback.from_user.id)
+        await callback.bot.send_invoice(
+            chat_id=callback.from_user.id,
+            title=package["title"],
+            description=f"Receive {package['gems']} Peak Gems for your adventure account.",
+            payload=payload,
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label=f"{package['gems']} Peak Gems", amount=package["stars"])],
+            start_parameter=f"peak-gems-{package_id}",
+        )
+        await callback.answer("Your Stars invoice was sent in private chat.")
+    except Exception:
+        log.exception("Unable to send premium Stars invoice")
+        await callback.answer("Could not send the invoice. Start a private chat with the bot first.", show_alert=True)
+
+
+@dp.pre_checkout_query()
+async def premium_pre_checkout(query: PreCheckoutQuery):
+    if not PREMIUM_PAYMENTS_ENABLED:
+        await query.answer(ok=False, error_message="Premium purchases are currently disabled.")
+        return
+    try:
+        package_id, owner_id = parse_invoice_payload(query.invoice_payload)
+        package = get_premium_packages()[package_id]
+        valid = (
+            owner_id == query.from_user.id
+            and query.currency == "XTR"
+            and query.total_amount == package["stars"]
+        )
+        if not valid:
+            await record_security_event(db, query.from_user.id, "invalid_premium_payment", "invoice validation mismatch", 4)
+            await query.answer(ok=False, error_message="This invoice is invalid or belongs to another player.")
+            return
+    except PremiumError as exc:
+        await record_security_event(db, query.from_user.id, "invalid_premium_payment", str(exc), 3)
+        await query.answer(ok=False, error_message="This premium invoice is invalid.")
+        return
+    await query.answer(ok=True)
+
+
+@dp.message(F.successful_payment)
+async def premium_successful_payment(message: Message):
+    payment = message.successful_payment
+    if not PREMIUM_PAYMENTS_ENABLED:
+        await message.answer("Payment received, but premium crediting is disabled. Contact the bot administrator.")
+        log.error("Received Stars payment while premium payments are disabled for user %s", message.from_user.id)
+        return
+    try:
+        package_id, owner_id = parse_invoice_payload(payment.invoice_payload)
+        package = get_premium_packages()[package_id]
+        if owner_id != message.from_user.id or payment.currency != "XTR" or payment.total_amount != package["stars"]:
+            await record_security_event(db, message.from_user.id, "invalid_premium_payment", "successful payment validation mismatch", 5)
+            await message.answer("Payment validation failed. Contact the bot administrator with your Telegram payment receipt.")
+            return
+        result = await credit_premium_purchase(
+            db, message.from_user.id, package_id, payment.total_amount,
+            payment.telegram_payment_charge_id, payment.provider_payment_charge_id,
+        )
+        if result["credited"]:
+            await message.answer(
+                f"💎 Payment confirmed! {result['gems']} Peak Gems added. "
+                f"Wallet balance: {result['balance']} gems."
+            )
+        else:
+            await message.answer(f"This payment was already credited. Wallet balance: {result['balance']} gems.")
+    except PremiumError as exc:
+        await record_security_event(db, message.from_user.id, "invalid_premium_payment", str(exc), 4)
+        await message.answer("The payment could not be credited automatically. Contact the bot administrator.")
+    except Exception:
+        log.exception("Premium payment credit failed for user %s", message.from_user.id)
+        await message.answer("Payment received, but crediting failed. Contact the bot administrator; do not pay again.")
 
 
 @dp.message(Command("daily"))
