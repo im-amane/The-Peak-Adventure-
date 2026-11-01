@@ -104,6 +104,11 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/party create|invite|accept|decline|info|leave|disband` - Four-player party management
 - `/friend request|accept|decline|list|remove` - Friend system (request by replying to a player in a group)
 - `/guild create|join|leave|info|top|disband` - Guild management
+- `/guild invite|accept|decline` - Guild invitations
+- `/guild role player_id officer|member` - Leader-controlled guild roles
+- `/guild announce MESSAGE` - Guild announcement broadcast
+- `/guild missions|claim ID` - Daily guild missions and XP
+- `/guild raid start|status|attack` - Shared guild boss raids
 - `/trade` - Start a trade by replying to a player in a group
 - `/offer trade_id coins potions` - Set your offer
 - `/confirmtrade trade_id` - Confirm the current trade
