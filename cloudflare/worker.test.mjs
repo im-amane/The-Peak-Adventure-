@@ -187,7 +187,7 @@ test("dungeon API is POST-only and forwards authenticated requests", async () =>
     );
     assert.equal(postResponse.status, 200);
     assert.equal(forwardedUrl, "https://game.example/api/dungeon");
-    assert.equal(forwardedBody, JSON.stringify({ action: "enter", dungeon_id: 1 }));
+    assert.equal(new TextDecoder().decode(forwardedBody), JSON.stringify({ action: "enter", dungeon_id: 1 }));
   } finally {
     globalThis.fetch = originalFetch;
   }
