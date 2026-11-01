@@ -32,3 +32,28 @@ button:active{background:#526b79;transform:translateY(1px)}
 .battle-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
 .battle-actions button{font-size:12px;min-width:0;padding:6px 3px}
 @media(max-width:480px){.battle-actions{grid-template-columns:repeat(2,1fr)}}
+
+/* Mini App interaction and small-screen refinements */
+html{min-height:100%;overscroll-behavior-y:contain}
+body{overflow-x:hidden}
+button{cursor:pointer;user-select:none;-webkit-user-select:none}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+button:disabled{cursor:not-allowed}
+.dpad button{width:48px;height:44px;display:grid;place-items:center;font-size:18px}
+#game{touch-action:none;user-select:none;-webkit-user-select:none}
+#game canvas{touch-action:none}
+.mobile-controls{padding-bottom:2px}
+#status{overflow-wrap:anywhere}
+@media(max-width:520px){
+  .app-shell{padding-left:10px;padding-right:10px}
+  h1{font-size:23px}
+  .hero-hud,.world-panel,.bottom-note{padding:11px;border-radius:13px}
+  #game{height:62vw;min-height:230px;max-height:340px}
+  .mobile-controls{align-items:center}
+  .dpad button{width:46px;height:44px;min-width:46px}
+  .encounter-button{font-size:13px;padding:8px;min-width:130px}
+  .battle-panel{padding:11px}
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+}
