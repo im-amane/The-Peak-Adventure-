@@ -562,6 +562,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
                 "UPDATE guilds SET guild_level=?, guild_xp=? WHERE guild_id=?",
                 (guild_level, guild_xp, membership["guild_id"]),
             )
+    await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
     await db.commit()
     await refresh_quest_progress(user_id)
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
@@ -794,6 +795,8 @@ async def confirm_trade(message: Message):
                 await award_group_xp(db,trade["chat_id"],10)
             except GroupError:
                 pass
+        await record_player_guild_activity(trade["initiator_id"], "trade")
+        await record_player_guild_activity(trade["partner_id"], "trade")
         await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
         return
     await message.answer((await trade_summary(trade)) + "\nWaiting for the other player to confirm.")
@@ -1595,6 +1598,8 @@ async def duel_action(call: CallbackQuery):
             await award_group_xp(db,duel["chat_id"],20)
         except GroupError:
             pass
+    if duel["status"] == "finished" and duel["winner_id"]:
+        await record_player_guild_activity(duel["winner_id"], "battle")
     markup = duel_keyboard(duel_id) if duel["status"] == "active" else None
     await call.message.edit_text(await duel_text(duel), reply_markup=markup)
 
