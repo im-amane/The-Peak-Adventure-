@@ -42,6 +42,25 @@ async def init_party_tables(db: aiosqlite.Connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_party_members_party
       ON party_members(party_id, joined_at);
     """)
+
+    CREATE TABLE IF NOT EXISTS party_battles(
+      battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
+      monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS party_battle_contributions(
+      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(battle_id,user_id)
+    );
+    CREATE TABLE IF NOT EXISTS party_battle_cooldowns(
+      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(battle_id,user_id)
+    );
+    CREATE TABLE IF NOT EXISTS party_battle_rewards(
+      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(battle_id,user_id)
+    );
     await db.commit()
 
 
