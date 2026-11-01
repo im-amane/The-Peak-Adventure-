@@ -40,6 +40,8 @@ async def get_story_chapters(db,user_id,player_level):
     cur=await db.execute("SELECT chapter_id,choice_id FROM player_story WHERE user_id=?",(user_id,))
     done={row["chapter_id"]:row["choice_id"] for row in await cur.fetchall()}
     flags=await get_story_flags(db,user_id)
+    cur=await db.execute("SELECT chapter_id FROM story_reward_claims WHERE user_id=?",(user_id,))
+    claimed={row["chapter_id"] for row in await cur.fetchall()}
     result=[]
     for chapter in CHAPTERS:
         unlocked=player_level>=chapter["level"] and (chapter["id"]==1 or chapter["id"]-1 in done)
@@ -47,7 +49,7 @@ async def get_story_chapters(db,user_id,player_level):
         if chapter["id"]==3 and flags.get("trust_path")=="mira": scene += " Mira stands beside you. She has chosen not to run this time."
         elif chapter["id"]==3 and flags.get("trust_path")=="wanderer": scene += " The Wanderer walks ahead, carrying the compass with both hands."
         result.append({"id":chapter["id"],"title":chapter["title"],"world":chapter["world"],"level":chapter["level"],
-          "npc":chapter["npc"],"unlocked":unlocked,"completed":chapter["id"] in done,
+          "npc":chapter["npc"],"unlocked":unlocked,"completed":chapter["id"] in done,"reward_claimed":chapter["id"] in claimed,
           "choice":done.get(chapter["id"]),"requires_party":chapter.get("requires_party",False),
           "scene":scene,"choices":chapter["choices"],"reward":chapter["reward"],
           "branch_hint":flags.get("trust_path","")})
