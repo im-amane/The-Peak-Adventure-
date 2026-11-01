@@ -3509,7 +3509,7 @@ async def api_story(request: web.Request):
         return web.json_response({"error": "Story payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in {"choose", "claim"}:
         async with db_lock:
-            await record_security_event(db, user["id"], "invalid_world_action", "unsupported story action", 2)
+            await record_security_event(db, user["id"], "invalid_story_action", "unsupported story action", 2)
         return web.json_response({"error": "Unsupported story action."}, status=400)
     expected_fields = {"action", "chapter_id", "choice_id"} if payload["action"] == "choose" else {"action", "chapter_id"}
     if set(payload) != expected_fields:
