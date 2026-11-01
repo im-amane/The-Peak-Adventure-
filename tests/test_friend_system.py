@@ -71,6 +71,18 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         new_request = await send_friend_request(self.db, 202, 101)
         self.assertGreater(new_request, request_id)
 
+    async def test_outgoing_pending_requests_have_a_spam_limit(self):
+        for target_id in range(1000, 1010):
+            await send_friend_request(self.db, 101, target_id)
+        with self.assertRaisesRegex(FriendError, "at most 10"):
+            await send_friend_request(self.db, 101, 2000)
+
+    async def test_invalid_and_boolean_player_ids_are_rejected(self):
+        for requester_id, target_id in ((0, 202), (-1, 202), (True, 202), (101, False)):
+            with self.subTest(requester_id=requester_id, target_id=target_id):
+                with self.assertRaises(FriendError):
+                    await send_friend_request(self.db, requester_id, target_id)
+
     async def test_unknown_friend_cannot_be_removed(self):
         with self.assertRaisesRegex(FriendError, "not on your friend list"):
             await remove_friend(self.db, 101, 202)
