@@ -197,7 +197,7 @@ The-Peak-Adventure/
 - [x] Safe API response handling and request guard
 - [x] Character customization screen
 - [x] Dedicated inventory/equipment/quest screens
-- [ ] Friends, party, guild and trading screens
+- [~] Friends, party and guild social overview (read-only Mini App dashboard; action screens and trade UI pending)
 - [~] Polished responsive visual design and accessibility audit
 
 ### 11. Economy and Trading
