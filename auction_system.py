@@ -33,6 +33,13 @@ async def init_auction_tables(db):
     """)
     await db.commit()
 
+async def _has_active_battle(db, user_id):
+    cur = await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='battles'")
+    if not await cur.fetchone():
+        return False
+    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+    return await cur.fetchone() is not None
+
 async def _settle_due(db, now):
     cur = await db.execute("SELECT * FROM auction_listings WHERE status='active' AND ends_at<=?", (now,))
     rows = await cur.fetchall()
@@ -46,10 +53,14 @@ async def _settle_due(db, now):
                 current = await db.execute(f"SELECT {column}, {stat_column} FROM players WHERE user_id=?", (row["highest_bidder"],))
                 equipped = await current.fetchone()
                 default_name, default_stat = DEFAULTS[column]
-                if equipped and (equipped[column] != default_name or equipped[stat_column] != default_stat):
+                if await _has_active_battle(db, row["highest_bidder"]):
                     await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
-                      (row["highest_bidder"],column,equipped[column],equipped[stat_column],row["listing_id"],now))
-                await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["highest_bidder"]))
+                      (row["highest_bidder"],column,row["item_name"],row["item_stat"],row["listing_id"],now))
+                else:
+                    if equipped and (equipped[column] != default_name or equipped[stat_column] != default_stat):
+                        await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
+                          (row["highest_bidder"],column,equipped[column],equipped[stat_column],row["listing_id"],now))
+                    await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["highest_bidder"]))
                 await db.execute("UPDATE auction_listings SET status='sold' WHERE listing_id=?", (row["listing_id"],))
             else:
                 await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?", (row["current_bid"], row["highest_bidder"]))
@@ -79,6 +90,8 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
         player = await cur.fetchone()
         if not player:
             raise AuctionError("Register before using the auction house.")
+        if await _has_active_battle(db, seller_id):
+            raise AuctionError("Finish your active battle before listing equipped gear.")
         cur = await db.execute("SELECT 1 FROM auction_listings WHERE seller_id=? AND status='active'", (seller_id,))
         if await cur.fetchone():
             raise AuctionError("You already have an active auction.")
@@ -174,6 +187,8 @@ async def equip_stashed_item(db, user_id, stash_id):
         item = await cur.fetchone()
         if not item:
             raise AuctionError("That stored item does not belong to your account.")
+        if await _has_active_battle(db, user_id):
+            raise AuctionError("Finish your active battle before changing equipment.")
         slot = item["slot"]
         stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
         cur = await db.execute(f"SELECT {slot},{stat_column} FROM players WHERE user_id=?", (user_id,))
