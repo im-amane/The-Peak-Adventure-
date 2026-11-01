@@ -24,6 +24,12 @@ async def init_auction_tables(db):
     );
     CREATE INDEX IF NOT EXISTS idx_auction_active ON auction_listings(status, ends_at);
     CREATE INDEX IF NOT EXISTS idx_auction_seller ON auction_listings(seller_id, status);
+    CREATE TABLE IF NOT EXISTS auction_stash(
+      stash_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
+      slot TEXT NOT NULL CHECK(slot IN ('weapon','armor')),item_name TEXT NOT NULL,
+      item_stat INTEGER NOT NULL,source_listing_id INTEGER,created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_auction_stash_user ON auction_stash(user_id,stash_id);
     """)
     await db.commit()
 
@@ -35,8 +41,14 @@ async def _settle_due(db, now):
             seller = await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?", (row["current_bid"], row["seller_id"]))
             buyer = await db.execute("SELECT 1 FROM players WHERE user_id=?", (row["highest_bidder"],))
             if seller.rowcount and await buyer.fetchone():
-                column = "weapon" if row["slot"] == "weapon" else "armor"
-                stat_column = "weapon_attack" if row["slot"] == "weapon" else "armor_defense"
+                column = row["slot"]
+                stat_column = "weapon_attack" if column == "weapon" else "armor_defense"
+                current = await db.execute(f"SELECT {column}, {stat_column} FROM players WHERE user_id=?", (row["highest_bidder"],))
+                equipped = await current.fetchone()
+                default_name, default_stat = DEFAULTS[column]
+                if equipped and (equipped[column] != default_name or equipped[stat_column] != default_stat):
+                    await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
+                      (row["highest_bidder"],column,equipped[column],equipped[stat_column],row["listing_id"],now))
                 await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["highest_bidder"]))
                 await db.execute("UPDATE auction_listings SET status='sold' WHERE listing_id=?", (row["listing_id"],))
             else:
@@ -150,3 +162,30 @@ async def list_active_auctions(db, now=None, limit=20):
 async def get_auction(db, listing_id, now=None):
     rows = await list_active_auctions(db, now, 50)
     return next((row for row in rows if row["listing_id"] == listing_id), None)
+
+async def list_stash(db, user_id):
+    cur = await db.execute("SELECT stash_id,slot,item_name,item_stat,created_at FROM auction_stash WHERE user_id=? ORDER BY stash_id", (user_id,))
+    return await cur.fetchall()
+
+async def equip_stashed_item(db, user_id, stash_id):
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        cur = await db.execute("SELECT * FROM auction_stash WHERE stash_id=? AND user_id=?", (stash_id,user_id))
+        item = await cur.fetchone()
+        if not item:
+            raise AuctionError("That stored item does not belong to your account.")
+        slot = item["slot"]
+        stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
+        cur = await db.execute(f"SELECT {slot},{stat_column} FROM players WHERE user_id=?", (user_id,))
+        player = await cur.fetchone()
+        if not player:
+            raise AuctionError("Player account not found.")
+        await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
+          (user_id,slot,player[slot],player[stat_column],None,int(time.time())))
+        await db.execute(f"UPDATE players SET {slot}=?,{stat_column}=? WHERE user_id=?", (item["item_name"],item["item_stat"],user_id))
+        await db.execute("DELETE FROM auction_stash WHERE stash_id=?", (stash_id,))
+        await db.commit()
+        return item["item_name"],slot,item["item_stat"]
+    except Exception:
+        await db.rollback()
+        raise
