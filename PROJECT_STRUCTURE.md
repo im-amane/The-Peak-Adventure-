@@ -120,7 +120,7 @@ The-Peak-Adventure/
 - [x] Ten region-specific NPC dialogue lines
 - [x] Multiple monster encounter locations
 - [ ] Large multi-zone maps
-- [ ] Portals and landmarks
+- [~] Ten discoverable world landmarks with one-time rewards; visual portals and multi-zone navigation pending
 - [~] Ten persistent three-room dungeons with unlocks, progression and one-time rewards; secret areas pending
 - [ ] World unlock and fast travel
 - [x] Weather and day/night cycle
