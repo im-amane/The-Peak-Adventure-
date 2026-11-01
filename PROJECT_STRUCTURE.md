@@ -161,15 +161,15 @@ The-Peak-Adventure/
 - [x] Duel challenge through group reply
 - [x] PvP rankings command
 - [x] Player trade initiation through group reply
-- [ ] Group registration and verification
-- [ ] Group profile and settings
-- [ ] Group owner/admin permissions
-- [ ] Group member roster
-- [ ] Group XP and level
-- [ ] Group missions and rewards
-- [ ] Group boss/raid commands
-- [ ] Group leaderboard and events
-- [ ] Group-specific moderation controls
+- [x] Group registration and verification
+- [x] Group profile and settings
+- [x] Group owner/admin permissions
+- [x] Group member roster
+- [x] Group XP and level
+- [x] Group missions and rewards
+- [x] Group boss/raid commands
+- [x] Group leaderboard and events
+- [x] Group-specific moderation controls
 
 ### 09. Guild System
 
