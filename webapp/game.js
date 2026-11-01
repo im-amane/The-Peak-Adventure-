@@ -139,7 +139,7 @@
       if (action === "potion") button.textContent = "🧪 Potion (" + data.potions + ")";
     });
     if (battle) {
-      ui.battleName.textContent = (battle.elite ? "💀 ELITE · " : "") + battle.name + " · Lv." + battle.level + (battle.phase > 1 ? " · Phase " + battle.phase : "");
+      ui.battleName.textContent = (battle.elite ? "💀 ELITE · " : (battle.evolved ? "✨ ASCENDED · " : "")) + battle.name + " · Lv." + battle.level + (battle.phase > 1 ? " · Phase " + battle.phase : "");
       ui.battleHp.textContent = "❤️ " + battle.hp + " / " + battle.max_hp;
       ui.battleHpFill.style.width = Math.max(0, battle.hp / battle.max_hp * 100) + "%";
       ui.potionCount.textContent = "Health potions: " + data.potions + " · " + battle.special_move;
