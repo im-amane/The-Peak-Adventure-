@@ -1518,19 +1518,32 @@ async def _battle_action_unlocked(call: CallbackQuery):
         fury=m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3),
         special=special_turn,
     )
-    new_hp = max(0, p["hp"] - enemy_damage)
+    if m["trait_effect"] == "berserk" and new_enemy_hp <= int(m["hp"] * 0.5):
+        enemy_damage = int(enemy_damage * 1.35)
+    reflect_damage = max(1, damage // 5) if m["trait_effect"] == "reflect" and action != "potion" else 0
+    poison_damage = max(1, p["max_hp"] // 40) if m["trait_effect"] == "poison" else 0
+    new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
+    effect_notes = []
+    if reflect_damage:
+        effect_notes.append(f"🪞 Your strike is reflected for {reflect_damage} damage.")
+    if poison_damage:
+        effect_notes.append(f"☠️ Poison deals {poison_damage} damage.")
     if m["trait_effect"] == "drain":
         new_enemy_hp = min(m["hp"], new_enemy_hp + max(1, enemy_damage // 10))
+    elif m["trait_effect"] == "lifesteal":
+        stolen = max(1, enemy_damage // 4)
+        new_enemy_hp = min(m["hp"], new_enemy_hp + stolen)
+        effect_notes.append(f"🩸 The monster steals {stolen} HP.")
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
     await db.commit()
+    effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     if new_hp == 0:
         result = await finish_battle(user_id, False)
-        await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
+        await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     enemy_action = f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!" if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
-    if effect_notes:
-        enemy_action += " " + " ".join(effect_notes)
+    enemy_action += effect_text
     await send_battle(call.message, user_id, f"{action_line}\n{enemy_action}", edit=True)
 
 
@@ -1735,9 +1748,22 @@ async def api_action(request: web.Request):
             fury=monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3),
             special=special_turn,
         )
-        new_hp = max(0, p["hp"] - enemy_damage)
+        if monster["trait_effect"] == "berserk" and new_enemy_hp <= int(monster["hp"] * 0.5):
+            enemy_damage = int(enemy_damage * 1.35)
+        reflect_damage = max(1, damage // 5) if monster["trait_effect"] == "reflect" and action != "potion" else 0
+        poison_damage = max(1, p["max_hp"] // 40) if monster["trait_effect"] == "poison" else 0
+        new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
+        effect_notes = []
+        if reflect_damage:
+            effect_notes.append(f"Your strike is reflected for {reflect_damage} damage.")
+        if poison_damage:
+            effect_notes.append(f"Poison deals {poison_damage} damage.")
         if monster["trait_effect"] == "drain":
             new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
+        elif monster["trait_effect"] == "lifesteal":
+            stolen = max(1, enemy_damage // 4)
+            new_enemy_hp = min(monster["hp"], new_enemy_hp + stolen)
+            effect_notes.append(f"The monster steals {stolen} HP.")
         await db.execute(
             "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
             (new_enemy_hp, turn_count, user_id),
@@ -1747,18 +1773,18 @@ async def api_action(request: web.Request):
             (new_hp, user_id),
         )
         await db.commit()
+        effect_text = " " + " ".join(effect_notes) if effect_notes else ""
         if new_hp == 0:
             message = await finish_battle(user_id, False)
             return web.json_response({
-                "message": f"{action_line} {monster['name']} hits you for {enemy_damage}. {message}",
+                "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
                 "state": await miniapp_state(user),
             })
         enemy_text = (
             f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
             if special_turn else f"{monster['name']} hits you for {enemy_damage}."
         )
-        if effect_notes:
-            enemy_text += " " + " ".join(effect_notes)
+        enemy_text += effect_text
         return web.json_response({
             "message": f"{action_line} {enemy_text}",
             "state": await miniapp_state(user),
