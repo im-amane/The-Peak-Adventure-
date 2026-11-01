@@ -443,12 +443,14 @@ async def cb_choose_class(call: CallbackQuery):
         await call.message.answer("Your hero class has already been chosen.")
         return
     stats = HERO_CLASSES[chosen]
-    new_max = p["max_hp"] + stats["hp"]
-    await db.execute(
-        "UPDATE players SET hero_class=?, class_selected=1, max_hp=?, hp=hp+? WHERE user_id=?",
-        (chosen, new_max, stats["hp"], user_id),
+    cur = await db.execute(
+        "UPDATE players SET hero_class=?, class_selected=1, max_hp=max_hp+?, hp=hp+? WHERE user_id=? AND class_selected=0",
+        (chosen, stats["hp"], stats["hp"], user_id),
     )
     await db.commit()
+    if cur.rowcount == 0:
+        await call.message.answer("Your hero class has already been chosen.")
+        return
     await call.message.answer(
         f"✨ You are now a <b>{chosen}</b>!\n"
         f"Class skill: {stats['skill']}\nElement: {stats['element']}\n"
@@ -476,6 +478,10 @@ async def cb_buy_item(call: CallbackQuery):
     if not p["class_selected"]:
         await call.message.answer("Choose your hero class first.")
         return
+    active = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+    if await active.fetchone():
+        await call.message.answer("Finish or escape your current battle before shopping.")
+        return
     if p["level"] < item["level"]:
         await call.message.answer(f"🔒 You need level {item['level']} to buy {item['name']}.")
         return
@@ -488,7 +494,10 @@ async def cb_buy_item(call: CallbackQuery):
     if item["type"] == "armor" and item["bonus"] <= p["armor_defense"]:
         await call.message.answer("Your current armor is already as strong or stronger.")
         return
-    await db.execute("UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?", (item["cost"], user_id, item["cost"]))
+    debit = await db.execute("UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?", (item["cost"], user_id, item["cost"]))
+    if debit.rowcount == 0:
+        await call.message.answer("🪙 You no longer have enough coins for this purchase.")
+        return
     if item["type"] == "weapon":
         await db.execute("UPDATE players SET weapon=?, weapon_attack=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
     elif item["type"] == "armor":
@@ -581,6 +590,14 @@ async def _battle_action_unlocked(call: CallbackQuery):
     else:
         damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
         action_line = f"⚔️ You strike for {damage} damage."
+    elemental_multiplier = 1.0
+    if class_stats["element"] == m["weakness"]:
+        elemental_multiplier = 1.5
+        action_line += f" ✨ Super effective! {class_stats['element']} exploits its weakness."
+    elif class_stats["element"] == m["element"]:
+        elemental_multiplier = 0.8
+        action_line += f" 🧱 {m['element']} resists your matching element."
+    damage = max(1, int(damage * elemental_multiplier))
     if m["trait_effect"] == "armored":
         damage = max(1, int(damage * 0.85))
         action_line += " 🛡️ Its armor absorbs part of the hit."
