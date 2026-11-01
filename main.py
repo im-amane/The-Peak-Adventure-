@@ -1018,10 +1018,11 @@ async def party_command(message: Message):
             if sub == "attack":
                 result = await attack_party_battle(db, party_id, user_id, max(1, player["level"] * 5 + player["weapon_attack"]))
                 if result["status"] == "won":
-                    coins = max(20, player["level"] * 10)
-                    xp = max(40, player["level"] * 20)
                     for member_id in result["members"]:
                         try:
+                            member_player = await get_player(member_id)
+                            coins = max(20, member_player["level"] * 10)
+                            xp = max(40, member_player["level"] * 20)
                             reward = await reward_party_battle(db, result["battle_id"], member_id, coins, xp)
                             try:
                                 await message.bot.send_message(member_id, "🏆 Party raid cleared! You received +" + str(reward["coins"]) + " coins and +" + str(reward["xp"]) + " XP.")
