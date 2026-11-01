@@ -60,4 +60,24 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await start_guild_raid(self.db,10,1,10,"Root Warden",1000)
   await attack_guild_raid(self.db,10,2,10)
   with self.assertRaises(GuildFeatureError): await attack_guild_raid(self.db,10,2,10)
+
+ async def test_leader_can_declare_war_and_target_leader_accepts(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  self.assertEqual(await respond_guild_war(self.db,war,4,True),"active")
+ async def test_non_leader_cannot_declare_war(self):
+  with self.assertRaises(GuildFeatureError): await declare_guild_war(self.db,10,2,20)
+ async def test_only_target_leader_can_accept_war(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  with self.assertRaises(GuildFeatureError): await respond_guild_war(self.db,war,2,True)
+ async def test_guild_war_completes_after_three_wins(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  for _ in range(3):
+   result=await record_guild_war_duel(self.db,1,4,1)
+  self.assertEqual(result["status"],"completed")
+  self.assertEqual(result["winner_guild"],10)
+ async def test_duplicate_war_is_blocked(self):
+  await declare_guild_war(self.db,10,1,20)
+  with self.assertRaises(GuildFeatureError): await declare_guild_war(self.db,20,4,10)
+
 if __name__=="__main__": unittest.main()
