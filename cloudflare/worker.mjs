@@ -26,6 +26,7 @@ function resolveOrigin(value) {
   try {
     const origin = new URL(value);
     if (origin.protocol !== "https:" || origin.username || origin.password) return null;
+    if (origin.pathname !== "/" || origin.search || origin.hash) return null;
     return origin;
   } catch {
     return null;
