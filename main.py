@@ -2058,9 +2058,9 @@ async def export_account(message: Message):
 async def help_cmd(message: Message):
     await message.answer(
         "<b>📖 Adventure Guide</b>\n"
-        "/start - Main menu\n/profile - Your hero stats\n/explore - Find a monster\n"
+        "/start - Main menu\n/profile - Your hero stats\n/stamina - Check stamina\n/explore - Find a monster (10 stamina)\n"
         "/inventory - Potions and items\n/map - World and boss milestones\n"
-        "/quests - Current objectives\n/daily - Daily coins and potion\n"
+        "/quests - Current objectives\n/weekly - Weekly objectives and rewards\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
         "/claimquest quest_id - Claim a completed quest reward\n"
@@ -2070,7 +2070,7 @@ async def help_cmd(message: Message):
         "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
-        "/admin - Bot administration (authorized IDs only)\n/export - Download your account data\n"
+        "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
                 "/auction - Browse; /auction sell weapon|armor price [hours]\n/auction cancel ID; /bid ID amount\n/auction stash; /auction equip ID\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n"
