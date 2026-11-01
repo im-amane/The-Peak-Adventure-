@@ -2022,7 +2022,7 @@ async def auction_command(message: Message):
             lines = ["🎒 <b>Stored Equipment</b>"]
             lines.extend(f"#{row['stash_id']} · {escape(row['item_name'])} ({row['slot']}, +{row['item_stat']})" for row in rows)
             lines.append("Equip an item with /auction equip ID. Your currently equipped item will be stored.")
-            await message.answer("\\n".join(lines))
+            await message.answer("\n".join(lines))
             return
         if action == "equip":
             if len(args) != 3 or not args[2].isdigit():
