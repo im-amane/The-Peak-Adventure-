@@ -901,7 +901,7 @@
     constructor(){super("adventure");}
     create(){
       sceneRef=this;
-      const w=this.scale.width*1.5,h=this.scale.height*1.5;
+      const w=this.scale.width*2.6,h=this.scale.height*1.5;
       this.worldWidth=w;this.worldHeight=h;
       const idx=Math.max(0,Math.min(9,gameState ? (gameState.world_id||1)-1:0));
       const palette=worldPalettes[idx];
@@ -936,11 +936,17 @@
       }else{
         for(let i=0;i<8;i++){const x=i*120+30;scenery.lineStyle(8,0x725c69,0.9);scenery.beginPath();scenery.moveTo(x,h*0.95);scenery.lineTo(x+20,h*0.65);scenery.lineTo(x-12,h*0.45);scenery.lineTo(x+18,h*0.25);scenery.strokePath();scenery.fillStyle(0xe2c17c,0.7);scenery.fillCircle(x+18,h*0.25,5);}
       }
+      // Spread deterministic blockers across the expanded three-zone map.
+      // Keep the hero spawn, Wanderer and world gate clear for reliable first input.
       this.obstacles = [
-        {x:w*0.39,y:h*0.61,width:42,height:58},
-        {x:w*0.57,y:h*0.77,width:58,height:34},
-        {x:w*0.68,y:h*0.51,width:46,height:54},
-        {x:w*0.31,y:h*0.84,width:50,height:28}
+        {x:w*0.14,y:h*0.61,width:42,height:58},
+        {x:w*0.32,y:h*0.77,width:58,height:34},
+        {x:w*0.43,y:h*0.51,width:46,height:54},
+        {x:w*0.62,y:h*0.84,width:50,height:28},
+        {x:w*0.76,y:h*0.59,width:54,height:42},
+        {x:w*0.91,y:h*0.76,width:46,height:58},
+        {x:w*0.27,y:h*0.53,width:38,height:48},
+        {x:w*0.69,y:h*0.48,width:44,height:36}
       ];
       this.obstacleGraphics = this.add.graphics();
       this.obstacles.forEach((obstacle,index)=>{
@@ -953,6 +959,19 @@
           this.obstacleGraphics.fillStyle(palette.accent,0.65);
           this.obstacleGraphics.fillCircle(obstacle.x-7,obstacle.y-8,4);
           this.obstacleGraphics.fillCircle(obstacle.x+8,obstacle.y-5,3);
+        }
+      });
+      const zoneLabels=["THE OUTER REACH","THE WILD HEART","THE INNER FRONTIER"];
+      zoneLabels.forEach((label,index)=>{
+        const x=w*(index+0.5)/3;
+        this.add.text(x,h*0.47,label,{
+          fontFamily:"Georgia",fontSize:"11px",fontStyle:"bold",color:"#fff1cf",
+          stroke:"#17232a",strokeThickness:3,letterSpacing:2
+        }).setOrigin(0.5).setAlpha(0.72).setDepth(2);
+        if(index>0){
+          const divider=this.add.graphics().setDepth(1);
+          divider.lineStyle(2,palette.accent,0.22);
+          divider.lineBetween(x-w/6,h*0.49,x-w/6,h*0.96);
         }
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
