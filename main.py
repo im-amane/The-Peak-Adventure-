@@ -23,6 +23,7 @@ from aiogram.types import WebAppInfo
 from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
+from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -187,6 +188,7 @@ async def init_db():
             pass
     await db.commit()
     await init_friend_tables(db)
+    await init_party_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -916,6 +918,121 @@ async def decline_friend_callback(call: CallbackQuery):
     await call.message.edit_text(f"{call.message.text}\n\nFriend request declined.")
 
 
+
+def party_invite_keyboard(invite_id: int):
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🛡️ Join Party", callback_data=f"party_accept:{invite_id}"),
+        InlineKeyboardButton(text="✋ Decline", callback_data=f"party_decline:{invite_id}"),
+    ]])
+
+
+async def party_text(user_id: int):
+    party, members = await get_party_info(db, user_id)
+    lines = [
+        f"🛡️ <b>Party #{party['party_id']}</b> · {party['member_count']}/4 players",
+        f"👑 Leader: <code>{party['leader_id']}</code>",
+    ]
+    for member in members:
+        icon = "👑" if member["user_id"] == party["leader_id"] else "•"
+        lines.append(f"{icon} {escape(member['username'] or 'Adventurer')} · Lv.{member['level']}")
+    return "\n".join(lines)
+
+
+@dp.message(Command("party"))
+async def party_command(message: Message):
+    args = (message.text or "").split(maxsplit=1)
+    action = args[1].lower() if len(args) > 1 else "info"
+    user_id = message.from_user.id
+    try:
+        if action == "create":
+            party_id = await create_party(db, user_id)
+            await message.answer(f"🛡️ Party #{party_id} created. You are the leader.")
+            return
+        if action == "invite":
+            if message.chat.type not in {"group", "supergroup"} or not message.reply_to_message or not message.reply_to_message.from_user:
+                await message.answer("Reply to a player's group message, then use /party invite.")
+                return
+            target = message.reply_to_message.from_user
+            if target.is_bot:
+                await message.answer("Bots cannot join a party.")
+                return
+            party, _ = await get_party_info(db, user_id)
+            requester = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+            invited = await get_player(target.id, target.username or target.full_name)
+            if not requester["class_selected"] or not invited["class_selected"]:
+                await message.answer("Both players must register with /start and choose a class first.")
+                return
+            invite_id = await invite_to_party(db, party["party_id"], user_id, target.id)
+            await message.answer(
+                f"🛡️ <b>Party invitation #{invite_id}</b>\n"
+                f"{escape(requester['username'] or 'Leader')} invited "
+                f"{escape(invited['username'] or 'Adventurer')}.",
+                reply_markup=party_invite_keyboard(invite_id),
+            )
+            return
+        if action in {"accept", "decline"}:
+            parts = (message.text or "").split()
+            if len(parts) != 3 or not parts[2].isdigit():
+                await message.answer(f"Usage: <code>/party {action} invite_id</code>.")
+                return
+            await respond_to_party_invite(db, int(parts[2]), user_id, action == "accept")
+            await message.answer("🛡️ You joined the party." if action == "accept" else "Party invitation declined.")
+            return
+        if action == "leave":
+            new_leader = await leave_party(db, user_id)
+            await message.answer(
+                f"You left the party. Leadership passed to player <code>{new_leader}</code>."
+                if new_leader else "You left the party."
+            )
+            return
+        if action == "disband":
+            party, _ = await get_party_info(db, user_id)
+            await disband_party(db, party["party_id"], user_id)
+            await message.answer("Party disbanded.")
+            return
+        if action == "info":
+            await message.answer(await party_text(user_id))
+            return
+    except PartyError as exc:
+        await message.answer(escape(str(exc)))
+        return
+    await message.answer(
+        "Party commands: <code>/party create</code>, <code>/party invite</code> (reply to player), "
+        "<code>/party accept ID</code>, <code>/party decline ID</code>, "
+        "<code>/party info</code>, <code>/party leave</code>, <code>/party disband</code>."
+    )
+
+
+@dp.callback_query(F.data.startswith("party_accept:"))
+async def accept_party_callback(call: CallbackQuery):
+    try:
+        invite_id = int(call.data.split(":", 1)[1])
+        await respond_to_party_invite(db, invite_id, call.from_user.id, True)
+    except (TypeError, ValueError, IndexError):
+        await call.answer("Invalid party invitation.", show_alert=True)
+        return
+    except PartyError as exc:
+        await call.answer(str(exc), show_alert=True)
+        return
+    await call.answer("Joined party!")
+    await call.message.edit_text(f"{call.message.text}\n\n🛡️ Party invitation accepted.")
+
+
+@dp.callback_query(F.data.startswith("party_decline:"))
+async def decline_party_callback(call: CallbackQuery):
+    try:
+        invite_id = int(call.data.split(":", 1)[1])
+        await respond_to_party_invite(db, invite_id, call.from_user.id, False)
+    except (TypeError, ValueError, IndexError):
+        await call.answer("Invalid party invitation.", show_alert=True)
+        return
+    except PartyError as exc:
+        await call.answer(str(exc), show_alert=True)
+        return
+    await call.answer("Invitation declined.")
+    await call.message.edit_text(f"{call.message.text}\n\nParty invitation declined.")
+
+
 async def guild_summary(guild_id: int):
     cur = await db.execute(
         "SELECT g.*, COUNT(m.user_id) AS member_count FROM guilds g "
@@ -1243,6 +1360,7 @@ async def help_cmd(message: Message):
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/friend request|accept|decline|list|remove - Friend list\n"
+        "/party create|invite|accept|decline|info|leave|disband - Party management\\n"
         "/guild create|join|leave|info|top|disband - Guild management\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
