@@ -4,6 +4,7 @@
   const initData = tg ? tg.initData : "";
   const ui = {
     coins: document.getElementById("coins"),
+    premiumGems: document.getElementById("premium-gems"),
     name: document.getElementById("hero-name"),
     heroClass: document.getElementById("hero-class"),
     level: document.getElementById("level"),
@@ -146,6 +147,7 @@
       if (ui.staminaFill) ui.staminaFill.style.width = (data.stamina.stamina / data.stamina.max_stamina * 100) + "%";
     }
     ui.coins.textContent = data.coins;
+    if(ui.premiumGems)ui.premiumGems.textContent = Number.isFinite(data.premium_gems) ? data.premium_gems : 0;
     const onlineCount = document.getElementById("online-count");
     if (onlineCount) onlineCount.textContent = "🌐 " + (data.online_count || 0) + " online";
     const inventory = {
