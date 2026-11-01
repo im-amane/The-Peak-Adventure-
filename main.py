@@ -3185,6 +3185,7 @@ async def miniapp_state(user: dict):
         "materials": material_state,
         "story": story_state,
         "weekly_quests": await get_weekly_quests(db, user_id),
+        "daily_missions": await get_daily_missions(db, user_id),
         "online_count": await count_online_players(db),
         "settings": await get_settings(db, user_id),
         "class_skill": class_stats["skill"],
@@ -3346,6 +3347,35 @@ async def api_quest_claim(request: web.Request):
     return web.json_response({"message": result, "state": state})
 
 
+
+
+async def api_daily_mission_claim(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Daily mission request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Daily mission payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or set(payload) != {"mission_id"}:
+        return web.json_response({"error": "A mission_id is required."}, status=400)
+    mission_id = payload.get("mission_id")
+    if not isinstance(mission_id, str) or len(mission_id) > 64:
+        return web.json_response({"error": "Invalid daily mission ID."}, status=400)
+    try:
+        async with db_lock:
+            async with player_locks[user["id"]]:
+                reward = await claim_daily_mission(db, user["id"], mission_id)
+                state = await miniapp_state(user)
+    except DailyMissionError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({
+        "message": f"Daily mission claimed: +{reward['coins']} coins and +{reward['potions']} potions.",
+        "state": state,
+    })
 
 
 async def api_story(request: web.Request):
@@ -3653,6 +3683,7 @@ async def start_web_server():
     app.router.add_route("*", "/api/settings", api_settings)
     app.router.add_post("/api/story", api_story)
     app.router.add_post("/api/quest/claim", api_quest_claim)
+    app.router.add_post("/api/daily-mission/claim", api_daily_mission_claim)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
