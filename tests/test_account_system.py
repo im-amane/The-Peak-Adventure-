@@ -58,9 +58,14 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await init_account_tables(self.db)
  async def asyncTearDown(self): await self.db.close()
  async def test_default_settings(self):
-  self.assertEqual(await get_settings(self.db,1),{"notifications_enabled":1,"profile_visibility":"public"})
+  self.assertEqual(await get_settings(self.db,1),{"notifications_enabled":1,"profile_visibility":"public","sound_enabled":1})
  async def test_update_settings(self):
-  self.assertEqual(await update_settings(self.db,1,False,"friends"),{"notifications_enabled":0,"profile_visibility":"friends"})
+  self.assertEqual(await update_settings(self.db,1,False,"friends"),{"notifications_enabled":0,"profile_visibility":"friends","sound_enabled":1})
+ async def test_sound_preference_is_persisted(self):
+  self.assertEqual(await update_settings(self.db,1,sound_enabled=False),{"notifications_enabled":1,"profile_visibility":"public","sound_enabled":0})
+  self.assertEqual((await get_settings(self.db,1))["sound_enabled"],0)
+ async def test_invalid_sound_setting_rejected(self):
+  with self.assertRaises(AccountError): await update_settings(self.db,1,sound_enabled="muted")
  async def test_invalid_settings_rejected(self):
   with self.assertRaises(AccountError): await update_settings(self.db,1,"off",None)
   with self.assertRaises(AccountError): await update_settings(self.db,1,None,"private")
