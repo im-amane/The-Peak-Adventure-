@@ -51,7 +51,7 @@ button:disabled{cursor:not-allowed}
   #game{height:62vw;min-height:230px;max-height:340px}
   .mobile-controls{align-items:center}
   .dpad button{width:46px;height:44px;min-width:46px}
-  .encounter-button{font-size:13px;padding:8px;min-width:130px}
+  .map-actions{flex-direction:column;gap:6px}.encounter-button{font-size:12px;padding:7px;min-width:0;min-height:40px}
   .battle-panel{padding:11px}
 }
 @media(prefers-reduced-motion:reduce){
