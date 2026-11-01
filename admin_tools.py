@@ -104,6 +104,7 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "story_rewards":("SELECT * FROM story_reward_claims WHERE user_id=?",(user_id,)),
         "dungeon_runs":("SELECT * FROM dungeon_runs WHERE user_id=?",(user_id,)),
         "dungeon_rewards":("SELECT * FROM dungeon_rewards WHERE user_id=?",(user_id,)),
+        "security_events":("SELECT event_type,severity,details,created_at FROM security_events WHERE user_id=? ORDER BY event_id DESC",(user_id,)),
     }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
