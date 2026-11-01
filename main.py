@@ -570,6 +570,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
                 (guild_level, guild_xp, membership["guild_id"]),
             )
     await advance_dungeon(db, user_id, m["level"])
+    await award_material_drop(db, user_id, m)
     await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
     await db.commit()
     await refresh_quest_progress(user_id)
