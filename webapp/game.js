@@ -955,7 +955,6 @@
         this.tweens.add({targets:this.hero,alpha:0.12,angle:82,y:this.hero.y+9,duration:420,ease:"Cubic.easeIn"});
       }else if(action==="victory"){
         this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
-        this.playLevelUpAnimation();
       }
     }
     playLevelUpAnimation(){
