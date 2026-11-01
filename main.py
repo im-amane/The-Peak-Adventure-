@@ -3611,7 +3611,7 @@ async def api_settings(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Settings payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or set(payload)-{"notifications_enabled","profile_visibility"}:
+    if not isinstance(payload, dict) or set(payload)-{"notifications_enabled","profile_visibility","sound_enabled"}:
         return web.json_response({"error": "Unsupported settings fields."}, status=400)
     try:
         async with db_lock:
@@ -3619,6 +3619,7 @@ async def api_settings(request: web.Request):
                 db,user["id"],
                 notifications_enabled=payload.get("notifications_enabled"),
                 profile_visibility=payload.get("profile_visibility"),
+                sound_enabled=payload.get("sound_enabled"),
             )
             state = await miniapp_state(user)
     except AccountError as exc:
