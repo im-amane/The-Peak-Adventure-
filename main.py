@@ -536,7 +536,8 @@ async def help_cmd(message: Message):
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
-        "/claimquest quest_id - Claim a completed quest reward\n/achievements - View achievements\n"
+        "/claimquest quest_id - Claim a completed quest reward\n"
+        "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
