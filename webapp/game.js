@@ -483,9 +483,23 @@
         addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
       });
     }
-    if(social.pending_trades){
-      const note=document.createElement("p");note.className="small";note.textContent="🤝 Pending trades: "+social.pending_trades;
-      ui.socialOverview.appendChild(note);
+    const pendingTrades=social.pending_trades||[];
+    if(pendingTrades.length){
+      const card=addCard("Trade invitations",pendingTrades.map(trade=>
+        (trade.incoming?"From ":"To ")+trade.other_username+" · #"+trade.trade_id
+      ));
+      pendingTrades.forEach(trade=>{
+        if(trade.incoming){
+          addAction(card,"Accept trade","trade_accept",{tradeId:trade.trade_id});
+          addAction(card,"Decline","trade_decline",{tradeId:trade.trade_id});
+        }else{
+          const waiting=document.createElement("p");waiting.className="small";
+          waiting.textContent="Waiting for "+trade.other_username+" to respond to trade #"+trade.trade_id+".";
+          card.appendChild(waiting);
+        }
+      });
+    }else{
+      addCard("Trading",["No pending trade invitations. Start a trade with /trade in a Telegram group."]);
     }
     if(ui.partyCreate)ui.partyCreate.hidden=Boolean(party);
     if(ui.partyInvite)ui.partyInvite.hidden=!party;
@@ -1345,6 +1359,7 @@
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
     if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
+    if(action==="trade_accept"||action==="trade_decline")payload.trade_id=Number(button.dataset.tradeId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
   });
