@@ -37,7 +37,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 ## Setup
 1. Create a Telegram bot with @BotFather.
 2. Copy `.env.example` to `.env`.
-3. Set `BOT_TOKEN` and `WEBAPP_URL`. The Mini App URL must be a public HTTPS address pointing to this server.
+3. Set `BOT_TOKEN`, `WEBAPP_URL`, and `ADMIN_IDS`. `WEBAPP_URL` should be the Cloudflare Worker URL once the Python backend is deployed.
 4. Install Python 3.11+.
 5. Install dependencies and start the combined bot + web server:
 
@@ -62,15 +62,17 @@ The repository includes a Cloudflare Worker in `cloudflare/worker.mjs`. Cloudfla
 4. Deploy from the repository root: `npx wrangler deploy`.
 5. Set Render's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
 
-Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Worker URL cannot be activated until a workers.dev subdomain is configured on the Cloudflare account.
+Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Cloudflare account now has the `thepeakadventure.workers.dev` subdomain and the `peak-adventure-edge` Worker is deployed. Public Mini App URL: `https://peak-adventure-edge.thepeakadventure.workers.dev`. Set `BACKEND_ORIGIN` to the deployed Python/Aiohttp HTTPS origin before gameplay API calls can work.
 
 ## Deploy with Render
 1. Push this repository to GitHub and create a new Blueprint in Render.
 2. Select this repository so Render reads `render.yaml`.
 3. Set `BOT_TOKEN` to the token from @BotFather.
-4. Set `WEBAPP_URL` to the public HTTPS URL Render assigns to the service (for example, `https://your-service.onrender.com`).
-5. If Telegram asks for a Web App domain, set the service hostname with BotFather.
-6. Deploy. The blueprint includes a persistent disk mounted at `/data` so the SQLite player database survives restarts.
+4. Set `ADMIN_IDS` to comma-separated Telegram user IDs allowed to use `/admin`.
+5. Set `WEBAPP_URL` to `https://peak-adventure-edge.thepeakadventure.workers.dev`.
+6. Set the Cloudflare Worker secret `BACKEND_ORIGIN` to the Render HTTPS origin, without a path.
+7. Register `thepeakadventure.workers.dev` as the Mini App domain with BotFather.
+8. Deploy. The blueprint includes a persistent disk mounted at `/data` so the SQLite player database survives restarts.
 
 The included Render blueprint uses a paid Starter web service and a persistent disk. For a VPS, build the included Dockerfile and pass the same environment variables. Keep `BOT_TOKEN` private.
 
@@ -91,6 +93,11 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/achievements` - View achievements
 - `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily reward
+- `/settings` - Set notification preferences and profile visibility
+- `/deleteaccount` - Request permanent player-data deletion with an explicit confirmation step
+- `/export` - Download your player data as JSON
+- `/group register|info|members|missions|claim|raid|ban|unban|top` - Telegram group progression and raids
+- `/admin stats|player|coins|announce` - Restricted bot administration
 - `/friend request|accept|decline|list|remove` - Friend requests and friend list (request by replying to a player in a group)
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
