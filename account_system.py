@@ -126,6 +126,7 @@ async def delete_player_account(db,user_id):
     # Remove records added by optional gameplay services when those services are installed.
     for table, where, params in (
         ("player_reports","reporter_id=? OR target_id=?",(user_id,user_id)),
+        ("security_events","user_id=?",(user_id,)),
         ("player_bans","user_id=?",(user_id,)),
         ("player_weekly_quests","user_id=?",(user_id,)),
         ("player_stamina","user_id=?",(user_id,)),
