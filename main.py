@@ -52,6 +52,11 @@ async def init_db():
     CREATE TABLE IF NOT EXISTS daily_claims (
       user_id INTEGER PRIMARY KEY, claimed_on TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS boss_defeats (
+      user_id INTEGER NOT NULL, monster_level INTEGER NOT NULL,
+      defeated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(user_id, monster_level)
+    );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     await db.commit()
@@ -132,14 +137,19 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         await send_target.answer("⚔️ Tumhari battle pehle se chal rahi hai. Uske buttons use karo.")
         return
     if p["hp"] <= 0:
-        await db.execute("UPDATE players SET hp=max_hp WHERE user_id=?", (user_id,))
-        await db.commit()
-        p = await get_player(user_id)
+        await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
+        return
     level = p["level"]
+    boss_defeated = False
     if level in BOSS_LEVELS:
+        cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, level))
+        boss_defeated = await cur.fetchone() is not None
+    if level in BOSS_LEVELS and not boss_defeated:
         monster_level = level
     else:
-        monster_level = max(1, min(100, level + random.choice([-1, 0, 0, 0, 1])))
+        candidates = [max(1, min(100, level + offset)) for offset in (-1, 0, 1)]
+        candidates = [candidate for candidate in candidates if candidate not in BOSS_LEVELS]
+        monster_level = random.choice(candidates or [max(1, level - 1)])
     m = MONSTER_BY_LEVEL[monster_level]
     await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
                      (user_id, monster_level, m["hp"]))
@@ -178,9 +188,9 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         await db.commit()
         return "🏃 You escaped. The wilderness is still waiting."
     if not won:
-        await db.execute("UPDATE players SET hp=1 WHERE user_id=?", (user_id,))
+        await db.execute("UPDATE players SET hp=0 WHERE user_id=?", (user_id,))
         await db.commit()
-        return "💀 You were defeated. You wake at the camp with 1 HP. Heal before exploring again."
+        return "💀 You were defeated and returned to camp. Your HP is 0. Use /heal to recover before exploring again."
     p = await get_player(user_id)
     reward_xp = 35 + m["level"] * 18 + (m["level"] * 30 if m["boss"] else 0)
     reward_coins = 15 + m["level"] * 7 + (m["level"] * 25 if m["boss"] else 0)
@@ -188,13 +198,18 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     while new_level < 100 and new_xp >= xp_needed(new_level):
         new_xp -= xp_needed(new_level)
         new_level += 1
+    if new_level >= 100:
+        new_level = 100
+        new_xp = 0
     new_max = 120 + (new_level - 1) * 20
     await db.execute("""UPDATE players SET xp=?, level=?, coins=coins+?, wins=wins+1,
         max_hp=?, hp=min(?, ?) WHERE user_id=?""",
         (new_xp, new_level, reward_coins, new_max, p["hp"] + 25, new_max, user_id))
+    if m["boss"]:
+        await db.execute("INSERT OR IGNORE INTO boss_defeats(user_id, monster_level) VALUES (?, ?)", (user_id, m["level"]))
     await db.commit()
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
-    boss_note = "\n👑 The boss seal has weakened. A fragment of the world's lost memory returns..." if m["boss"] else ""
+    boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
     return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}"
 
 
@@ -241,12 +256,16 @@ async def inventory(message: Message):
 @dp.message(Command("heal"))
 async def heal(message: Message):
     p = await get_player(message.from_user.id)
+    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (message.from_user.id,))
+    if await cur.fetchone():
+        await message.answer("⚔️ Finish or escape your current battle before healing at camp.")
+        return
     if p["hp"] >= p["max_hp"]:
         await message.answer("❤️ Your HP is already full.")
     elif p["coins"] < 30:
         await message.answer("🪙 You need 30 coins to heal.")
     else:
-        await db.execute("UPDATE players SET coins=coins-30, hp=max_hp WHERE user_id=?", (message.from_user.id,))
+        await db.execute("UPDATE players SET coins=coins-30, hp=max_hp WHERE user_id=? AND coins>=30", (message.from_user.id,))
         await db.commit()
         await message.answer("✨ Your HP has been fully restored.")
 
