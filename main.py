@@ -2845,11 +2845,13 @@ async def premium_pre_checkout(query: PreCheckoutQuery):
             and query.total_amount == package["stars"]
         )
         if not valid:
-            await record_security_event(db, query.from_user.id, "invalid_premium_payment", "invoice validation mismatch", 4)
+            async with db_lock:
+                await record_security_event(db, query.from_user.id, "invalid_premium_payment", "invoice validation mismatch", 4)
             await query.answer(ok=False, error_message="This invoice is invalid or belongs to another player.")
             return
     except PremiumError as exc:
-        await record_security_event(db, query.from_user.id, "invalid_premium_payment", str(exc), 3)
+        async with db_lock:
+            await record_security_event(db, query.from_user.id, "invalid_premium_payment", str(exc), 3)
         await query.answer(ok=False, error_message="This premium invoice is invalid.")
         return
     await query.answer(ok=True)
@@ -2864,13 +2866,15 @@ async def premium_successful_payment(message: Message):
         package_id, owner_id = parse_invoice_payload(payment.invoice_payload)
         package = get_premium_packages()[package_id]
         if owner_id != message.from_user.id or payment.currency != "XTR" or payment.total_amount != package["stars"]:
-            await record_security_event(db, message.from_user.id, "invalid_premium_payment", "successful payment validation mismatch", 5)
+            async with db_lock:
+                await record_security_event(db, message.from_user.id, "invalid_premium_payment", "successful payment validation mismatch", 5)
             await message.answer("Payment validation failed. Contact the bot administrator with your Telegram payment receipt.")
             return
-        result = await credit_premium_purchase(
-            db, message.from_user.id, package_id, payment.total_amount,
-            payment.telegram_payment_charge_id, payment.provider_payment_charge_id,
-        )
+        async with db_lock:
+            result = await credit_premium_purchase(
+                db, message.from_user.id, package_id, payment.total_amount,
+                payment.telegram_payment_charge_id, payment.provider_payment_charge_id,
+            )
         if result["credited"]:
             await message.answer(
                 f"💎 Payment confirmed! {result['gems']} Peak Gems added. "
@@ -2879,7 +2883,8 @@ async def premium_successful_payment(message: Message):
         else:
             await message.answer(f"This payment was already credited. Wallet balance: {result['balance']} gems.")
     except PremiumError as exc:
-        await record_security_event(db, message.from_user.id, "invalid_premium_payment", str(exc), 4)
+        async with db_lock:
+            await record_security_event(db, message.from_user.id, "invalid_premium_payment", str(exc), 4)
         await message.answer("The payment could not be credited automatically. Contact the bot administrator.")
     except Exception:
         log.exception("Premium payment credit failed for user %s", message.from_user.id)
