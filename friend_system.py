@@ -130,3 +130,39 @@ async def remove_friend(db: aiosqlite.Connection, user_id: int, friend_id: int) 
     if cur.rowcount == 0:
         raise FriendError("That player is not on your friend list.")
     await db.commit()
+
+
+async def search_players(db: aiosqlite.Connection, searcher_id: int, query: str, limit: int = 10):
+    """Search public profiles and friends-only profiles visible to accepted friends."""
+    if not _valid_user_id(searcher_id):
+        raise FriendError("Invalid player account.")
+    clean = " ".join(str(query or "").strip().lstrip("@").split())
+    if not 2 <= len(clean) <= 32:
+        raise FriendError("Player search must be between 2 and 32 characters.")
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 20:
+        raise FriendError("Invalid player search limit.")
+    escaped = clean.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    cur = await db.execute(
+        """SELECT p.user_id,p.username,p.level
+           FROM players p
+           LEFT JOIN player_settings settings ON settings.user_id=p.user_id
+           WHERE p.user_id!=?
+             AND p.username IS NOT NULL
+             AND p.username LIKE ? ESCAPE '\\'
+             AND (
+               COALESCE(settings.profile_visibility,'public')='public'
+               OR (
+                 settings.profile_visibility='friends'
+                 AND EXISTS (
+                   SELECT 1 FROM friend_requests f
+                   WHERE f.status='accepted'
+                     AND f.user_low=MIN(?,p.user_id)
+                     AND f.user_high=MAX(?,p.user_id)
+                 )
+               )
+             )
+           ORDER BY p.level DESC,p.username COLLATE NOCASE
+           LIMIT ?""",
+        (searcher_id, f"%{escaped}%", searcher_id, searcher_id, limit),
+    )
+    return await cur.fetchall()
