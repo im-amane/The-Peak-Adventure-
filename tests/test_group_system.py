@@ -30,6 +30,11 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
  async def test_raid_start_attack(self):
   await start_group_raid(self.db,-1001,202,10,"Root Warden",1000)
   result=await attack_group_raid(self.db,-1001,101,1000); self.assertEqual(result["status"],"won")
+ async def test_raid_attack_cooldown(self):
+  await start_group_raid(self.db,-1001,202,10,"Root Warden",1000)
+  await attack_group_raid(self.db,-1001,101,10)
+  with self.assertRaisesRegex(GroupError,"cooldown"):
+   await attack_group_raid(self.db,-1001,101,10)
  async def test_unrostered_cannot_attack(self):
   await start_group_raid(self.db,-1001,202,10,"Root Warden",1000)
   with self.assertRaises(GroupError): await attack_group_raid(self.db,-1001,303,10)
