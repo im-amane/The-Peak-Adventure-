@@ -533,7 +533,7 @@ def duel_keyboard(duel_id: int, invite: bool = False):
 async def duel_text(duel):
     challenger = await get_player(duel["challenger_id"])
     opponent = await get_player(duel["opponent_id"])
-    turn = await get_player(duel["turn_user_id"]) if duel["turn_user_id"] else None
+    turn = await get_player(duel["turn_user_id"]) if duel["status"] == "active" and duel["turn_user_id"] else None
     status = "⚔️ ACTIVE DUEL" if duel["status"] == "active" else "🏆 DUEL FINISHED"
     lines = [
         f"<b>{status}</b>",
@@ -592,16 +592,16 @@ async def create_duel(message: Message):
 
 @dp.callback_query(F.data.startswith("duel_accept:"))
 async def accept_duel(call: CallbackQuery):
-    await call.answer()
     duel_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     if not duel or duel["status"] != "pending":
-        await call.message.answer("This duel invitation is no longer active.")
+        await call.answer("This duel invitation is no longer active.", show_alert=True)
         return
     if call.from_user.id != duel["opponent_id"]:
         await call.answer("Only the challenged player can accept.", show_alert=True)
         return
+    await call.answer()
     await db.execute(
         "UPDATE duels SET status='active', turn_user_id=challenger_id WHERE duel_id=? AND status='pending'",
         (duel_id,),
@@ -614,16 +614,16 @@ async def accept_duel(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("duel_decline:"))
 async def decline_duel(call: CallbackQuery):
-    await call.answer()
     duel_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     if not duel or duel["status"] != "pending":
-        await call.message.answer("This duel invitation is no longer active.")
+        await call.answer("This duel invitation is no longer active.", show_alert=True)
         return
     if call.from_user.id != duel["opponent_id"]:
         await call.answer("Only the challenged player can decline.", show_alert=True)
         return
+    await call.answer()
     await db.execute("UPDATE duels SET status='declined' WHERE duel_id=?", (duel_id,))
     await db.commit()
     await call.message.edit_text("✋ Duel declined.")
@@ -631,13 +631,12 @@ async def decline_duel(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("duel_action:"))
 async def duel_action(call: CallbackQuery):
-    await call.answer()
     _, action, duel_id_text = call.data.split(":", 2)
     duel_id = int(duel_id_text)
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     if not duel or duel["status"] != "active":
-        await call.message.answer("This duel is not active.")
+        await call.answer("This duel is not active.", show_alert=True)
         return
     user_id = call.from_user.id
     if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
@@ -646,6 +645,10 @@ async def duel_action(call: CallbackQuery):
     if duel["turn_user_id"] != user_id:
         await call.answer("Wait for your turn.", show_alert=True)
         return
+    if action not in {"attack", "skill", "surrender"}:
+        await call.answer("Unknown duel action.", show_alert=True)
+        return
+    await call.answer()
     if action == "surrender":
         winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
         loser_id = user_id
