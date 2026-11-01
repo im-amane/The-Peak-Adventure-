@@ -24,5 +24,6 @@ jobs:
           node-version: "20"
       - run: python scripts/sync_cloudflare_assets.py --check
       - run: node --check webapp/game.js
+      - run: node --check cloudflare/worker.mjs
       - run: node --test webapp/pathfinding.test.mjs
       - run: node --test cloudflare/worker.test.mjs
