@@ -152,6 +152,14 @@ async def init_db():
       user_id INTEGER PRIMARY KEY, guild_id INTEGER NOT NULL,
       role TEXT NOT NULL DEFAULT 'member', joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS trades (
+      trade_id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL,
+      initiator_id INTEGER NOT NULL, partner_id INTEGER NOT NULL,
+      initiator_coins INTEGER NOT NULL DEFAULT 0, initiator_potions INTEGER NOT NULL DEFAULT 0,
+      partner_coins INTEGER NOT NULL DEFAULT 0, partner_potions INTEGER NOT NULL DEFAULT 0,
+      initiator_confirmed INTEGER NOT NULL DEFAULT 0, partner_confirmed INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     migrations = [
@@ -580,6 +588,205 @@ async def duel_text(duel):
     return "\n".join(lines)
 
 
+def trade_keyboard(trade_id: int):
+    return InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(text="🤝 Accept Trade", callback_data=f"trade_accept:{trade_id}"),
+        InlineKeyboardButton(text="✋ Decline", callback_data=f"trade_decline:{trade_id}"),
+    ]])
+
+
+async def trade_summary(trade):
+    initiator = await get_player(trade["initiator_id"])
+    partner = await get_player(trade["partner_id"])
+    return (
+        f"🤝 <b>Trade #{trade['trade_id']}</b> · {trade['status'].upper()}\n"
+        f"<b>{escape(initiator['username'] or 'Player 1')}</b> offers: "
+        f"{trade['initiator_coins']} coins, {trade['initiator_potions']} potions\n"
+        f"<b>{escape(partner['username'] or 'Player 2')}</b> offers: "
+        f"{trade['partner_coins']} coins, {trade['partner_potions']} potions\n"
+        f"Confirmations: {'✅' if trade['initiator_confirmed'] else '⌛'} / "
+        f"{'✅' if trade['partner_confirmed'] else '⌛'}"
+    )
+
+
+@dp.message(Command("trade"))
+async def create_trade(message: Message):
+    if message.chat.type not in {"group", "supergroup"} or not message.reply_to_message or not message.reply_to_message.from_user:
+        await message.answer("Reply to another player's message in a group, then send /trade.")
+        return
+    initiator_id = message.from_user.id
+    partner_id = message.reply_to_message.from_user.id
+    if initiator_id == partner_id or message.reply_to_message.from_user.is_bot:
+        await message.answer("Choose another human player.")
+        return
+    initiator = await get_player(initiator_id, message.from_user.username or message.from_user.full_name)
+    partner = await get_player(partner_id, message.reply_to_message.from_user.username or message.reply_to_message.from_user.full_name)
+    if not initiator["class_selected"] or not partner["class_selected"]:
+        await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
+        return
+    cur = await db.execute(
+        "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
+        "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
+        (initiator_id, partner_id, initiator_id, partner_id),
+    )
+    if await cur.fetchone():
+        await message.answer("One of these players already has a pending or open trade.")
+        return
+    cur = await db.execute(
+        "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
+        (message.chat.id, initiator_id, partner_id),
+    )
+    await db.commit()
+    trade_id = cur.lastrowid
+    await message.answer(
+        f"🤝 <b>Trade invitation #{trade_id}</b>\n"
+        f"{escape(initiator['username'] or 'Player 1')} wants to trade with "
+        f"{escape(partner['username'] or 'Player 2')}.",
+        reply_markup=trade_keyboard(trade_id),
+    )
+
+
+@dp.callback_query(F.data.startswith("trade_accept:"))
+async def accept_trade(call: CallbackQuery):
+    trade_id = int(call.data.split(":", 1)[1])
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if not trade or trade["status"] != "pending":
+        await call.answer("This trade invitation is no longer active.", show_alert=True)
+        return
+    if call.from_user.id != trade["partner_id"]:
+        await call.answer("Only the invited player can accept.", show_alert=True)
+        return
+    await call.answer()
+    await db.execute("UPDATE trades SET status='open' WHERE trade_id=?", (trade_id,))
+    await db.commit()
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    await call.message.edit_text(
+        (await trade_summary(trade)) + "\n\nUse <code>/offer ID COINS POTIONS</code> to set your offer.",
+    )
+
+
+@dp.callback_query(F.data.startswith("trade_decline:"))
+async def decline_trade(call: CallbackQuery):
+    trade_id = int(call.data.split(":", 1)[1])
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if not trade or trade["status"] != "pending":
+        await call.answer("This trade invitation is no longer active.", show_alert=True)
+        return
+    if call.from_user.id != trade["partner_id"]:
+        await call.answer("Only the invited player can decline.", show_alert=True)
+        return
+    await call.answer()
+    await db.execute("UPDATE trades SET status='declined' WHERE trade_id=?", (trade_id,))
+    await db.commit()
+    await call.message.edit_text("✋ Trade declined.")
+
+
+@dp.message(Command("offer"))
+async def set_trade_offer(message: Message):
+    if len(message.command) != 4 or not all(part.isdigit() for part in message.command[1:]):
+        await message.answer("Usage: <code>/offer trade_id coins potions</code>.")
+        return
+    trade_id, coins, potions = map(int, message.command[1:])
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if not trade or trade["status"] != "open":
+        await message.answer("That trade is not open.")
+        return
+    user_id = message.from_user.id
+    if user_id not in {trade["initiator_id"], trade["partner_id"]}:
+        await message.answer("You are not part of this trade.")
+        return
+    p = await get_player(user_id, message.from_user.username)
+    if coins > p["coins"] or potions > p["potions"]:
+        await message.answer("Your offer exceeds your current coins or potions.")
+        return
+    if user_id == trade["initiator_id"]:
+        await db.execute(
+            "UPDATE trades SET initiator_coins=?, initiator_potions=?, initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
+            (coins, potions, trade_id),
+        )
+    else:
+        await db.execute(
+            "UPDATE trades SET partner_coins=?, partner_potions=?, initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
+            (coins, potions, trade_id),
+        )
+    await db.commit()
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    await message.answer((await trade_summary(trade)) + "\nBoth players must confirm with /confirmtrade ID.")
+
+
+@dp.message(Command("confirmtrade"))
+async def confirm_trade(message: Message):
+    if len(message.command) != 2 or not message.command[1].isdigit():
+        await message.answer("Usage: <code>/confirmtrade trade_id</code>.")
+        return
+    trade_id = int(message.command[1])
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if not trade or trade["status"] != "open":
+        await message.answer("That trade is not open.")
+        return
+    user_id = message.from_user.id
+    if user_id == trade["initiator_id"]:
+        await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=?", (trade_id,))
+    elif user_id == trade["partner_id"]:
+        await db.execute("UPDATE trades SET partner_confirmed=1 WHERE trade_id=?", (trade_id,))
+    else:
+        await message.answer("You are not part of this trade.")
+        return
+    await db.commit()
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if trade["initiator_confirmed"] and trade["partner_confirmed"]:
+        initiator = await get_player(trade["initiator_id"])
+        partner = await get_player(trade["partner_id"])
+        if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
+                or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
+            await db.execute(
+                "UPDATE trades SET initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
+                (trade_id,),
+            )
+            await db.commit()
+            await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
+            return
+        await db.execute(
+            "UPDATE players SET coins=coins-?+?, potions=potions-?+? WHERE user_id=?",
+            (trade["initiator_coins"], trade["partner_coins"], trade["initiator_potions"], trade["partner_potions"], trade["initiator_id"]),
+        )
+        await db.execute(
+            "UPDATE players SET coins=coins-?+?, potions=potions-?+? WHERE user_id=?",
+            (trade["partner_coins"], trade["initiator_coins"], trade["partner_potions"], trade["initiator_potions"], trade["partner_id"]),
+        )
+        await db.execute("UPDATE trades SET status='completed' WHERE trade_id=?", (trade_id,))
+        await db.commit()
+        await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
+        return
+    await message.answer((await trade_summary(trade)) + "\nWaiting for the other player to confirm.")
+
+
+@dp.message(Command("canceltrade"))
+async def cancel_trade(message: Message):
+    if len(message.command) != 2 or not message.command[1].isdigit():
+        await message.answer("Usage: <code>/canceltrade trade_id</code>.")
+        return
+    trade_id = int(message.command[1])
+    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+    trade = await cur.fetchone()
+    if not trade or trade["status"] not in {"pending", "open"}:
+        await message.answer("That trade cannot be cancelled.")
+        return
+    if message.from_user.id not in {trade["initiator_id"], trade["partner_id"]}:
+        await message.answer("You are not part of this trade.")
+        return
+    await db.execute("UPDATE trades SET status='cancelled' WHERE trade_id=?", (trade_id,))
+    await db.commit()
+    await message.answer(f"Trade #{trade_id} cancelled.")
+
+
 async def guild_summary(guild_id: int):
     cur = await db.execute(
         "SELECT g.*, COUNT(m.user_id) AS member_count FROM guilds g "
@@ -907,6 +1114,7 @@ async def help_cmd(message: Message):
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/guild create|join|leave|info|top|disband - Guild management\n"
+        "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
