@@ -42,6 +42,21 @@ SHOP_ITEMS = {
     "celestial_armor": {"name": "Celestial Armor", "type": "armor", "cost": 1400, "bonus": 60, "level": 60},
     "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1},
 }
+QUESTS = [
+    {"id": "first_steps", "title": "A Tiny Spark", "kind": "level", "target": 2, "coins": 40, "potions": 1, "description": "Reach hero level 2."},
+    {"id": "first_hunt", "title": "First Blood", "kind": "wins", "target": 3, "coins": 60, "potions": 1, "description": "Win 3 monster battles."},
+    {"id": "root_seal", "title": "Seal of Roots", "kind": "boss", "target": 10, "coins": 120, "potions": 2, "description": "Defeat the level 10 boss."},
+    {"id": "desert_trail", "title": "Beyond the Dunes", "kind": "level", "target": 11, "coins": 100, "potions": 2, "description": "Reach hero level 11."},
+    {"id": "ancient_seal", "title": "The Ancient Seal", "kind": "boss", "target": 20, "coins": 180, "potions": 2, "description": "Defeat the level 20 boss."},
+    {"id": "storm_memory", "title": "Storm's Memory", "kind": "boss", "target": 30, "coins": 220, "potions": 2, "description": "Defeat the level 30 boss."},
+    {"id": "hollow_kingdom", "title": "The Hollow Crown", "kind": "boss", "target": 40, "coins": 280, "potions": 3, "description": "Defeat the level 40 boss."},
+    {"id": "ember_oath", "title": "Ember Oath", "kind": "boss", "target": 50, "coins": 350, "potions": 3, "description": "Defeat the level 50 boss."},
+    {"id": "frostbound", "title": "Frostbound Promise", "kind": "boss", "target": 60, "coins": 420, "potions": 3, "description": "Defeat the level 60 boss."},
+    {"id": "riftwalker", "title": "Riftwalker", "kind": "boss", "target": 70, "coins": 520, "potions": 3, "description": "Defeat the level 70 boss."},
+    {"id": "celestial_truth", "title": "Celestial Truth", "kind": "boss", "target": 80, "coins": 650, "potions": 4, "description": "Defeat the level 80 boss."},
+    {"id": "eternal_hour", "title": "The Eternal Hour", "kind": "boss", "target": 90, "coins": 800, "potions": 4, "description": "Defeat the level 90 boss."},
+    {"id": "alpha_dream", "title": "The Alpha's Dream", "kind": "boss", "target": 100, "coins": 1200, "potions": 5, "description": "Defeat THE ALPHA GOD."},
+]
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("peak-adventure")
@@ -78,6 +93,12 @@ async def init_db():
       user_id INTEGER NOT NULL, monster_level INTEGER NOT NULL,
       defeated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY(user_id, monster_level)
+    );
+    CREATE TABLE IF NOT EXISTS quest_progress (
+      user_id INTEGER NOT NULL, quest_id TEXT NOT NULL,
+      progress INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
+      claimed INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(user_id, quest_id)
     );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
@@ -241,6 +262,77 @@ async def claim_daily_reward(user_id: int) -> bool:
         return True
 
 
+async def refresh_quest_progress(user_id: int):
+    assert db is not None
+    p = await get_player(user_id)
+    for quest in QUESTS:
+        if quest["kind"] == "level":
+            progress = p["level"]
+        elif quest["kind"] == "wins":
+            progress = p["wins"]
+        else:
+            cur = await db.execute(
+                "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
+                (user_id, quest["target"]),
+            )
+            progress = quest["target"] if await cur.fetchone() else 0
+        await db.execute(
+            "INSERT INTO quest_progress(user_id, quest_id, progress, completed) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(user_id, quest_id) DO UPDATE SET progress=excluded.progress, "
+            "completed=MAX(quest_progress.completed, excluded.completed)",
+            (user_id, quest["id"], progress, int(progress >= quest["target"])),
+        )
+    await db.commit()
+
+
+async def quest_view(user_id: int):
+    await refresh_quest_progress(user_id)
+    cur = await db.execute("SELECT * FROM quest_progress WHERE user_id=?", (user_id,))
+    states = {row["quest_id"]: row for row in await cur.fetchall()}
+    lines = ["📜 <b>Story Quests</b>"]
+    buttons = []
+    for quest in QUESTS:
+        state = states[quest["id"]]
+        if state["claimed"]:
+            status = "🎁 Claimed"
+        elif state["completed"]:
+            status = "✅ Ready to claim"
+            buttons.append([InlineKeyboardButton(text=f"Claim: {quest['title']}", callback_data=f"questclaim:{quest['id']}")])
+        else:
+            status = f"🔒 {min(state['progress'], quest['target'])}/{quest['target']}"
+        lines.append(f"\n<b>{quest['title']}</b> · {status}\n{quest['description']}")
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+    return "\n".join(lines), markup
+
+
+async def claim_quest_reward(user_id: int, quest_id: str) -> str:
+    assert db is not None
+    quest = next((q for q in QUESTS if q["id"] == quest_id), None)
+    if not quest:
+        return "That quest does not exist."
+    async with player_locks[user_id]:
+        await refresh_quest_progress(user_id)
+        cur = await db.execute(
+            "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
+            (user_id, quest_id),
+        )
+        state = await cur.fetchone()
+        if not state or not state["completed"]:
+            return "This quest is not complete yet."
+        if state["claimed"]:
+            return "You have already claimed this quest reward."
+        await db.execute(
+            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+            (quest["coins"], quest["potions"], user_id),
+        )
+        await db.execute(
+            "UPDATE quest_progress SET claimed=1 WHERE user_id=? AND quest_id=?",
+            (user_id, quest_id),
+        )
+        await db.commit()
+    return f"🎁 <b>{quest['title']}</b> reward claimed: +{quest['coins']} coins and +{quest['potions']} potions."
+
+
 async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     assert db is not None
     cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
@@ -273,6 +365,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     if m["boss"]:
         await db.execute("INSERT OR IGNORE INTO boss_defeats(user_id, monster_level) VALUES (?, ?)", (user_id, m["level"]))
     await db.commit()
+    await refresh_quest_progress(user_id)
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
     boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
     return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}"
@@ -308,7 +401,8 @@ async def help_cmd(message: Message):
         "/inventory - Potions and items\n/map - World and boss milestones\n"
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
-        "/class - View hero classes\n/shop - Buy weapons, armor and potions\n\n"
+        "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
+        "/claimquest <id> - Claim a completed quest reward\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
 
@@ -382,13 +476,17 @@ async def map_cmd(message: Message):
 
 @dp.message(Command("quests"))
 async def quests(message: Message):
-    p = await get_player(message.from_user.id)
-    await message.answer(
-        "📜 <b>Story Quests</b>\n"
-        f"1. First Steps: reach level 2 ({'✅' if p['level'] >= 2 else '🔒'})\n"
-        f"2. The First Seal: defeat the level 10 boss ({'✅' if p['wins'] >= 10 else '🔒'})\n"
-        "3. A Fractured World: uncover the truth behind the changing monsters (story progression).\n"
-        "Quest tracking will expand as the campaign is developed.")
+    text, markup = await quest_view(message.from_user.id)
+    await message.answer(text, reply_markup=markup)
+
+
+@dp.message(Command("claimquest"))
+async def claimquest(message: Message):
+    if len(message.command) < 2:
+        await message.answer("Usage: /claimquest <quest_id>. Use /quests to see available rewards.")
+        return
+    result = await claim_quest_reward(message.from_user.id, message.command[1])
+    await message.answer(result)
 
 
 @dp.message(Command("daily"))
@@ -525,8 +623,16 @@ async def cb_inventory(call: CallbackQuery):
 @dp.callback_query(F.data == "quests")
 async def cb_quests(call: CallbackQuery):
     await call.answer()
-    p = await get_player(call.from_user.id)
-    await call.message.answer(f"📜 <b>Story Progress</b>\nCurrent level: {p['level']}/100\nNext milestone: boss level {min(100, ((p['level']//10)+1)*10)}")
+    text, markup = await quest_view(call.from_user.id)
+    await call.message.answer(text, reply_markup=markup)
+
+
+@dp.callback_query(F.data.startswith("questclaim:"))
+async def cb_claim_quest(call: CallbackQuery):
+    await call.answer()
+    quest_id = call.data.split(":", 1)[1]
+    result = await claim_quest_reward(call.from_user.id, quest_id)
+    await call.message.answer(result)
 
 
 @dp.callback_query(F.data == "daily")
