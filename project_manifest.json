@@ -249,7 +249,7 @@
         },
         {
           "name": "Sound and music engine",
-          "status": "partial"
+          "status": "complete"
         }
       ]
     },
@@ -634,7 +634,7 @@
         },
         {
           "name": "Premium currency and payments",
-          "status": "partial"
+          "status": "complete"
         }
       ]
     },
