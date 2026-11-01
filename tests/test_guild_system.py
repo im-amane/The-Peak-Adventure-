@@ -13,6 +13,9 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   INSERT INTO guilds VALUES(10,'Peak',1,1,0);
   INSERT INTO guild_members VALUES(1,10,'leader',CURRENT_TIMESTAMP),(2,10,'member',CURRENT_TIMESTAMP);
   """)
+  await self.db.execute("INSERT INTO players VALUES(?,?,?,?)",(4,"other",4,0))
+  await self.db.execute("INSERT INTO guilds VALUES(?,?,?,?,?)",(20,"Other",4,1,0))
+  await self.db.execute("INSERT INTO guild_members VALUES(?,?,?,CURRENT_TIMESTAMP)",(4,20,"leader"))
   await init_guild_features(self.db)
  async def asyncTearDown(self): await self.db.close()
  async def test_leader_can_invite_and_target_accepts(self):
