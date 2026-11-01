@@ -8,6 +8,7 @@ from friend_system import (
     FriendError,
     init_friend_tables,
     list_friends,
+    list_pending_friend_requests,
     remove_friend,
     respond_to_friend_request,
     search_players,
