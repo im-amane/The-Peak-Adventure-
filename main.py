@@ -107,6 +107,7 @@ async def init_db():
       hero_class TEXT NOT NULL DEFAULT 'Knight', class_selected INTEGER NOT NULL DEFAULT 0,
       weapon TEXT NOT NULL DEFAULT 'Rusty Sword', weapon_attack INTEGER NOT NULL DEFAULT 0,
       armor TEXT NOT NULL DEFAULT 'Traveler Clothes', armor_defense INTEGER NOT NULL DEFAULT 0,
+      pvp_wins INTEGER NOT NULL DEFAULT 0, pvp_losses INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS battles (
@@ -134,6 +135,13 @@ async def init_db():
       claimed INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY(user_id, achievement_id)
     );
+    CREATE TABLE IF NOT EXISTS duels (
+      duel_id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL,
+      challenger_id INTEGER NOT NULL, opponent_id INTEGER NOT NULL,
+      challenger_hp INTEGER NOT NULL, opponent_hp INTEGER NOT NULL,
+      turn_user_id INTEGER, status TEXT NOT NULL DEFAULT 'pending',
+      winner_id INTEGER, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     migrations = [
@@ -144,6 +152,8 @@ async def init_db():
         "ALTER TABLE players ADD COLUMN weapon_attack INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN armor TEXT NOT NULL DEFAULT 'Traveler Clothes'",
         "ALTER TABLE players ADD COLUMN armor_defense INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN pvp_wins INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE players ADD COLUMN pvp_losses INTEGER NOT NULL DEFAULT 0",
     ]
     for migration in migrations:
         try:
@@ -171,7 +181,8 @@ def menu():
          InlineKeyboardButton(text="📜 Quests", callback_data="quests")],
         [InlineKeyboardButton(text="🛒 Shop", callback_data="shop"),
          InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
-        [InlineKeyboardButton(text="🏅 Achievements", callback_data="achievements")],
+        [InlineKeyboardButton(text="🏅 Achievements", callback_data="achievements"),
+         InlineKeyboardButton(text="⚔️ PvP Rank", callback_data="pvprank")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ]
@@ -221,7 +232,8 @@ async def player_text(p):
             f"✨ XP: <b>{p['xp']}/{xp_needed(p['level'])}</b>\n"
             f"❤️ HP: <b>{p['hp']}/{p['max_hp']}</b>\n"
             f"🪙 Coins: <b>{p['coins']}</b>\n"
-            f"🏆 Victories: <b>{p['wins']}</b>")
+            f"🏆 Victories: <b>{p['wins']}</b>\n"
+            f"⚔️ PvP Record: <b>{p['pvp_wins']}W / {p['pvp_losses']}L</b>")
 
 
 async def send_battle(target, user_id: int, intro: str = "", edit: bool = False):
@@ -505,6 +517,184 @@ async def webapp_data(message: Message):
         await message.answer("Unknown Mini App action.")
 
 
+def duel_keyboard(duel_id: int, invite: bool = False):
+    if invite:
+        return InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="⚔️ Accept Duel", callback_data=f"duel_accept:{duel_id}"),
+            InlineKeyboardButton(text="✋ Decline", callback_data=f"duel_decline:{duel_id}"),
+        ]])
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚔️ Attack", callback_data=f"duel_action:attack:{duel_id}"),
+         InlineKeyboardButton(text="🔥 Skill", callback_data=f"duel_action:skill:{duel_id}")],
+        [InlineKeyboardButton(text="🏳️ Surrender", callback_data=f"duel_action:surrender:{duel_id}")],
+    ])
+
+
+async def duel_text(duel):
+    challenger = await get_player(duel["challenger_id"])
+    opponent = await get_player(duel["opponent_id"])
+    turn = await get_player(duel["turn_user_id"]) if duel["turn_user_id"] else None
+    status = "⚔️ ACTIVE DUEL" if duel["status"] == "active" else "🏆 DUEL FINISHED"
+    lines = [
+        f"<b>{status}</b>",
+        f"🛡️ {escape(challenger['username'] or 'Challenger')} · Lv.{challenger['level']} · ❤️ {duel['challenger_hp']}/{challenger['max_hp']}",
+        f"⚔️ {escape(opponent['username'] or 'Opponent')} · Lv.{opponent['level']} · ❤️ {duel['opponent_hp']}/{opponent['max_hp']}",
+    ]
+    if turn:
+        lines.append(f"\n⏳ Turn: <b>{escape(turn['username'] or 'Adventurer')}</b>")
+    if duel["winner_id"]:
+        winner = await get_player(duel["winner_id"])
+        lines.append(f"\n🏆 Winner: <b>{escape(winner['username'] or 'Adventurer')}</b>")
+    return "\n".join(lines)
+
+
+@dp.message(Command("duel"))
+async def create_duel(message: Message):
+    if message.chat.type not in {"group", "supergroup"}:
+        await message.answer("Use /duel as a reply to another player's message inside a group.")
+        return
+    target_message = message.reply_to_message
+    if not target_message or not target_message.from_user:
+        await message.answer("Reply to the player you want to challenge, then send /duel.")
+        return
+    challenger_id = message.from_user.id
+    opponent_id = target_message.from_user.id
+    if challenger_id == opponent_id or target_message.from_user.is_bot:
+        await message.answer("You need to challenge another human player.")
+        return
+    challenger = await get_player(challenger_id, message.from_user.username or message.from_user.full_name)
+    opponent = await get_player(opponent_id, target_message.from_user.username or target_message.from_user.full_name)
+    if not challenger["class_selected"] or not opponent["class_selected"]:
+        await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
+        return
+    cur = await db.execute(
+        "SELECT 1 FROM duels WHERE status='active' AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
+        (challenger_id, opponent_id, challenger_id, opponent_id),
+    )
+    if await cur.fetchone():
+        await message.answer("One of these players is already in an active duel.")
+        return
+    cur = await db.execute(
+        "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
+        "VALUES (?, ?, ?, ?, ?, 'pending')",
+        (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
+    )
+    await db.commit()
+    duel_id = cur.lastrowid
+    await message.answer(
+        f"⚔️ <b>Duel Challenge #{duel_id}</b>\n"
+        f"{escape(challenger['username'] or 'Challenger')} challenges "
+        f"{escape(opponent['username'] or 'Opponent')}!\n"
+        "The challenged player must accept.",
+        reply_markup=duel_keyboard(duel_id, invite=True),
+    )
+
+
+@dp.callback_query(F.data.startswith("duel_accept:"))
+async def accept_duel(call: CallbackQuery):
+    await call.answer()
+    duel_id = int(call.data.split(":", 1)[1])
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    if not duel or duel["status"] != "pending":
+        await call.message.answer("This duel invitation is no longer active.")
+        return
+    if call.from_user.id != duel["opponent_id"]:
+        await call.answer("Only the challenged player can accept.", show_alert=True)
+        return
+    await db.execute(
+        "UPDATE duels SET status='active', turn_user_id=challenger_id WHERE duel_id=? AND status='pending'",
+        (duel_id,),
+    )
+    await db.commit()
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    await call.message.edit_text(await duel_text(duel), reply_markup=duel_keyboard(duel_id))
+
+
+@dp.callback_query(F.data.startswith("duel_decline:"))
+async def decline_duel(call: CallbackQuery):
+    await call.answer()
+    duel_id = int(call.data.split(":", 1)[1])
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    if not duel or duel["status"] != "pending":
+        await call.message.answer("This duel invitation is no longer active.")
+        return
+    if call.from_user.id != duel["opponent_id"]:
+        await call.answer("Only the challenged player can decline.", show_alert=True)
+        return
+    await db.execute("UPDATE duels SET status='declined' WHERE duel_id=?", (duel_id,))
+    await db.commit()
+    await call.message.edit_text("✋ Duel declined.")
+
+
+@dp.callback_query(F.data.startswith("duel_action:"))
+async def duel_action(call: CallbackQuery):
+    await call.answer()
+    _, action, duel_id_text = call.data.split(":", 2)
+    duel_id = int(duel_id_text)
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    if not duel or duel["status"] != "active":
+        await call.message.answer("This duel is not active.")
+        return
+    user_id = call.from_user.id
+    if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
+        await call.answer("You are not part of this duel.", show_alert=True)
+        return
+    if duel["turn_user_id"] != user_id:
+        await call.answer("Wait for your turn.", show_alert=True)
+        return
+    if action == "surrender":
+        winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+        loser_id = user_id
+        await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (winner_id, duel_id))
+        await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
+        await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
+        await db.commit()
+    else:
+        attacker_id = user_id
+        defender_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+        attacker = await get_player(attacker_id)
+        defender = await get_player(defender_id)
+        attacker_class = HERO_CLASSES.get(attacker["hero_class"], HERO_CLASSES["Knight"])
+        defender_class = HERO_CLASSES.get(defender["hero_class"], HERO_CLASSES["Knight"])
+        base = attacker["level"] * 8 + attacker_class["attack"] + attacker["weapon_attack"]
+        if action == "skill":
+            base = int(base * 1.8)
+        damage = max(5, base + random.randint(0, 12) - defender["armor_defense"] - defender_class["defense"])
+        if user_id == duel["challenger_id"]:
+            new_hp = max(0, duel["opponent_hp"] - damage)
+            await db.execute("UPDATE duels SET opponent_hp=? WHERE duel_id=?", (new_hp, duel_id))
+        else:
+            new_hp = max(0, duel["challenger_hp"] - damage)
+            await db.execute("UPDATE duels SET challenger_hp=? WHERE duel_id=?", (new_hp, duel_id))
+        if new_hp == 0:
+            await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (user_id, duel_id))
+            await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (user_id,))
+            await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (defender_id,))
+        else:
+            await db.execute("UPDATE duels SET turn_user_id=? WHERE duel_id=?", (defender_id, duel_id))
+        await db.commit()
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    markup = duel_keyboard(duel_id) if duel["status"] == "active" else None
+    await call.message.edit_text(await duel_text(duel), reply_markup=markup)
+
+
+@dp.message(Command("pvprank"))
+async def pvprank(message: Message):
+    cur = await db.execute(
+        "SELECT username, pvp_wins, pvp_losses FROM players ORDER BY pvp_wins DESC, pvp_losses ASC LIMIT 10"
+    )
+    rows = await cur.fetchall()
+    lines = ["⚔️ <b>PvP Rankings</b>"]
+    for i, row in enumerate(rows, 1):
+        lines.append(f"{i}. {escape(row['username'] or 'Adventurer')} · {row['pvp_wins']}W / {row['pvp_losses']}L")
+    await message.answer("\n".join(lines))
+
+
 @dp.message(Command("start"))
 async def start(message: Message):
     p = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
@@ -538,6 +728,7 @@ async def help_cmd(message: Message):
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
         "/claimquest quest_id - Claim a completed quest reward\n"
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
+        "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
