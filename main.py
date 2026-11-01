@@ -568,7 +568,7 @@ async def create_duel(message: Message):
         await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
         return
     cur = await db.execute(
-        "SELECT 1 FROM duels WHERE status='active' AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
+        "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
         (challenger_id, opponent_id, challenger_id, opponent_id),
     )
     if await cur.fetchone():
