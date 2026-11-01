@@ -10,7 +10,7 @@ import main
 from game_rules import calculate_enemy_damage
 
 
-class CombatRuleTests(unittest.TestCase):
+class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
     def test_telegram_battle_uses_synchronous_monster_builder_correctly(self):
         source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
         module = ast.parse(source)
