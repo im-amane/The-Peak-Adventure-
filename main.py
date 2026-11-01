@@ -1500,7 +1500,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
         await db.commit()
         result = await finish_battle(user_id, True)
-        await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu())
+        await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     p = await get_player(user_id)
     enemy_damage = max(3, m["attack_power"] - p["level"] * 2 - p["armor_defense"] + class_stats["defense"] + m["speed"] // 12 + random.randint(-3, 6))
