@@ -4,24 +4,29 @@ import aiosqlite
 class AccountError(ValueError):
     pass
 
-DEFAULT_SETTINGS={"notifications_enabled":1,"profile_visibility":"public"}
+DEFAULT_SETTINGS={"notifications_enabled":1,"profile_visibility":"public","sound_enabled":1}
 
 async def init_account_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_settings(
       user_id INTEGER PRIMARY KEY,
       notifications_enabled INTEGER NOT NULL DEFAULT 1 CHECK(notifications_enabled IN (0,1)),
       profile_visibility TEXT NOT NULL DEFAULT 'public' CHECK(profile_visibility IN ('public','friends')),
+      sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""")
+    try:
+        await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
+    except aiosqlite.OperationalError:
+        pass
     await db.commit()
 
 async def get_settings(db,user_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
-    cur=await db.execute("SELECT notifications_enabled,profile_visibility FROM player_settings WHERE user_id=?",(user_id,))
+    cur=await db.execute("SELECT notifications_enabled,profile_visibility,sound_enabled FROM player_settings WHERE user_id=?",(user_id,))
     row=await cur.fetchone()
     return dict(row) if row else dict(DEFAULT_SETTINGS)
 
-async def update_settings(db,user_id,notifications_enabled=None,profile_visibility=None):
+async def update_settings(db,user_id,notifications_enabled=None,profile_visibility=None,sound_enabled=None):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
     current=await get_settings(db,user_id)
     if notifications_enabled is not None:
@@ -30,10 +35,13 @@ async def update_settings(db,user_id,notifications_enabled=None,profile_visibili
     if profile_visibility is not None:
         if profile_visibility not in {"public","friends"}: raise AccountError("Profile visibility must be public or friends.")
         current["profile_visibility"]=profile_visibility
-    await db.execute("""INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility) VALUES(?,?,?)
+    if sound_enabled is not None:
+        if not isinstance(sound_enabled,bool): raise AccountError("Sound setting must be on or off.")
+        current["sound_enabled"]=int(sound_enabled)
+    await db.execute("""INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility,sound_enabled) VALUES(?,?,?,?)
       ON CONFLICT(user_id) DO UPDATE SET notifications_enabled=excluded.notifications_enabled,
-      profile_visibility=excluded.profile_visibility,updated_at=CURRENT_TIMESTAMP""",
-      (user_id,current["notifications_enabled"],current["profile_visibility"]))
+      profile_visibility=excluded.profile_visibility,sound_enabled=excluded.sound_enabled,updated_at=CURRENT_TIMESTAMP""",
+      (user_id,current["notifications_enabled"],current["profile_visibility"],current["sound_enabled"]))
     await db.commit()
     return current
 
