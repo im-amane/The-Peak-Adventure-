@@ -691,7 +691,8 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         "\\n✨ Mastery complete! This monster's evolved form can now appear."
         if evolution["evolved"] and evolution["defeats"] == 5 else ""
     )
-    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}"
+    xp_boost_note = "\\n💎 XP Charm doubled this victory's XP." if xp_boosted else ""
+    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}{xp_boost_note}"
 
 
 @dp.message(F.web_app_data)
