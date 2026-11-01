@@ -325,7 +325,7 @@
   },
   {
     "level": 19,
-    "name": "ANCIENT MINOTAUR",
+    "name": "MINOTAUR WARDEN",
     "boss": false,
     "rank": "COMMON",
     "power": 758,
@@ -505,7 +505,7 @@
   },
   {
     "level": 29,
-    "name": "THUNDER DRAGON",
+    "name": "STORM WYRM",
     "boss": false,
     "rank": "ELITE",
     "power": 2682,
@@ -685,7 +685,7 @@
   },
   {
     "level": 39,
-    "name": "ANCIENT SHADOW DRAGON",
+    "name": "SHADOW WYRM",
     "boss": false,
     "rank": "ELITE",
     "power": 9485,
@@ -865,7 +865,7 @@
   },
   {
     "level": 49,
-    "name": "WORLD DESTROYER TITAN",
+    "name": "OBSIDIAN TITAN",
     "boss": false,
     "rank": "ELITE",
     "power": 33546,
@@ -1045,7 +1045,7 @@
   },
   {
     "level": 59,
-    "name": "CELESTIAL DRAGON GOD",
+    "name": "ASTRAL WYRM",
     "boss": false,
     "rank": "LEGENDARY",
     "power": 118650,
@@ -1225,7 +1225,7 @@
   },
   {
     "level": 69,
-    "name": "GOD OF DESTRUCTION",
+    "name": "ABYSSAL DEITY",
     "boss": false,
     "rank": "LEGENDARY",
     "power": 419657,
@@ -1405,7 +1405,7 @@
   },
   {
     "level": 79,
-    "name": "PRIMORDIAL DRAGON GOD",
+    "name": "VOID DRAGON",
     "boss": false,
     "rank": "LEGENDARY",
     "power": 1484292,
@@ -1585,7 +1585,7 @@
   },
   {
     "level": 89,
-    "name": "ETERNAL OVERLORD",
+    "name": "ETERNAL TYRANT",
     "boss": false,
     "rank": "MYTHIC",
     "power": 5249826,
