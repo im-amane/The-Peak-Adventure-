@@ -171,7 +171,7 @@
       if (element) element.textContent = value;
     });
     if (data.appearance) {
-      ["race","skin","hair","outfit"].forEach(key => {
+      ["race","skin","hair","face","body","outfit"].forEach(key => {
         const field = document.getElementById("appearance-" + key);
         if (field) field.value = data.appearance[key];
       });
@@ -754,9 +754,15 @@
     const g = scene.add.graphics();
     const cloak = {traveler:0x344d68,knight:0x596a86,mage:0x654b88,ranger:0x41684f}[appearance.outfit] || ({Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a);
     const skin = {fair:0xf1d2b5,warm:0xe2b98d,tan:0xb97850,deep:0x70442f}[appearance.skin] || 0xe2b98d;
+    const bodyScale = {slim:0.9,balanced:1,broad:1.12}[appearance.body] || 1;
     g.fillStyle(cloak,1); g.fillRoundedRect(-15,-5,30,29,8);
     g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
-    g.fillStyle(skin,1); g.fillCircle(0,-15,11);
+    g.fillStyle(skin,1);
+    if(appearance.face==="angular"){
+      g.fillEllipse(0,-16,20,22);g.fillTriangle(-7,-8,7,-8,0,-1);
+    }else{
+      g.fillCircle(0,-15,11);
+    }
     if (appearance.race === "Elf") {
       g.fillStyle(skin,1); g.fillTriangle(-8,-17,-22,-27,-12,-10); g.fillTriangle(8,-17,22,-27,12,-10);
     } else if (appearance.race === "Orc") {
@@ -788,7 +794,10 @@
       g.fillStyle(0xdce6ef,1);g.fillTriangle(26,-25,30,-34,23,-28);
     }
     g.fillStyle(0x171b25,1); g.fillCircle(-4,-16,1.5); g.fillCircle(4,-16,1.5);
-    c.add(g); c.setDepth(10); return c;
+    if(appearance.face==="scarred"){
+      g.lineStyle(1.8,0x8b3d42,0.95);g.lineBetween(-7,-11,-1,-5);
+    }
+    c.add(g);c.setScale(bodyScale,1);c.setDepth(10);return c;
   }
 
   function makeMonster(scene,x,y,level,color) {
