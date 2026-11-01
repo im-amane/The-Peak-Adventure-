@@ -65,6 +65,16 @@ QUESTS = [
     {"id": "eternal_hour", "title": "The Eternal Hour", "kind": "boss", "target": 90, "coins": 800, "potions": 4, "description": "Defeat the level 90 boss."},
     {"id": "alpha_dream", "title": "The Alpha's Dream", "kind": "boss", "target": 100, "coins": 1200, "potions": 5, "description": "Defeat THE ALPHA GOD."},
 ]
+ACHIEVEMENTS = [
+    {"id": "first_blood", "title": "First Blood", "kind": "wins", "target": 1, "coins": 30, "potions": 0, "description": "Win your first battle."},
+    {"id": "monster_hunter", "title": "Monster Hunter", "kind": "wins", "target": 10, "coins": 120, "potions": 1, "description": "Win 10 battles."},
+    {"id": "boss_breaker", "title": "Boss Breaker", "kind": "bosses", "target": 1, "coins": 180, "potions": 1, "description": "Defeat your first boss."},
+    {"id": "seal_keeper", "title": "Seal Keeper", "kind": "bosses", "target": 5, "coins": 500, "potions": 2, "description": "Defeat five bosses."},
+    {"id": "halfway_hero", "title": "Halfway Hero", "kind": "level", "target": 50, "coins": 600, "potions": 2, "description": "Reach level 50."},
+    {"id": "mythic_voyager", "title": "Mythic Voyager", "kind": "level", "target": 80, "coins": 1000, "potions": 3, "description": "Reach level 80."},
+    {"id": "alpha_slayer", "title": "Alpha Slayer", "kind": "alpha", "target": 1, "coins": 2500, "potions": 5, "description": "Defeat THE ALPHA GOD."},
+    {"id": "master_armorer", "title": "Master Armorer", "kind": "gear", "target": 1, "coins": 700, "potions": 2, "description": "Equip the strongest weapon and armor."},
+]
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("peak-adventure")
@@ -118,6 +128,12 @@ async def init_db():
       claimed INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY(user_id, quest_id)
     );
+    CREATE TABLE IF NOT EXISTS achievement_progress (
+      user_id INTEGER NOT NULL, achievement_id TEXT NOT NULL,
+      progress INTEGER NOT NULL DEFAULT 0, completed INTEGER NOT NULL DEFAULT 0,
+      claimed INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY(user_id, achievement_id)
+    );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     migrations = [
@@ -155,6 +171,7 @@ def menu():
          InlineKeyboardButton(text="📜 Quests", callback_data="quests")],
         [InlineKeyboardButton(text="🛒 Shop", callback_data="shop"),
          InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
+        [InlineKeyboardButton(text="🏅 Achievements", callback_data="achievements")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ]
@@ -357,6 +374,85 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> str:
     return f"🎁 <b>{quest['title']}</b> reward claimed: +{quest['coins']} coins and +{quest['potions']} potions."
 
 
+async def refresh_achievement_progress(user_id: int):
+    assert db is not None
+    p = await get_player(user_id)
+    cur = await db.execute("SELECT COUNT(*) AS total FROM boss_defeats WHERE user_id=?", (user_id,))
+    boss_count = (await cur.fetchone())["total"]
+    cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=100", (user_id,))
+    alpha_defeated = await cur.fetchone() is not None
+    for achievement in ACHIEVEMENTS:
+        kind = achievement["kind"]
+        if kind == "wins":
+            progress = p["wins"]
+        elif kind == "bosses":
+            progress = boss_count
+        elif kind == "level":
+            progress = p["level"]
+        elif kind == "alpha":
+            progress = int(alpha_defeated)
+        else:
+            progress = int(p["weapon_attack"] >= 90 and p["armor_defense"] >= 60)
+        await db.execute(
+            "INSERT INTO achievement_progress(user_id, achievement_id, progress, completed) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(user_id, achievement_id) DO UPDATE SET progress=excluded.progress, "
+            "completed=MAX(achievement_progress.completed, excluded.completed)",
+            (user_id, achievement["id"], progress, int(progress >= achievement["target"])),
+        )
+    await db.commit()
+
+
+async def achievement_view(user_id: int):
+    await refresh_achievement_progress(user_id)
+    cur = await db.execute("SELECT * FROM achievement_progress WHERE user_id=?", (user_id,))
+    states = {row["achievement_id"]: row for row in await cur.fetchall()}
+    lines = ["🏅 <b>Achievements</b>"]
+    buttons = []
+    for achievement in ACHIEVEMENTS:
+        state = states[achievement["id"]]
+        if state["claimed"]:
+            status = "🎁 Claimed"
+        elif state["completed"]:
+            status = "✅ Complete · reward ready"
+            buttons.append([InlineKeyboardButton(
+                text=f"Claim: {achievement['title']}",
+                callback_data=f"achclaim:{achievement['id']}",
+            )])
+        else:
+            status = f"🔒 {min(state['progress'], achievement['target'])}/{achievement['target']}"
+        lines.append(f"\n<b>{achievement['title']}</b> · {status}\n{achievement['description']}")
+    markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
+    return "\n".join(lines), markup
+
+
+async def claim_achievement_reward(user_id: int, achievement_id: str) -> str:
+    assert db is not None
+    achievement = next((a for a in ACHIEVEMENTS if a["id"] == achievement_id), None)
+    if not achievement:
+        return "That achievement does not exist."
+    async with player_locks[user_id]:
+        await refresh_achievement_progress(user_id)
+        cur = await db.execute(
+            "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
+            (user_id, achievement_id),
+        )
+        state = await cur.fetchone()
+        if not state or not state["completed"]:
+            return "This achievement is not complete yet."
+        if state["claimed"]:
+            return "You have already claimed this achievement reward."
+        await db.execute(
+            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+            (achievement["coins"], achievement["potions"], user_id),
+        )
+        await db.execute(
+            "UPDATE achievement_progress SET claimed=1 WHERE user_id=? AND achievement_id=?",
+            (user_id, achievement_id),
+        )
+        await db.commit()
+    return f"🏅 <b>{achievement['title']}</b> reward claimed: +{achievement['coins']} coins and +{achievement['potions']} potions."
+
+
 async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     assert db is not None
     cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
@@ -440,7 +536,7 @@ async def help_cmd(message: Message):
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
-        "/claimquest quest_id - Claim a completed quest reward\n"
+        "/claimquest quest_id - Claim a completed quest reward\n/achievements - View achievements\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
@@ -549,6 +645,21 @@ async def bestiary(message: Message):
         lines.append(f"{marker} Lv.{monster['level']} {monster['name']} · {monster['element']}")
     lines.append("\nUse /monster <code>level</code> for full details.")
     await message.answer("\n".join(lines))
+
+
+@dp.message(Command("achievements"))
+async def achievements(message: Message):
+    text, markup = await achievement_view(message.from_user.id)
+    await message.answer(text, reply_markup=markup)
+
+
+@dp.message(Command("claimachievement"))
+async def claimachievement(message: Message):
+    if len(message.command) < 2:
+        await message.answer("Usage: <code>/claimachievement achievement_id</code>.")
+        return
+    result = await claim_achievement_reward(message.from_user.id, message.command[1])
+    await message.answer(result)
 
 
 @dp.message(Command("quests"))
@@ -695,6 +806,21 @@ async def cb_inventory(call: CallbackQuery):
     await call.answer()
     p = await get_player(call.from_user.id)
     await call.message.answer(f"🎒 <b>Inventory</b>\n🧪 Potions: {p['potions']}\n🪙 Coins: {p['coins']}")
+
+
+@dp.callback_query(F.data == "achievements")
+async def cb_achievements(call: CallbackQuery):
+    await call.answer()
+    text, markup = await achievement_view(call.from_user.id)
+    await call.message.answer(text, reply_markup=markup)
+
+
+@dp.callback_query(F.data.startswith("achclaim:"))
+async def cb_claim_achievement(call: CallbackQuery):
+    await call.answer()
+    achievement_id = call.data.split(":", 1)[1]
+    result = await claim_achievement_reward(call.from_user.id, achievement_id)
+    await call.message.answer(result)
 
 
 @dp.callback_query(F.data == "quests")
