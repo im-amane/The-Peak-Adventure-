@@ -1935,8 +1935,8 @@ async def dungeon_command(message: Message):
             dungeon_id = int(args[2])
             if not 1 <= dungeon_id <= 10:
                 raise DungeonError("Dungeon ID must be between 1 and 10.")
-            await travel_to_world(db, message.from_user.id, player["level"], dungeon_id)
             state = await enter_dungeon(db, message.from_user.id, player["level"], dungeon_id)
+            await travel_to_world(db, message.from_user.id, player["level"], dungeon_id)
             await message.answer("🗝️ Entered <b>" + escape(state["name"]) + "</b>. Room 1/3: defeat a level " + str(state["target_level"]) + " or stronger monster.")
         elif action == "status":
             state = await get_dungeon_state(db, message.from_user.id)
