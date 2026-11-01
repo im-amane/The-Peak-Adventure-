@@ -10,10 +10,10 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Turn-based combat with attack, class skill, potions and escape
 - Elemental matchups, weapon attack bonuses and armor defence bonuses
 - Equipment shop with level-gated weapons, armor and potions
-- Persistent story quests with one-time rewards
+- Persistent story quests and achievements with one-time rewards
 - Daily rewards with a UTC 24-hour claim cooldown
 - One-time boss clears, player XP/levels, coins, HP and leaderboard
-- Phaser 3 Mini App with a custom-drawn 2D map, keyboard/touch movement and monster encounter handoff to Telegram chat
+- Phaser 3 Mini App with ten world biomes, custom-drawn 2D scenery, keyboard/touch movement and in-app battle controls
 - Telegram initData HMAC authentication for the Mini App API
 - SQLite persistence and automated catalogue/authentication tests
 
@@ -71,6 +71,6 @@ python -m unittest discover -s tests -v
 GitHub Actions runs these checks on pushes and pull requests to `main`.
 
 ## Remaining development
-The Mini App currently provides the 2D map, hero movement and encounter handoff; battles are still played using Telegram buttons. Full in-Mini-App combat animations, polished hand-drawn sprite sheets, multiple explorable maps, multiplayer parties/PvP/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
+The Mini App currently provides custom-drawn world scenes, hero movement and turn-based battles inside the Mini App. Polished frame-by-frame hand-drawn sprite sheets, larger explorable maps with collision and NPCs, multiplayer parties/PvP/guilds/trading, deeper story cinematics, sound, deployment hardening and live Telegram testing remain to be completed.
 
 Never commit your real `.env` or bot token.
