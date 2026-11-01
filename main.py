@@ -3154,6 +3154,11 @@ async def miniapp_state(user: dict):
     trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
     pending_trades = (await trade_cur.fetchone())["total"]
     dungeon_state = await get_dungeon_state(db, user_id)
+    dungeon_choices = available_dungeons(p["level"])
+    claimed_cur = await db.execute("SELECT dungeon_id FROM dungeon_rewards WHERE user_id=?", (user_id,))
+    claimed_dungeons = {row["dungeon_id"] for row in await claimed_cur.fetchall()}
+    for dungeon_choice in dungeon_choices:
+        dungeon_choice["claimed"] = dungeon_choice["id"] in claimed_dungeons
     material_state = await get_materials(db, user_id)
     story_state = await get_story_chapters(db, user_id, p["level"])
     await refresh_quest_progress(user_id)
@@ -3174,6 +3179,7 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "dungeon": dungeon_state,
+        "dungeons": dungeon_choices,
         "materials": material_state,
         "story": story_state,
         "weekly_quests": await get_weekly_quests(db, user_id),
@@ -3208,6 +3214,50 @@ async def api_state(request: web.Request):
         return web.json_response({"error": str(exc)}, status=401)
     async with db_lock:
         return web.json_response(await miniapp_state(user))
+
+
+async def api_dungeon(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 4096:
+        return web.json_response({"error": "Dungeon request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Dungeon payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or payload.get("action") not in {"enter", "abandon", "claim"}:
+        return web.json_response({"error": "Choose enter, abandon or claim."}, status=400)
+    action = payload["action"]
+    dungeon_id = payload.get("dungeon_id")
+    if action == "enter" and (not isinstance(dungeon_id, int) or isinstance(dungeon_id, bool) or not 1 <= dungeon_id <= 10):
+        return web.json_response({"error": "A valid dungeon ID is required."}, status=400)
+    user_id = user["id"]
+    try:
+        async with db_lock:
+            async with player_locks[user_id]:
+                player = await get_player(user_id, user.get("username") or user.get("first_name"))
+                if action == "enter":
+                    if not player["class_selected"]:
+                        return web.json_response({"error": "Choose a hero class in the Telegram chat first."}, status=409)
+                    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+                    if await cur.fetchone():
+                        return web.json_response({"error": "Finish your active battle before entering a dungeon."}, status=409)
+                    state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                    message = "Dungeon entered. Defeat the room guardians to progress."
+                elif action == "abandon":
+                    await abandon_dungeon(db, user_id)
+                    state = None
+                    message = "Dungeon run abandoned."
+                else:
+                    coins, potions = await claim_dungeon_reward(db, user_id)
+                    state = None
+                    message = f"Dungeon reward claimed: +{coins} coins and +{potions} potions."
+                player_state = await miniapp_state(user)
+    except DungeonError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({"message": message, "result": state, "state": player_state})
 
 
 async def api_explore(request: web.Request):
@@ -3594,6 +3644,7 @@ async def start_web_server():
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
     app.router.add_get("/api/state", api_state)
+    app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/appearance", api_appearance)
