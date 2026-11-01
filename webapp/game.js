@@ -225,6 +225,7 @@
       this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D");
+      this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
       this.input.on("pointerdown",pointer=>{if(nearMonster)this.challenge();});
       this.physics=null;
     }
@@ -261,7 +262,6 @@
   document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
   document.querySelectorAll("[data-dir]").forEach(button=>{
     const dir=button.dataset.dir;
-    const vector={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[dir];
     const start=event=>{
       event.preventDefault();
       pressedDirections.add(dir);
