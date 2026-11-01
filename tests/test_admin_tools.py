@@ -20,6 +20,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE crafted_items(user_id INTEGER,recipe_id TEXT);
   CREATE TABLE player_worlds(user_id INTEGER,current_world INTEGER);
   CREATE TABLE player_presence(user_id INTEGER,last_seen TEXT);
+  CREATE TABLE world_discoveries(user_id INTEGER,world_id INTEGER);
   CREATE TABLE dungeon_runs(user_id INTEGER,dungeon_id INTEGER);
   CREATE TABLE dungeon_rewards(user_id INTEGER,dungeon_id INTEGER);
   CREATE TABLE monster_discoveries(user_id INTEGER,monster_level INTEGER);
