@@ -147,3 +147,9 @@ The Mini App now includes obstacle collision, a solid NPC with ten region-specif
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
 Never commit your real `.env` or bot token.
+
+## Database backup and recovery
+
+The bot creates a SQLite online backup immediately after startup and repeats it every 6 hours by default. Each snapshot is integrity-checked before publication, written atomically, and rotated to retain the newest 7 files. Configure `BACKUP_DIR`, `BACKUP_INTERVAL_SECONDS`, and `BACKUP_RETENTION` in the environment. Keep the backup directory on persistent storage and outside publicly served web assets.
+
+For recovery, stop the bot process first, then call `restore_backup(backup_file, database_file)` from `db_backup.py` in a controlled Python maintenance script. Restore refuses unreadable snapshots and atomically replaces the database only after integrity verification. Restart the bot after verifying the recovered player data.
