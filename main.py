@@ -22,7 +22,7 @@ from aiogram.types import WebAppInfo
 
 from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
-from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
+from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
@@ -956,6 +956,30 @@ async def cb_friend_list(call: CallbackQuery):
     for index, friend in enumerate(friends, 1):
         lines.append(f"{index}. {escape(friend['username'] or 'Adventurer')} · Lv.{friend['level']} · ID <code>{friend['user_id']}</code>")
     await call.message.answer("\n".join(lines))
+
+
+@dp.message(Command("players"))
+async def search_players_command(message: Message):
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) < 2:
+        await message.answer("Usage: /players username\\nOnly public profiles and profiles visible to your friends appear.")
+        return
+    try:
+        rows = await search_players(db, message.from_user.id, args[1])
+    except FriendError as exc:
+        await message.answer(escape(str(exc)))
+        return
+    if not rows:
+        await message.answer("No visible players matched that search.")
+        return
+    lines = ["🔎 <b>Player Search</b>"]
+    for row in rows:
+        lines.append(
+            f"👤 <b>{escape(row['username'] or 'Adventurer')}</b> · Lv.{row['level']} · "
+            f"ID <code>{row['user_id']}</code>"
+        )
+    lines.append("To add someone, reply to their message in a shared group and use /friend request.")
+    await message.answer("\\n".join(lines))
 
 
 @dp.message(Command("friend"))
