@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import closing
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,8 +24,8 @@ def create_backup(database_path: str | Path, backup_dir: str | Path, keep: int =
     os.close(fd)
     temporary_path = Path(temporary_name)
     try:
-        with sqlite3.connect(f"file:{source_path.resolve()}?mode=ro", uri=True, timeout=30) as source:
-            with sqlite3.connect(temporary_path, timeout=30) as target:
+        with closing(sqlite3.connect(f"file:{source_path.resolve()}?mode=ro", uri=True, timeout=30)) as source:
+            with closing(sqlite3.connect(temporary_path, timeout=30)) as target:
                 source.backup(target, pages=256, sleep=0.05)
                 result = target.execute("PRAGMA integrity_check").fetchone()
                 if not result or result[0] != "ok":
@@ -50,8 +51,32 @@ def verify_backup(backup_path: str | Path) -> bool:
     if not path.is_file():
         return False
     try:
-        with sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=10) as connection:
+        with closing(sqlite3.connect(f"file:{path.resolve()}?mode=ro", uri=True, timeout=10)) as connection:
             result = connection.execute("PRAGMA integrity_check").fetchone()
             return bool(result and result[0] == "ok")
     except sqlite3.Error:
         return False
+
+ 
+def restore_backup(backup_path: str | Path, database_path: str | Path) -> Path:
+    """Atomically restore a verified snapshot. Stop the game process before calling."""
+    source = Path(backup_path)
+    destination = Path(database_path)
+    if not verify_backup(source):
+        raise sqlite3.DatabaseError("Refusing to restore an invalid or unreadable backup")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=".restore-", suffix=".tmp", dir=destination.parent)
+    os.close(fd)
+    temporary = Path(temporary_name)
+    try:
+        with closing(sqlite3.connect(f"file:{source.resolve()}?mode=ro", uri=True, timeout=30)) as source_db:
+            with closing(sqlite3.connect(temporary, timeout=30)) as target_db:
+                source_db.backup(target_db, pages=256, sleep=0.05)
+                result = target_db.execute("PRAGMA integrity_check").fetchone()
+                if not result or result[0] != "ok":
+                    raise sqlite3.DatabaseError(f"Restore verification failed: {result}")
+        os.replace(temporary, destination)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
+    return destination
