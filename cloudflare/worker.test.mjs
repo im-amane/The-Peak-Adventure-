@@ -466,4 +466,7 @@ test("hero level-up, defeat and respawn effects are wired to state changes", () 
   assert.match(game, /playDeathAnimation\(\)/);
   assert.match(game, /playRespawnAnimation\(\)/);
   assert.match(game, /playLevelUpAnimation\(\)/);
+  assert.match(game, /let pendingSceneEffects = \[\]/);
+  assert.match(game, /function flushSceneEffects\(\)/);
+  assert.match(game, /pendingSceneEffects\.push\("levelup"\)/);
 });
