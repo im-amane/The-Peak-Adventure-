@@ -376,3 +376,17 @@ async def get_party_info(db: aiosqlite.Connection, user_id: int):
         (party["party_id"],),
     )
     return party, await cur.fetchall()
+
+
+async def list_pending_party_invites(db: aiosqlite.Connection, user_id: int):
+    if not _valid_id(user_id):
+        raise PartyError("Invalid player account.")
+    cur = await db.execute(
+        """SELECT i.invite_id,i.party_id,i.inviter_id,p.username,p.level
+           FROM party_invites i
+           JOIN players p ON p.user_id=i.inviter_id
+           WHERE i.target_id=? AND i.status='pending'
+           ORDER BY i.invite_id DESC LIMIT 20""",
+        (user_id,),
+    )
+    return await cur.fetchall()
