@@ -158,11 +158,11 @@
         },
         {
           "name": "Armor and outfit visuals",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Weapon appearance visuals",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Idle, walk and run frame animations",
@@ -296,7 +296,7 @@
         },
         {
           "name": "Dungeons and secret areas",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "World unlock and fast travel",
