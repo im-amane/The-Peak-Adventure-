@@ -33,7 +33,7 @@ def get_premium_packages():
 
 
 def make_invoice_payload(package_id, user_id):
-    if package_id not in get_premium_packages():
+    if not isinstance(package_id, str) or package_id not in get_premium_packages():
         raise PremiumError("Unknown premium package.")
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise PremiumError("Invalid player account.")
@@ -98,14 +98,18 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
         raise PremiumError("The paid Stars amount does not match this package.")
     if not isinstance(telegram_charge_id, str) or not telegram_charge_id.strip() or len(telegram_charge_id) > 255:
         raise PremiumError("Invalid Telegram payment charge ID.")
+    telegram_charge_id = telegram_charge_id.strip()
     provider_charge_id = str(provider_charge_id or "")[:255]
     try:
         await db.execute("BEGIN IMMEDIATE")
         cur = await db.execute(
-            "SELECT transaction_id FROM premium_transactions WHERE telegram_charge_id=?",
+            "SELECT user_id,package_id,stars FROM premium_transactions WHERE telegram_charge_id=?",
             (telegram_charge_id,),
         )
-        if await cur.fetchone():
+        previous = await cur.fetchone()
+        if previous:
+            if previous["user_id"] != user_id or previous["package_id"] != package_id or previous["stars"] != stars:
+                raise PremiumError("This Telegram charge ID is already linked to a different purchase.")
             await db.commit()
             return {"credited": False, "balance": await get_premium_balance(db, user_id), "gems": 0}
         await db.execute(
