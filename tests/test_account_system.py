@@ -45,6 +45,9 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE player_worlds(user_id INTEGER,current_world INTEGER);
   CREATE TABLE player_presence(user_id INTEGER PRIMARY KEY,last_seen TEXT);
   CREATE TABLE world_discoveries(user_id INTEGER,world_id INTEGER);
+  CREATE TABLE player_story(user_id INTEGER,chapter_id INTEGER,choice_id TEXT);
+  CREATE TABLE story_flags(user_id INTEGER,flag TEXT,value TEXT);
+  CREATE TABLE story_reward_claims(user_id INTEGER,chapter_id INTEGER);
   INSERT INTO players VALUES(1,'leader',10,0),(2,'member',20,0);
   INSERT INTO guilds VALUES(5,1);
   INSERT INTO guild_members VALUES(1,5,'leader',CURRENT_TIMESTAMP),(2,5,'member',CURRENT_TIMESTAMP);
