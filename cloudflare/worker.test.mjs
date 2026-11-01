@@ -508,3 +508,12 @@ test("premium shop API is forwarded through the edge allowlist", async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("hero idle animation does not tween world position and yields to walking", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /targets:this\.hero, scaleY:1\.025, duration:650/);
+  assert.match(game, /if\(this\.heroIdle\)\{\s*this\.heroIdle\.stop\(\);\s*this\.heroIdle=null;/);
+  assert.match(game, /if\(!this\.heroIdle\)\{\s*this\.heroIdle=this\.tweens\.add\(\{targets:this\.hero,scaleY:1\.025/);
+  assert.doesNotMatch(game, /targets:this\.hero, y:this\.hero\.y-3/);
+});
