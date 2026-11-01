@@ -397,3 +397,13 @@ test("A-star pathfinding rejects blocked and out-of-bounds destinations", () => 
     [],
   );
 });
+
+
+test("Mini App loads A-star and uses it for tap-to-move navigation", () => {
+  const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(html, /<script src="\/pathfinding\.js"><\/script>/);
+  assert.match(game, /window\.PeakPathfinding\.findPath/);
+  assert.match(game, /this\.movePathIndex/);
+  assert.match(game, /this\.cameras\.main\.getWorldPoint/);
+});
