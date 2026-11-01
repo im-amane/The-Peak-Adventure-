@@ -43,6 +43,7 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shop_purchases_apply_effects_and_deduct_gems(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,200)")
+        await self.db.commit()
         potion = await buy_premium_item(self.db, 101, "potion_bundle")
         self.assertEqual(potion["balance"], 160)
         cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
@@ -54,6 +55,7 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_xp_charm_adds_three_wins_and_is_consumed_once_per_victory(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await self.db.commit()
         await buy_premium_item(self.db, 101, "xp_charm")
         self.assertTrue(await consume_xp_boost(self.db, 101))
         self.assertTrue(await consume_xp_boost(self.db, 101))
@@ -67,6 +69,7 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
+        await self.db.commit()
         with self.assertRaises(PremiumError):
             await buy_premium_item(self.db, 101, "potion_bundle")
         cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
