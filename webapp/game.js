@@ -18,6 +18,7 @@
     status: document.getElementById("status"),
     encounter: document.getElementById("encounter"),
     interact: document.getElementById("interact-npc"),
+    portalTravel: document.getElementById("portal-travel"),
     battlePanel: document.getElementById("battle-panel"),
     battleName: document.getElementById("battle-name"),
     battleHp: document.getElementById("battle-hp"),
@@ -62,6 +63,7 @@
   const pressedDirections = new Set();
   let nearMonster = false;
   let nearNpc = false;
+  let nearPortal = false;
   let requestInFlight = false;
   let phaserGame = null;
   let soundEnabled = true;
@@ -857,6 +859,20 @@
       this.npc.setScale(0.9);
       this.obstacles.push({x:this.npc.x,y:this.npc.y,width:34,height:34});
       this.npcLabel = this.add.text(w*0.49,h*0.7-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
+      const nextWorld=gameState.worlds.find(world=>world.id===gameState.world_id+1);
+      this.portalX=this.worldWidth-78;
+      this.portalY=h*0.69;
+      this.portalGraphics=this.add.graphics().setDepth(3);
+      this.portalGraphics.fillStyle(0x142a42,0.82);
+      this.portalGraphics.fillCircle(this.portalX,this.portalY,31);
+      this.portalGraphics.lineStyle(4,0x8edbff,0.95);
+      this.portalGraphics.strokeCircle(this.portalX,this.portalY,28);
+      this.portalGraphics.lineStyle(2,0xd6b7ff,0.8);
+      this.portalGraphics.strokeCircle(this.portalX,this.portalY,19);
+      this.portalLabel=this.add.text(this.portalX,this.portalY-48,nextWorld?(nextWorld.unlocked?"WORLD GATE":"SEALED GATE"):"ORIGIN GATE",{
+        fontFamily:"Georgia",fontSize:"11px",color:"#dff7ff",stroke:"#17232a",strokeThickness:3
+      }).setOrigin(0.5);
+      this.tweens.add({targets:this.portalGraphics,alpha:0.55,duration:900,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
       this.npcDialog = [
         "The blue spark you carry once guided the first guardian home.",
         "The desert swallowed a city to hide a promise beneath its oldest dune.",
@@ -1000,6 +1016,11 @@
       nearMonster=closestDistance<88;
       this.selectedMonster=nearMonster?closest:null;
       nearNpc=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.npc.x,this.npc.y)<72;
+      nearPortal=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.portalX,this.portalY)<72;
+      const nextWorld=gameState.worlds.find(world=>world.id===gameState.world_id+1);
+      ui.portalTravel.dataset.worldTravelId=nextWorld?String(nextWorld.id):"";
+      ui.portalTravel.disabled=!nearPortal||!nextWorld||!nextWorld.unlocked||gameState.battle_active||requestInFlight;
+      ui.portalTravel.textContent=!nearPortal?"🌀 Find portal":!nextWorld?"🏁 Origin Gate":nextWorld.unlocked?"🌀 Enter "+nextWorld.name:"🔒 Portal · Lv."+nextWorld.min_level;
       ui.interact.disabled=!nearNpc;
       ui.interact.textContent=nearNpc?"💬 Talk to Wanderer":"💬 Find Wanderer";
       if(Phaser.Input.Keyboard.JustDown(this.keys.E))this.talkToNpc();
@@ -1062,6 +1083,7 @@
     const button=event.target.closest("[data-world-travel-id],[data-world-discover]");
     if(button) performWorldAction(button);
   });
+  if(ui.portalTravel) ui.portalTravel.addEventListener("click",event=>performWorldAction(event.currentTarget));
 
   if(ui.guildChatLoad)ui.guildChatLoad.addEventListener("click",async()=>{
     try{
