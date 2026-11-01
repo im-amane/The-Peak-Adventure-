@@ -3031,6 +3031,16 @@ async def api_explore(request: web.Request):
                 return web.json_response({"error": "That monster is not available at your current level."}, status=409)
             monster_level = requested_monster_level if requested_monster_level is not None else random.choice(available_monster_levels)
             monster = MONSTER_BY_LEVEL[monster_level]
+            # The Mini App must pay the same exploration cost as Telegram /explore.
+            # Existing battles are checked above, so refreshing the active battle is free.
+            try:
+                await consume_stamina(db, user_id, EXPLORE_COST)
+            except StaminaError as exc:
+                stamina_state = await get_stamina(db, user_id)
+                return web.json_response(
+                    {"error": str(exc), "stamina": stamina_state},
+                    status=409,
+                )
             await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
             await db.execute(
                 "INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
