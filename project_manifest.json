@@ -170,11 +170,11 @@
         },
         {
           "name": "Attack, skill, hit and death animations",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Level-up and cosmetic effects",
-          "status": "pending"
+          "status": "partial"
         }
       ]
     },
