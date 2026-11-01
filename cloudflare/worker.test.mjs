@@ -113,3 +113,11 @@ test("serves the Mini App shell through the Cloudflare static assets binding", a
   assert.equal(requestedPath, "/");
   assert.match(await response.text(), /Peak Adventure/);
 });
+
+test("rejects backend URLs that contain paths or query strings", async () => {
+  const response = await worker.fetch(
+    new Request("https://edge.example/api/state"),
+    { BACKEND_ORIGIN: "https://game.example/internal?debug=1" },
+  );
+  assert.equal(response.status, 503);
+});
