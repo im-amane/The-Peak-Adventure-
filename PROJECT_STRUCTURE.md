@@ -81,10 +81,10 @@ The-Peak-Adventure/
 - [x] Four class identities in game data
 - [x] Character stats and class passives
 - [ ] Playable custom character sprite sheets
-- [ ] Race selection
-- [ ] Character appearance editor
-- [ ] Hair, face and body customization
-- [ ] Armor and outfit visuals
+- [x] Race selection
+- [x] Character appearance editor
+- [~] Hair, face and body customization (race, skin tone and hair presets; no detailed facial/body sliders)
+- [~] Armor and outfit visuals (outfit palettes; no equipment-specific layered sprite art)
 - [ ] Weapon appearance visuals
 - [ ] Idle, walk and run frame animations
 - [ ] Attack, skill, hit and death animations
@@ -195,7 +195,7 @@ The-Peak-Adventure/
 - [x] Battle HUD and boss phase display
 - [x] Skill cooldown and potion availability UI
 - [x] Safe API response handling and request guard
-- [ ] Character customization screen
+- [x] Character customization screen
 - [ ] Dedicated inventory/equipment/quest screens
 - [ ] Friends, party, guild and trading screens
 - [~] Polished responsive visual design and accessibility audit
