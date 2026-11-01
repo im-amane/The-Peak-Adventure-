@@ -3261,6 +3261,8 @@ async def api_dungeon(request: web.Request):
     except ValueError:
         return web.json_response({"error": "Dungeon payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or payload.get("action") not in {"enter", "abandon", "claim"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_dungeon_action", "unsupported action", 2)
         return web.json_response({"error": "Choose enter, abandon or claim."}, status=400)
     action = payload["action"]
     expected_fields = {"action", "dungeon_id"} if action == "enter" else {"action"}
@@ -3311,6 +3313,8 @@ async def api_explore(request: web.Request):
         return web.json_response({"error": "Unsupported exploration request fields."}, status=400)
     requested_monster_level = payload.get("monster_level")
     if requested_monster_level is not None and (type(requested_monster_level) is not int or not 1 <= requested_monster_level <= 100):
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_monster_request", str(requested_monster_level)[:80], 3)
         return web.json_response({"error": "Invalid monster level."}, status=400)
     user_id = user["id"]
     async with db_lock:
@@ -3454,6 +3458,8 @@ async def api_world(request: web.Request):
     except ValueError:
         return web.json_response({"error": "World payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or payload.get("action") not in {"travel", "discover"}:
+        async with db_lock:
+            await record_security_event(db, user["id"], "invalid_world_action", "unsupported action", 2)
         return web.json_response({"error": "Unsupported world action."}, status=400)
     user_id = user["id"]
     try:
