@@ -179,3 +179,6 @@ button:disabled{cursor:not-allowed}
 .guild-chat-form div{display:flex;gap:8px}
 .guild-chat-form input{min-width:0;flex:1}
 .guild-chat-form button,.guild-chat-panel .section-heading button{border:1px solid var(--gold);border-radius:9px;padding:9px 12px;background:#5b4728;color:#fff4d6;font-weight:700}
+
+.portal-button{background:linear-gradient(135deg,#24445a,#4b3e68);border-color:#87c9e6;color:#e9f7ff}
+.portal-button:disabled{filter:saturate(.55)}
