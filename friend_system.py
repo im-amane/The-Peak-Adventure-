@@ -166,3 +166,17 @@ async def search_players(db: aiosqlite.Connection, searcher_id: int, query: str,
         (searcher_id, f"%{escaped}%", searcher_id, searcher_id, limit),
     )
     return await cur.fetchall()
+
+
+async def list_pending_friend_requests(db: aiosqlite.Connection, user_id: int):
+    if not _valid_user_id(user_id):
+        raise FriendError("Invalid player account.")
+    cur = await db.execute(
+        """SELECT f.request_id,f.requester_id,p.username,p.level,f.created_at
+           FROM friend_requests f
+           JOIN players p ON p.user_id=f.requester_id
+           WHERE f.target_id=? AND f.status='pending'
+           ORDER BY f.request_id DESC LIMIT 20""",
+        (user_id,),
+    )
+    return await cur.fetchall()
