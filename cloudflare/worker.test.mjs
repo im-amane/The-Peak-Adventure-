@@ -470,3 +470,17 @@ test("hero level-up, defeat and respawn effects are wired to state changes", () 
   assert.match(game, /function flushSceneEffects\(\)/);
   assert.match(game, /pendingSceneEffects\.push\("levelup"\)/);
 });
+
+
+test("A-star does not move diagonally through two blocked corner cells", () => {
+  const path = globalThis.PeakPathfinding.findPath(
+    { x: 10, y: 10 },
+    { x: 30, y: 30 },
+    [
+      { x: 30, y: 10, width: 20, height: 20 },
+      { x: 10, y: 30, width: 20, height: 20 },
+    ],
+    { width: 40, height: 40, cellSize: 20, margin: 0 },
+  );
+  assert.deepEqual(path, []);
+});
