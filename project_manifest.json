@@ -237,7 +237,7 @@
         },
         {
           "name": "Monster AI with tactical decision-making",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Advanced physics and pathfinding",
@@ -791,5 +791,12 @@
     "pending_items": 72,
     "fully_implemented_percent": 52,
     "calculation": "complete_items / total_items; partial items excluded"
+  },
+  "progress": {
+    "complete": 90,
+    "partial": 8,
+    "pending": 71,
+    "total": 169,
+    "percentage": 53
   }
 }
