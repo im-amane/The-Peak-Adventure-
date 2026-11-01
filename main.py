@@ -1494,6 +1494,9 @@ async def _battle_action_unlocked(call: CallbackQuery):
         if m["trait_effect"] == "armored":
             damage = max(1, int(damage * 0.85))
             action_line += " 🛡️ Its armor absorbs part of the hit."
+        if m["trait_effect"] == "shield" and (b["turn_count"] + 1) % 3 == 1:
+            damage = max(1, int(damage * 0.7))
+            action_line += " 🔰 Its shield blocks part of this strike."
     else:
         damage = 0
     new_enemy_hp = max(0, b["monster_hp"] - damage)
@@ -1526,6 +1529,8 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     enemy_action = f"💥 {m['name']} uses {m['special_move']} and hits for {enemy_damage}!" if special_turn else f"💥 {m['name']} hits you for {enemy_damage}."
+    if effect_notes:
+        enemy_action += " " + " ".join(effect_notes)
     await send_battle(call.message, user_id, f"{action_line}\n{enemy_action}", edit=True)
 
 
@@ -1707,6 +1712,9 @@ async def api_action(request: web.Request):
             if monster["trait_effect"] == "armored":
                 damage = int(damage * 0.85)
                 action_line += " Its armor absorbs part of the hit."
+            if monster["trait_effect"] == "shield" and (battle["turn_count"] + 1) % 3 == 1:
+                damage = max(1, int(damage * 0.7))
+                action_line += " Its shield blocks part of this strike."
         new_enemy_hp = max(0, battle["monster_hp"] - damage)
         turn_count = battle["turn_count"] + 1
         if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
@@ -1749,6 +1757,8 @@ async def api_action(request: web.Request):
             f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
             if special_turn else f"{monster['name']} hits you for {enemy_damage}."
         )
+        if effect_notes:
+            enemy_text += " " + " ".join(effect_notes)
         return web.json_response({
             "message": f"{action_line} {enemy_text}",
             "state": await miniapp_state(user),
