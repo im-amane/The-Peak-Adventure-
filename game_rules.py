@@ -82,3 +82,27 @@ def validate_monster_catalogue(monsters: list[dict]) -> None:
         values = [monster[field].strip().casefold() for monster in monsters]
         if len(set(values)) != MAX_LEVEL:
             raise ValueError(f"Every monster must have a unique {field}")
+
+ 
+def calculate_enemy_damage(
+    attack_power: int,
+    player_level: int,
+    armor_defense: int,
+    class_defense: int,
+    monster_speed: int,
+    random_bonus: int,
+    *,
+    fury: bool = False,
+    special: bool = False,
+) -> int:
+    """Return monster damage after player mitigation and monster modifiers."""
+    damage = max(
+        3,
+        attack_power - player_level * 2 - armor_defense - class_defense
+        + monster_speed // 12 + random_bonus,
+    )
+    if fury:
+        damage = int(damage * 1.25)
+    if special:
+        damage = int(damage * 1.5)
+    return damage
