@@ -66,6 +66,7 @@ async def dashboard_stats(db: aiosqlite.Connection) -> dict:
         "guilds":"SELECT COUNT(*) AS n FROM guilds",
         "registered_groups":"SELECT COUNT(*) AS n FROM group_profiles",
         "active_duels":"SELECT COUNT(*) AS n FROM duels WHERE status='active'",
+        "security_events_24h":"SELECT COUNT(*) AS n FROM security_events WHERE created_at >= datetime('now','-24 hours')",
     }
     result={}
     for key,query in queries.items():
