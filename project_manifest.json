@@ -311,7 +311,7 @@
     {
       "id": "06",
       "name": "Monster and Boss System",
-      "status": "pending",
+      "status": "partial",
       "items": [
         {
           "name": "100 monster records and ordered levels",
