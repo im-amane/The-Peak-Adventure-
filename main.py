@@ -3849,6 +3849,37 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
                     await respond_guild_invite(db, payload["invite_id"], user_id, action == "guild_accept")
                     result = {"accepted": action == "guild_accept"}
+                elif action == "trade_create":
+                    if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int or payload["target_id"] <= 0:
+                        return web.json_response({"error": "A valid target_id is required."}, status=400)
+                    target_id = payload["target_id"]
+                    if target_id == user_id:
+                        return web.json_response({"error": "You cannot trade with yourself."}, status=400)
+                    low_id, high_id = sorted((user_id, target_id))
+                    friend_cur = await db.execute(
+                        "SELECT 1 FROM friend_requests WHERE user_low=? AND user_high=? AND status='accepted'",
+                        (low_id, high_id),
+                    )
+                    if not await friend_cur.fetchone():
+                        return web.json_response({"error": "You can only start trades with accepted friends."}, status=409)
+                    target_cur = await db.execute(
+                        "SELECT class_selected FROM players WHERE user_id=?", (target_id,)
+                    )
+                    target = await target_cur.fetchone()
+                    if not target or not target["class_selected"] or not player["class_selected"]:
+                        return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
+                    active_cur = await db.execute(
+                        """SELECT 1 FROM trades WHERE status IN ('pending','open')
+                           AND (initiator_id IN (?,?) OR partner_id IN (?,?)) LIMIT 1""",
+                        (user_id,target_id,user_id,target_id),
+                    )
+                    if await active_cur.fetchone():
+                        return web.json_response({"error": "One of these players already has an active trade."}, status=409)
+                    trade_cur = await db.execute(
+                        "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
+                        (user_id,target_id),
+                    )
+                    result = {"trade_id": trade_cur.lastrowid, "status": "pending"}
                 elif action in {"trade_accept", "trade_decline"}:
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
