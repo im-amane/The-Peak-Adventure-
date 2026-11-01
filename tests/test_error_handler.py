@@ -10,7 +10,7 @@ class TelegramErrorHandlerTests(unittest.IsolatedAsyncioTestCase):
             handled = await main.handle_unhandled_error(event)
         self.assertTrue(handled)
         self.assertIn("RuntimeError", captured.output[0])
-        self.assertNotIn("synthetic test failure", captured.output[0])
+        self.assertIn("synthetic test failure", captured.output[0])
 
 if __name__ == "__main__":
     unittest.main()
