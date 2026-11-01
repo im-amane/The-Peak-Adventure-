@@ -37,7 +37,7 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_only_contributors_claim_one_time_rewards(self):
         event = await get_or_create_roaming_event(self.db, 1, 3, "Mire Colossus", 1, now=1000)
-        await attack_roaming_event(self.db, event["event_id"], 1, 20, now=1000)
+        await attack_roaming_event(self.db, event["event_id"], 1, 5, now=1000)
         await attack_roaming_event(self.db, event["event_id"], 2, 100, now=1000)
         reward = await claim_roaming_event_reward(self.db, event["event_id"], 1)
         self.assertGreater(reward["coins"], 0)
