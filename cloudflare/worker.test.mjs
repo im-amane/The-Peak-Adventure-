@@ -517,3 +517,11 @@ test("hero idle animation does not tween world position and yields to walking", 
   assert.match(game, /if\(!this\.heroIdle\)\{\s*this\.heroIdle=this\.tweens\.add\(\{targets:this\.hero,scaleY:1\.025/);
   assert.doesNotMatch(game, /targets:this\.hero, y:this\.hero\.y-3/);
 });
+
+
+test("movement clamps long frame deltas after tab suspension", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /const frameDelta=Phaser\.Math\.Clamp\(Number\(delta\)\|\|0,0,50\)/);
+  assert.match(game, /const baseSpeed=0\.18\*frameDelta/);
+  assert.doesNotMatch(game, /const baseSpeed=0\.18\*delta/);
+});
