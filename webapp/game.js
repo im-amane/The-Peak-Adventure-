@@ -539,7 +539,6 @@
       const payload=discover?{action:"discover"}:{action:"travel",world_id:Number(worldId)};
       const result=await postApi("/api/world",payload);
       applyState(result.state,result.message);
-      if(sceneRef)sceneRef.scene.restart();
     }catch(error){
       ui.status.textContent=error.message;
       await loadState().catch(()=>null);
