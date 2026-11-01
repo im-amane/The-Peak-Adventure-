@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, class_evades, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, class_evades, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 
 load_dotenv()
@@ -309,12 +309,7 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
     if level in BOSS_LEVELS:
         cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, level))
         boss_defeated = await cur.fetchone() is not None
-    if level in BOSS_LEVELS and not boss_defeated:
-        monster_level = level
-    else:
-        candidates = [max(1, min(100, level + offset)) for offset in (-1, 0, 1)]
-        candidates = [candidate for candidate in candidates if candidate not in BOSS_LEVELS]
-        monster_level = random.choice(candidates or [max(1, level - 1)])
+    monster_level = random.choice(nearby_monster_levels(level, boss_defeated))
     m = MONSTER_BY_LEVEL[monster_level]
     await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
     await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
@@ -1573,15 +1568,24 @@ async def miniapp_state(user: dict):
         "Eternal Hour", "Origin Realm",
     ]
     region_index = min(9, (p["level"] - 1) // 10)
-    monster_level = p["level"]
+    boss_defeated = False
     if p["level"] in BOSS_LEVELS:
         cur = await db.execute(
             "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
             (user_id, p["level"]),
         )
-        if await cur.fetchone():
-            monster_level = p["level"] - 1 if p["level"] == 100 else p["level"] + 1
-    monster = MONSTER_BY_LEVEL[monster_level]
+        boss_defeated = await cur.fetchone() is not None
+    nearby_levels = nearby_monster_levels(p["level"], boss_defeated)
+    nearby_monsters = [
+        {
+            "name": MONSTER_BY_LEVEL[level]["name"],
+            "level": level,
+            "element": MONSTER_BY_LEVEL[level]["element"],
+            "boss": MONSTER_BY_LEVEL[level]["boss"],
+        }
+        for level in nearby_levels
+    ]
+    monster = MONSTER_BY_LEVEL[nearby_levels[0]]
     cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
     battle_row = await cur.fetchone()
     battle = None
@@ -1618,6 +1622,7 @@ async def miniapp_state(user: dict):
         "coins": p["coins"],
         "region": region_names[region_index],
         "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
+        "nearby_monsters": nearby_monsters,
         "battle": battle,
     }
 
@@ -1636,6 +1641,15 @@ async def api_explore(request: web.Request):
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=401)
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "Invalid JSON body."}, status=400)
+    if not isinstance(payload, dict):
+        return web.json_response({"error": "JSON body must be an object."}, status=400)
+    requested_monster_level = payload.get("monster_level")
+    if requested_monster_level is not None and (type(requested_monster_level) is not int or not 1 <= requested_monster_level <= 100):
+        return web.json_response({"error": "Invalid monster level."}, status=400)
     user_id = user["id"]
     async with db_lock:
       async with player_locks[user_id]:
@@ -1654,12 +1668,7 @@ async def api_explore(request: web.Request):
                     (user_id, level),
                 )
                 boss_defeated = await cur.fetchone() is not None
-            if level in BOSS_LEVELS and not boss_defeated:
-                monster_level = level
-            else:
-                candidates = [max(1, min(100, level + offset)) for offset in (-1, 0, 1)]
-                candidates = [candidate for candidate in candidates if candidate not in BOSS_LEVELS]
-                monster_level = random.choice(candidates or [max(1, level - 1)])
+            monster_level = requested_monster_level if requested_monster_level in nearby_monster_levels(level, boss_defeated) else random.choice(nearby_monster_levels(level, boss_defeated))
             monster = MONSTER_BY_LEVEL[monster_level]
             await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
             await db.execute(
