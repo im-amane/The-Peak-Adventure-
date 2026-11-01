@@ -103,7 +103,10 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/claimquest <quest_id>` - Claim a completed quest
 - `/achievements` - View achievements
 - `/claimachievement <achievement_id>` - Claim an achievement
-- `/daily` - Claim the daily reward
+- `/daily` - Claim the daily login reward
+- `/missions` - View daily objectives and claim completed rewards with `/missions claim MISSION_ID`
+- `/weekly` - View weekly objectives and claim with `/weekly claim QUEST_ID`
+- `/stamina` and `/mana` - View combat resources
 - `/settings` - Set notification preferences and profile visibility
 - `/deleteaccount` - Request permanent player-data deletion with an explicit confirmation step
 - `/export` - Download your player data as JSON
@@ -113,6 +116,9 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
 - `/party create|invite|accept|decline|info|leave|disband` - Four-player party management
+- `/party explore` - Start a shared world encounter (leader pays stamina)
+- `/party battle start|status|attack` - Run a shared party boss encounter
+- `/players username` - Search public and friend-visible player profiles
 - `/friend request|accept|decline|list|remove` - Friend system (request by replying to a player in a group)
 - `/guild create|join|leave|info|top|disband` - Guild management
 - `/guild invite|accept|decline` - Guild invitations
@@ -141,8 +147,20 @@ node --test cloudflare/worker.test.mjs
 
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
-## Remaining development
-The Mini App now includes obstacle collision, a solid NPC with ten region-specific dialogue lines, multiple level-appropriate monster encounters and selectable battle targets. Remaining work includes larger multi-zone maps with portals and landmarks, polished frame-by-frame sprite sheets, richer NPC quests and branching dialogue, deeper story cinematics, sound, co-op exploration/battles and team boss raids, guild invites, equipment trading, deployment hardening, balance testing and live Telegram testing. The 100-monster narrative catalogue also needs a dedicated editorial pass so each entry feels individually authored rather than template-like.
+## Remaining development and launch readiness
+Implemented in the repository: ten world biomes, level-gated travel and landmarks, three-room dungeons with Mini App controls, daily and weekly missions, party co-op encounters, guild raids and wars, player search, equipment auctions, monster evolution and elite encounters, and the authenticated Mini App HUD.
+
+Work still needed before calling the game production-ready:
+- Expand the current biome maps into larger connected zones with visible portals, landmarks and secret areas.
+- Replace procedural character presentation with polished sprite sheets and frame-based movement/combat animations.
+- Add a complete music and sound-effects package, with user-controlled audio preferences.
+- Finish balance and economy testing across all classes, monster traits, evolved/elite variants, crafting, auctions and multiplayer rewards.
+- Run browser and real-device QA, including Android Telegram Mini App testing, reconnects, and concurrent multiplayer sessions.
+- Configure the production Python backend origin and persistent database, then verify the complete Telegram → Cloudflare Worker → backend flow.
+- Complete live Telegram bot, security, backup-restore and load testing.
+- Give the 100-monster narrative catalogue a final editorial pass so every entry feels individually authored.
+
+The Cloudflare Worker and Render deployment configuration are present, but a configured live Python backend and full production end-to-end launch have not been verified. The included Render blueprint provisions paid resources, so create it only after choosing and authorizing the hosting plan.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
