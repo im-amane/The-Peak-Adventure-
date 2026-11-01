@@ -55,7 +55,7 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         )
         await main.db.execute(
             """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
-               VALUES(?,1,10000,0,0,0)""",
+               VALUES(?,1,100,0,0,0)""",
             (user_id,),
         )
         await main.db.commit()
@@ -71,7 +71,7 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         )
         battle = await cur.fetchone()
         self.assertEqual(battle["turn_count"], 1)
-        self.assertLess(battle["monster_hp"], 10000)
+        self.assertLess(battle["monster_hp"], 100)
 
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
