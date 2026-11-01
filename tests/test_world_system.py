@@ -50,6 +50,13 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   row=await cur.fetchone()
   self.assertEqual(row["coins"],result["coins"])
   self.assertEqual(row["potions"],result["potions"])
+ async def test_invalid_landmark_world_is_rejected_without_writing(self):
+  with self.assertRaises(WorldError): await discover_world_landmark(self.db,101,100,11)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM world_discoveries")
+  self.assertEqual((await cur.fetchone())["n"],0)
+ async def test_invalid_landmark_player_is_rejected(self):
+  with self.assertRaises(WorldError): await discover_world_landmark(self.db,0,10,1)
+  with self.assertRaises(WorldError): await travel_to_world(self.db,0,10,1)
  async def test_locked_landmark_cannot_be_discovered(self):
   with self.assertRaises(WorldError):await discover_world_landmark(self.db,101,10,2)
 
