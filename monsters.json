@@ -775,7 +775,7 @@
     "advantage": "Cinder Beetle gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Cinder Beetle is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] Heat rises from cracks in the earth, and the stars above the volcano begin to turn red.",
+    "story": "[5/10 · Ember Abyss] CINDER BEETLE crawls from a crack beneath the Hollow Kingdom, carrying a coal that burns with the same gentle blue as the first spark. It is not feeding the volcano; it is keeping a tiny nest warm for the fire-creatures fleeing the mountain's heart.",
     "trait_effect": "regenerate"
   },
   {
@@ -794,7 +794,7 @@
     "advantage": "Magma Serpent gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Magma Serpent is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The ember imp steals a coal to keep a cold nest warm.",
+    "story": "[5/10 · Ember Abyss] MAGMA SERPENT coils around a bridge above the lava, shielding the only safe path from the eruption. It recognizes the fourth seal's mark on your gear and asks whether the dead of the Hollow Kingdom finally found peace.",
     "trait_effect": "fury"
   },
   {
@@ -813,7 +813,7 @@
     "advantage": "Ashen Brute gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Ashen Brute is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] A magma serpent coils around a bridge, protecting the only path away from the eruption.",
+    "story": "[5/10 · Ember Abyss] ASHEN BRUTE carries a melted crown, the last gift from a queen who ordered her people to flee before the Ember Abyss awakened. The crown's underside bears the same promise as the blue spark: someone must remember those who stayed behind.",
     "trait_effect": "swift"
   },
   {
@@ -832,7 +832,7 @@
     "advantage": "Flame Revenant gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Flame Revenant is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The ash brute carries a melted crown and calls it the last gift from its queen.",
+    "story": "[5/10 · Ember Abyss] FLAME REVENANT rises from the queen's abandoned forge and bows when it sees the blue spark. It reveals that the fifth seal was forged here, using the warmth of a living heart rather than stone or metal.",
     "trait_effect": "armored"
   },
   {
@@ -851,7 +851,7 @@
     "advantage": "Lava Warden gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Lava Warden is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The flame revenant recognizes the blue spark and bows before attacking.",
+    "story": "[5/10 · Ember Abyss] LAVA WARDEN has guarded the furnace gate for centuries, holding shut a sleeping fire that once protected the world from the cold beyond it. It warns that the seal is weakening because the guardian inside has begun to dream again.",
     "trait_effect": "drain"
   },
   {
@@ -870,7 +870,7 @@
     "advantage": "Inferno Witch gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Inferno Witch is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The lava warden has held the gate shut for centuries, keeping a sleeping fire from waking.",
+    "story": "[5/10 · Ember Abyss] INFERNO WITCH offers to quiet the volcano, but asks for the memory of your first victory. She admits she has already traded away her own past to keep the fifth seal stable, and now remembers only the sound of someone calling her mother.",
     "trait_effect": "poison"
   },
   {
@@ -889,7 +889,7 @@
     "advantage": "Obsidian Behemoth gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Obsidian Behemoth is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The inferno witch offers to extinguish the volcano, but the price is the memory of your first victory.",
+    "story": "[5/10 · Ember Abyss] OBSIDIAN BEHEMOTH is built from the broken armor of guardians who tried to hold the furnace gate. Their memories speak through its stone plates, revealing that the child from the Hollow Kingdom was not the only one who made a promise to the sealed heart.",
     "trait_effect": "shield"
   },
   {
@@ -908,7 +908,7 @@
     "advantage": "Caldera Tyrant gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Caldera Tyrant is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The obsidian behemoth is made from the broken armor of guardians who failed before you.",
+    "story": "[5/10 · Ember Abyss] CALDERA TYRANT rules the burning terraces and believes the world must be destroyed before the thing beneath it can suffer again. It shows you visions of the five seals as one great lock around the world's heart, each forged to protect the same wounded being.",
     "trait_effect": "reflect"
   },
   {
@@ -927,7 +927,7 @@
     "advantage": "Obsidian Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Obsidian Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The caldera tyrant reveals that each seal is also a lock on the world's heart.",
+    "story": "[5/10 · Ember Abyss] OBSIDIAN TITAN stands before the furnace core, its body split by glowing lines shaped like the first blue spark. It tells you the fifth seal is not a prison door but a heartbeat regulator, and that breaking it carelessly could end every world you have saved.",
     "trait_effect": "lifesteal"
   },
   {
@@ -946,7 +946,7 @@
     "advantage": "World Destroyer Titan gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "World Destroyer Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] The fifth seal breaks. A warm voice from inside the fire calls you by a name you have never heard.",
+    "story": "[5/10 · Ember Abyss] World Destroyer Titan awakens inside the furnace, carrying the fifth seal in its molten chest. When you defeat it, the fire does not consume the world; it becomes a bridge of warmth through which the sealed heart sends a memory. The voice calls you by the forgotten name of the child who first carried the blue spark, then begs you to find the remaining seals before its heartbeat stops.",
     "trait_effect": "berserk"
   },
   {
