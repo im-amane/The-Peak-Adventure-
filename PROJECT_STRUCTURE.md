@@ -181,7 +181,7 @@ The-Peak-Adventure/
 - [x] Guild invitations
 - [~] Guild announcements (stored and delivered by private message; in-guild chat channel pending)
 - [x] Guild missions and rewards
-- [ ] Guild wars
+- [x] Guild wars (leader challenges; best-of-five score from PvP duels)
 - [x] Guild boss raids
 
 ### 10. Telegram Mini App
