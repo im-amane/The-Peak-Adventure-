@@ -953,7 +953,8 @@
       this.add.text(this.cameras.main.width*0.5,28,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5).setScrollFactor(0);
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
-      this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
+      this.sprintKey=this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
+      this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D","SHIFT"]);
       if(pendingSceneEffects.length)this.time.delayedCall(80,flushSceneEffects);
       this.input.on("pointerdown",pointer=>{
         if(gameState&&gameState.battle_active||requestInFlight)return;
@@ -1063,7 +1064,7 @@
         }
       }
       if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
-      const speed=0.18*delta;
+      const baseSpeed=0.18*delta;
       let dx=0,dy=0;
       if(this.cursors.left.isDown||this.keys.A.isDown||pressedDirections.has("left"))dx=-1;
       if(this.cursors.right.isDown||this.keys.D.isDown||pressedDirections.has("right"))dx=1;
@@ -1089,6 +1090,8 @@
       }
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       const moving=dx!==0||dy!==0;
+      const sprinting=moving&&Boolean(this.sprintKey&&this.sprintKey.isDown);
+      const speed=baseSpeed*(sprinting?1.45:1);
       if(moving){
         if(!this.heroWalkTween){
           this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
@@ -1105,7 +1108,7 @@
       const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
       if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
       const walking=Boolean(dx||dy);
-      const gait=walking?Math.sin(this.time.now/75)*0.48:Math.sin(this.time.now/430)*0.055;
+      const gait=walking?Math.sin(this.time.now/(sprinting?52:75))*(sprinting?0.66:0.48):Math.sin(this.time.now/430)*0.055;
       if(this.hero.limbs){
         this.hero.limbs.leftArm.rotation=-gait;
         this.hero.limbs.rightArm.rotation=gait;
