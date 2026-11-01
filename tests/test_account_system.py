@@ -20,6 +20,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE parties(party_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE party_members(user_id INTEGER PRIMARY KEY,party_id INTEGER,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE group_raid_contributions(raid_id INTEGER,user_id INTEGER);
+  CREATE TABLE group_raid_cooldowns(raid_id INTEGER,user_id INTEGER,last_attack_at TEXT);
   CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER);
   CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER);
   CREATE TABLE battles(user_id INTEGER PRIMARY KEY);
