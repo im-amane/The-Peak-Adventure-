@@ -80,3 +80,37 @@ def restore_backup(backup_path: str | Path, database_path: str | Path) -> Path:
         temporary.unlink(missing_ok=True)
         raise
     return destination
+
+ 
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="The Peak Adventure SQLite backup utility")
+    commands = parser.add_subparsers(dest="command", required=True)
+    backup_parser = commands.add_parser("backup", help="create and verify a rotated backup")
+    backup_parser.add_argument("--database", default=os.getenv("DATABASE_PATH", "peak_adventure.db"))
+    backup_parser.add_argument("--directory", default=os.getenv("BACKUP_DIR", "backups"))
+    backup_parser.add_argument("--keep", type=int, default=int(os.getenv("BACKUP_RETENTION", "7")))
+    verify_parser = commands.add_parser("verify", help="verify a backup integrity")
+    verify_parser.add_argument("backup")
+    restore_parser = commands.add_parser("restore", help="restore a verified backup (stop the bot first)")
+    restore_parser.add_argument("backup")
+    restore_parser.add_argument("--database", default=os.getenv("DATABASE_PATH", "peak_adventure.db"))
+    args = parser.parse_args()
+
+    if args.command == "backup":
+        result = create_backup(args.database, args.directory, args.keep)
+        print(f"Verified backup created: {result}")
+        return 0
+    if args.command == "verify":
+        valid = verify_backup(args.backup)
+        print("Backup integrity: OK" if valid else "Backup integrity: FAILED")
+        return 0 if valid else 1
+    print("Restore requires the game process to be stopped.")
+    result = restore_backup(args.backup, args.database)
+    print(f"Verified backup restored to: {result}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
