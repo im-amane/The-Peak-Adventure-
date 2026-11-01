@@ -111,7 +111,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/deleteaccount` - Request permanent player-data deletion with an explicit confirmation step
 - `/export` - Download your player data as JSON
 - `/group register|info|members|missions|claim|raid|ban|unban|top` - Telegram group progression and raids
-- `/admin stats|player|coins|announce` - Restricted bot administration
+- `/admin stats|player|coins|announce|security` - Restricted bot administration, audit log and suspicious-activity review
 - `/friend request|accept|decline|list|remove` - Friend requests and friend list (request by replying to a player in a group)
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
@@ -228,3 +228,10 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Defeating the same monster five times unlocks its evolved form for that player.
 - Mastery is tracked separately for each player and monster.
 - Evolved forms have increased HP, attack, defence and speed; they appear in Telegram and Mini App encounters.
+
+
+## Security and abuse monitoring
+- Mini App gameplay remains server-authoritative; clients submit actions, never damage or rewards.
+- Malformed battle, world, dungeon, story and social requests are recorded in a bounded-detail security event log.
+- Administrators can review aggregated suspicious activity with `/admin security` or inspect a player with `/admin security PLAYER_ID`.
+- Security telemetry is reviewed for investigation and does not automatically ban players.
