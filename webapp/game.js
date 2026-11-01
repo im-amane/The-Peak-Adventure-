@@ -1018,6 +1018,7 @@
       nearNpc=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.npc.x,this.npc.y)<72;
       nearPortal=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.portalX,this.portalY)<72;
       const nextWorld=gameState.worlds.find(world=>world.id===gameState.world_id+1);
+      this.portalLabel.setText(nextWorld?(nextWorld.unlocked?"WORLD GATE":"SEALED GATE"):"ORIGIN GATE");
       ui.portalTravel.dataset.worldTravelId=nextWorld?String(nextWorld.id):"";
       ui.portalTravel.disabled=!nearPortal||!nextWorld||!nextWorld.unlocked||gameState.battle_active||requestInFlight;
       ui.portalTravel.textContent=!nearPortal?"🌀 Find portal":!nextWorld?"🏁 Origin Gate":nextWorld.unlocked?"🌀 Enter "+nextWorld.name:"🔒 Portal · Lv."+nextWorld.min_level;
