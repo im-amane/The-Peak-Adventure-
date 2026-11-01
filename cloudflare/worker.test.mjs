@@ -345,6 +345,7 @@ test("serves current Mini App source files from the embedded fallback assets", a
     { route: "/", file: "../webapp/index.html", type: "text/html; charset=utf-8" },
     { route: "/style.css", file: "../webapp/style.css", type: "text/css; charset=utf-8" },
     { route: "/game.js", file: "../webapp/game.js", type: "application/javascript; charset=utf-8" },
+    { route: "/pathfinding.js", file: "../webapp/pathfinding.js", type: "application/javascript; charset=utf-8" },
   ];
 
   for (const asset of assets) {
