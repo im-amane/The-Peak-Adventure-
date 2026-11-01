@@ -815,11 +815,7 @@ async def battle_action(call: CallbackQuery):
         await _battle_action_unlocked(call)
 
 
-async def api_state(request: web.Request):
-    try:
-        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
-    except ValueError as exc:
-        return web.json_response({"error": str(exc)}, status=401)
+async def miniapp_state(user: dict):
     user_id = user["id"]
     p = await get_player(user_id, user.get("username") or user.get("first_name") or "Adventurer")
     region_names = [
@@ -834,27 +830,207 @@ async def api_state(request: web.Request):
             "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
             (user_id, p["level"]),
         )
-        boss_is_defeated = await cur.fetchone() is not None
-        if boss_is_defeated:
+        if await cur.fetchone():
             monster_level = p["level"] - 1 if p["level"] == 100 else p["level"] + 1
     monster = MONSTER_BY_LEVEL[monster_level]
-    active = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
-    battle_active = await active.fetchone() is not None
-    return web.json_response({
+    cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
+    battle_row = await cur.fetchone()
+    battle = None
+    if battle_row:
+        active_monster = MONSTER_BY_LEVEL[battle_row["monster_level"]]
+        battle = {
+            "level": active_monster["level"],
+            "name": active_monster["name"],
+            "hp": battle_row["monster_hp"],
+            "max_hp": active_monster["hp"],
+            "special_move": active_monster["special_move"],
+            "unique_power": active_monster["unique_power"],
+            "trait_effect": active_monster["trait_effect"],
+            "story": active_monster["story"],
+            "weakness": active_monster["weakness"],
+        }
+    class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
+    return {
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
         "class_selected": bool(p["class_selected"]),
-        "battle_active": battle_active,
+        "battle_active": battle is not None,
         "hero_class": p["hero_class"],
+        "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
+        "weapon_attack": p["weapon_attack"],
+        "armor": p["armor"],
+        "armor_defense": p["armor_defense"],
         "level": p["level"],
         "xp": p["xp"],
         "xp_required": xp_needed(p["level"]),
         "hp": p["hp"],
         "max_hp": p["max_hp"],
+        "potions": p["potions"],
         "coins": p["coins"],
         "region": region_names[region_index],
         "monster": {"name": monster["name"], "level": monster["level"], "element": monster["element"]},
-    })
+        "battle": battle,
+    }
+
+
+async def api_state(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    return web.json_response(await miniapp_state(user))
+
+
+async def api_explore(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    user_id = user["id"]
+    async with player_locks[user_id]:
+        p = await get_player(user_id, user.get("username") or user.get("first_name"))
+        if not p["class_selected"]:
+            return web.json_response({"error": "Choose a hero class in the Telegram chat first."}, status=409)
+        if p["hp"] <= 0:
+            return web.json_response({"error": "Your hero is exhausted. Use /heal in the Telegram chat."}, status=409)
+        cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+        if not await cur.fetchone():
+            level = p["level"]
+            boss_defeated = False
+            if level in BOSS_LEVELS:
+                cur = await db.execute(
+                    "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
+                    (user_id, level),
+                )
+                boss_defeated = await cur.fetchone() is not None
+            if level in BOSS_LEVELS and not boss_defeated:
+                monster_level = level
+            else:
+                candidates = [max(1, min(100, level + offset)) for offset in (-1, 0, 1)]
+                candidates = [candidate for candidate in candidates if candidate not in BOSS_LEVELS]
+                monster_level = random.choice(candidates or [max(1, level - 1)])
+            monster = MONSTER_BY_LEVEL[monster_level]
+            await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
+            await db.execute(
+                "INSERT INTO battles(user_id, monster_level, monster_hp) VALUES (?, ?, ?)",
+                (user_id, monster_level, monster["hp"]),
+            )
+            await db.commit()
+    return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
+
+
+async def api_action(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    try:
+        payload = await request.json()
+    except (json.JSONDecodeError, ValueError):
+        return web.json_response({"error": "Invalid JSON body."}, status=400)
+    action = payload.get("action")
+    if action not in {"attack", "skill", "potion", "flee"}:
+        return web.json_response({"error": "Unknown battle action."}, status=400)
+    user_id = user["id"]
+    async with player_locks[user_id]:
+        cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
+        battle = await cur.fetchone()
+        if not battle:
+            return web.json_response({"error": "There is no active battle."}, status=409)
+        p = await get_player(user_id, user.get("username"))
+        monster = MONSTER_BY_LEVEL[battle["monster_level"]]
+        class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
+        if action == "flee":
+            message = await finish_battle(user_id, False, escaped=True)
+            return web.json_response({"message": message, "state": await miniapp_state(user)})
+        if action == "potion":
+            if p["potions"] <= 0:
+                return web.json_response({"error": "You have no health potions."}, status=409)
+            heal_amount = min(80, p["max_hp"] - p["hp"])
+            if heal_amount <= 0:
+                return web.json_response({"error": "Your HP is already full."}, status=409)
+            await db.execute(
+                "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
+                (heal_amount, user_id),
+            )
+            damage = 0
+            action_line = f"You recover {heal_amount} HP."
+        elif action == "skill":
+            if p["skill_cd"] > 0:
+                return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+            damage = max(
+                25,
+                (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
+                - monster["defense"] // 2,
+            ) * 2
+            await db.execute("UPDATE players SET skill_cd=3 WHERE user_id=?", (user_id,))
+            action_line = f"{class_stats['skill']} deals {damage} damage."
+        else:
+            damage = max(
+                8,
+                p["level"] * 10 + class_stats["attack"] + p["weapon_attack"]
+                + random.randint(5, 18) - monster["defense"] // 3,
+            )
+            action_line = f"You strike for {damage} damage."
+        if action != "potion":
+            if class_stats["element"] == monster["weakness"]:
+                damage = int(damage * 1.5)
+                action_line += f" Super effective: {class_stats['element']} hits its weakness."
+            elif class_stats["element"] == monster["element"]:
+                damage = int(damage * 0.8)
+                action_line += f" {monster['element']} resists your matching element."
+            if monster["trait_effect"] == "armored":
+                damage = int(damage * 0.85)
+                action_line += " Its armor absorbs part of the hit."
+        new_enemy_hp = max(0, battle["monster_hp"] - damage)
+        turn_count = battle["turn_count"] + 1
+        if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
+            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
+        if new_enemy_hp == 0:
+            await db.execute(
+                "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+                (user_id,),
+            )
+            await db.commit()
+            message = await finish_battle(user_id, True)
+            return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
+        p = await get_player(user_id)
+        enemy_damage = max(
+            3,
+            monster["attack_power"] - p["level"] * 2 - p["armor_defense"]
+            + class_stats["defense"] + monster["speed"] // 12 + random.randint(-3, 6),
+        )
+        if monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3):
+            enemy_damage = int(enemy_damage * 1.25)
+        special_turn = turn_count % (2 if monster["trait_effect"] == "swift" else 3) == 0
+        if special_turn:
+            enemy_damage = int(enemy_damage * 1.5)
+        new_hp = max(0, p["hp"] - enemy_damage)
+        if monster["trait_effect"] == "drain":
+            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
+        await db.execute(
+            "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
+            (new_enemy_hp, turn_count, user_id),
+        )
+        await db.execute(
+            "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+            (new_hp, user_id),
+        )
+        await db.commit()
+        if new_hp == 0:
+            message = await finish_battle(user_id, False)
+            return web.json_response({
+                "message": f"{action_line} {monster['name']} hits you for {enemy_damage}. {message}",
+                "state": await miniapp_state(user),
+            })
+        enemy_text = (
+            f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
+            if special_turn else f"{monster['name']} hits you for {enemy_damage}."
+        )
+        return web.json_response({
+            "message": f"{action_line} {enemy_text}",
+            "state": await miniapp_state(user),
+        })
 
 
 async def start_web_server():
@@ -863,6 +1039,9 @@ async def start_web_server():
     app.router.add_get("/style.css", lambda request: web.FileResponse(WEB_DIR / "style.css"))
     app.router.add_get("/game.js", lambda request: web.FileResponse(WEB_DIR / "game.js"))
     app.router.add_get("/api/state", api_state)
+    app.router.add_post("/api/explore", api_explore)
+    app.router.add_post("/api/action", api_action)
+    app.router.add_get("/healthz", lambda request: web.json_response({"ok": True}))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
