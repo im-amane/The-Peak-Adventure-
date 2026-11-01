@@ -27,6 +27,7 @@
     appearanceStatus: document.getElementById("appearance-status"),
     questList: document.getElementById("quest-list"),
     dailyMissionList: document.getElementById("daily-mission-list"),
+    worldNavigation: document.getElementById("world-navigation"),
     weeklyQuestList: document.getElementById("weekly-quest-list"),
     socialOverview: document.getElementById("social-overview"),
     dungeonStatus: document.getElementById("dungeon-status")
@@ -119,6 +120,7 @@
     renderQuests(data.quests || []);
     renderDailyMissions(data.daily_missions || []);
     renderWeeklyQuests(data.weekly_quests || []);
+    renderWorldNavigation(data.worlds || [], data.landmark || null, data.battle_active);
     renderSocial(data.social || {});
     renderDungeon(data.dungeon || null, data.dungeons || []);
     renderMaterials(data.materials || {});
@@ -343,6 +345,68 @@
       }
       ui.questList.appendChild(card);
     });
+  }
+
+  function renderWorldNavigation(worlds, landmark, battleActive) {
+    if (!ui.worldNavigation) return;
+    ui.worldNavigation.replaceChildren();
+    const heading=document.createElement("h3");
+    heading.textContent="🌀 World Travel";
+    ui.worldNavigation.appendChild(heading);
+    const list=document.createElement("div");
+    list.className="world-choice-list";
+    worlds.forEach(world=>{
+      const button=document.createElement("button");
+      button.type="button";
+      button.className="world-choice"+(world.current?" current":"");
+      button.dataset.worldTravelId=String(world.id);
+      button.disabled=!world.unlocked||world.current||Boolean(battleActive);
+      const marker=world.current?"📍":world.unlocked?"🔓":"🔒";
+      button.textContent=marker+" "+world.id+". "+world.name+" · Lv."+world.min_level;
+      list.appendChild(button);
+    });
+    ui.worldNavigation.appendChild(list);
+    if(landmark){
+      const card=document.createElement("div");
+      card.className="landmark-card";
+      const title=document.createElement("strong");
+      title.textContent=(landmark.discovered?"✅ ":"🗿 ")+landmark.landmark;
+      const description=document.createElement("p");
+      description.textContent=landmark.description;
+      card.append(title,description);
+      if(!landmark.discovered){
+        const button=document.createElement("button");
+        button.type="button";button.className="landmark-action";
+        button.dataset.worldDiscover="1";button.textContent="Discover landmark";
+        card.appendChild(button);
+      }else{
+        const note=document.createElement("p");note.className="small";
+        note.textContent="Landmark discovered. Its reward has already been collected.";
+        card.appendChild(note);
+      }
+      ui.worldNavigation.appendChild(card);
+    }
+  }
+
+  async function performWorldAction(button) {
+    if(requestInFlight||!gameState)return;
+    const worldId=button.dataset.worldTravelId;
+    const discover=button.dataset.worldDiscover==="1";
+    if(!worldId&&!discover)return;
+    requestInFlight=true;
+    ui.worldNavigation.querySelectorAll("button").forEach(item=>item.disabled=true);
+    try{
+      const payload=discover?{action:"discover"}:{action:"travel",world_id:Number(worldId)};
+      const result=await postApi("/api/world",payload);
+      applyState(result.state,result.message);
+      if(sceneRef)sceneRef.scene.restart();
+    }catch(error){
+      ui.status.textContent=error.message;
+      await loadState().catch(()=>null);
+    }finally{
+      requestInFlight=false;
+      if(gameState)applyState(gameState);
+    }
   }
 
   function renderDailyMissions(missions) {
@@ -590,7 +654,7 @@
       sceneRef=this;
       const w=this.scale.width*1.5,h=this.scale.height*1.5;
       this.worldWidth=w;this.worldHeight=h;
-      const idx=Math.max(0,Math.min(9,gameState ? Math.floor((gameState.level-1)/10):0));
+      const idx=Math.max(0,Math.min(9,gameState ? (gameState.world_id||1)-1:0));
       const palette=worldPalettes[idx];
       this.cameras.main.setBackgroundColor(palette.sky);
       const ground=this.add.graphics();
@@ -691,7 +755,7 @@
     }
     talkToNpc(){
       if(!nearNpc || (gameState && gameState.battle_active))return;
-      const idx=Math.max(0,Math.min(9,Math.floor((gameState.level-1)/10)));
+      const idx=Math.max(0,Math.min(9,(gameState.world_id||1)-1));
       ui.status.textContent="Wanderer: "+this.npcDialog[idx];
     }
     blockedAt(x,y){
@@ -806,6 +870,11 @@
   if(ui.weeklyQuestList) ui.weeklyQuestList.addEventListener("click",event=>{
     const button=event.target.closest("[data-weekly-quest-id]");
     if(button) claimWeeklyQuest(button);
+  });
+
+  if(ui.worldNavigation) ui.worldNavigation.addEventListener("click",event=>{
+    const button=event.target.closest("[data-world-travel-id],[data-world-discover]");
+    if(button) performWorldAction(button);
   });
 
   ui.dungeonStatus.addEventListener("click",event=>{
