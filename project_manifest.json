@@ -681,7 +681,7 @@
         },
         {
           "name": "100-monster story editorial rewrite",
-          "status": "pending"
+          "status": "complete"
         }
       ]
     },
@@ -794,17 +794,17 @@
   ],
   "progress_summary": {
     "total_items": 171,
-    "complete_items": 128,
+    "complete_items": 129,
     "partial_items": 21,
-    "pending_items": 22,
-    "fully_implemented_percent": 74,
+    "pending_items": 21,
+    "fully_implemented_percent": 75,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 128,
+    "complete": 129,
     "partial": 21,
-    "pending": 22,
+    "pending": 21,
     "total": 171,
-    "percentage": 74
+    "percentage": 75
   }
 }
