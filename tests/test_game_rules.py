@@ -36,6 +36,15 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(len({m["unique_power"] for m in self.monsters}), 100)
         self.assertEqual(len({m["story"] for m in self.monsters}), 100)
 
+    def test_second_world_stories_name_their_monster_and_continue_the_seal_mystery(self):
+        second_world = self.monsters[10:20]
+        for monster in second_world:
+            self.assertIn(monster["name"].casefold(), monster["story"].casefold())
+            self.assertIn("Ashen Desert", monster["story"])
+        self.assertIn("buried river", second_world[0]["story"])
+        self.assertIn("second seal", second_world[-1]["story"])
+        self.assertIn("first blue spark", second_world[-1]["story"])
+
     def test_all_ten_combat_traits_are_used(self):
         expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
         self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
