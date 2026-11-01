@@ -203,7 +203,9 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         f"<i>{m['story']}</i>\n"
         f"✨ Special: {m['special_move']}\n"
         f"🧬 Trait: {m['unique_power']} ({m['trait_effect']})\n"
-        f"🎯 Weakness: {m['weakness']}"
+        f"🎯 Weakness: {m['weakness']}\n"
+        f"⚖️ Advantage: {m['advantage']}\n"
+        f"⚠️ Disadvantage: {m['disadvantage']}"
     )
     if edit:
         await target.edit_text(text, reply_markup=battle_keyboard())
@@ -403,7 +405,8 @@ async def help_cmd(message: Message):
         "/quests - Current objectives\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
-        "/claimquest quest_id - Claim a completed quest reward\n\n"
+        "/claimquest quest_id - Claim a completed quest reward\n"
+        "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
 
@@ -468,11 +471,43 @@ async def heal(message: Message):
 @dp.message(Command("map"))
 async def map_cmd(message: Message):
     p = await get_player(message.from_user.id)
-    worlds = ["🌱 Whispering Meadow", "🌲 Gloomwood Forest", "🏜️ Ashen Desert", "❄️ Frostfang Peaks",
-              "🌋 Ember Abyss", "🏰 Hollow Kingdom", "🌌 Celestial Ruins", "🕳️ The Primordial Rift",
-              "👁️ Eternal Throne", "🌠 Alpha Realm"]
+    worlds = ["🌱 Whispering Meadow", "🏜️ Ashen Desert", "🌩️ Stormglass Highlands", "🏰 Hollow Kingdom",
+              "🌋 Ember Abyss", "❄️ Frostfang Peaks", "🕳️ Primordial Rift", "🌌 Celestial Ruins",
+              "⌛ Eternal Hour", "🌠 Origin Realm"]
     idx = min(9, (p["level"] - 1) // 10)
     await message.answer(f"🗺️ <b>World Map</b>\nCurrent region: <b>{worlds[idx]}</b>\nProgress: Level {p['level']}/100\nBoss gates: levels 10, 20, 30 ... 100.")
+
+
+@dp.message(Command("monster"))
+async def monster_info(message: Message):
+    if len(message.command) < 2 or not message.command[1].isdigit():
+        await message.answer("Usage: <code>/monster 1</code> to inspect a monster.")
+        return
+    level = int(message.command[1])
+    if level not in MONSTER_BY_LEVEL:
+        await message.answer("Monster level must be between 1 and 100.")
+        return
+    m = MONSTER_BY_LEVEL[level]
+    await message.answer(
+        f"👹 <b>{m['name']}</b> · Level {m['level']} · {m['rank']}\n"
+        f"⚡ Power: {m['power']}\n❤️ HP: {m['hp']}\n⚔️ ATK: {m['attack_power']} · 🛡️ DEF: {m['defense']} · 💨 SPD: {m['speed']}\n"
+        f"✨ Special Move: {m['special_move']}\n🧬 Unique Power: {m['unique_power']}\n"
+        f"⚖️ Advantage: {m['advantage']}\n⚠️ Disadvantage: {m['disadvantage']}\n"
+        f"🎯 Weakness: {m['weakness']}\n\n<i>{m['story']}</i>"
+    )
+
+
+@dp.message(Command("bestiary"))
+async def bestiary(message: Message):
+    p = await get_player(message.from_user.id)
+    upper = min(100, p["level"] + 1)
+    discovered = MONSTERS[:upper]
+    lines = ["📚 <b>Monster Bestiary</b>"]
+    for monster in discovered:
+        marker = "👑" if monster["boss"] else "•"
+        lines.append(f"{marker} Lv.{monster['level']} {monster['name']} · {monster['element']}")
+    lines.append("\nUse /monster <code>level</code> for full details.")
+    await message.answer("\n".join(lines))
 
 
 @dp.message(Command("quests"))
