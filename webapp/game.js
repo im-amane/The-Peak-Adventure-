@@ -261,7 +261,7 @@
         const x=w*positions[Math.min(index,positions.length-1)];
         const y=h*(index%2===0?0.68:0.76);
         const sprite=makeMonster(this,x,y,monster.level,monsterColor);
-        const label=this.add.text(x,y-48,monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
+        const label=this.add.text(x,y-48,(monster.boss?"👑 ":"")+monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
         this.tweens.add({targets:sprite,y:sprite.y-5,duration:800+index*90,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         return {sprite,data:monster,label};
       });
