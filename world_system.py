@@ -1,4 +1,6 @@
 """Unlockable regions and safe fast travel for The Peak Adventure."""
+import sqlite3
+
 from game_rules import nearby_monster_levels
 
 WORLD_NAMES=(
@@ -58,6 +60,8 @@ async def get_current_world(db,user_id,player_level):
     return current
 
 async def travel_to_world(db,user_id,player_level,world_id):
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise WorldError("Invalid player account.")
     if not isinstance(world_id,int) or isinstance(world_id,bool) or not 1<=world_id<=10:
         raise WorldError("World must be between 1 and 10.")
     maximum=unlocked_world_count(player_level)
@@ -87,6 +91,8 @@ def world_encounter_levels(player_level,world_id,boss_defeated=False):
     return filtered or (world_min,)
 
 async def get_world_landmark(db,user_id,world_id):
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise WorldError("Invalid player account.")
     if not isinstance(world_id,int) or isinstance(world_id,bool) or not 1<=world_id<=10:
         raise WorldError("Invalid world.")
     cur=await db.execute("SELECT 1 FROM world_discoveries WHERE user_id=? AND world_id=?",(user_id,world_id))
@@ -96,15 +102,30 @@ async def get_world_landmark(db,user_id,world_id):
 
 
 async def discover_world_landmark(db,user_id,player_level,world_id):
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise WorldError("Invalid player account.")
+    world_min_level(world_id)
     if world_id>unlocked_world_count(player_level):
         raise WorldError("This landmark is beyond your unlocked worlds.")
     try:
-        await db.execute("INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)",(user_id,world_id))
-    except Exception as exc:
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute(
+            "INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)",
+            (user_id,world_id),
+        )
+        reward=100+world_id*25
+        potions=1 if world_id%2 else 2
+        cur=await db.execute(
+            "UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",
+            (reward,potions,user_id),
+        )
+        if cur.rowcount!=1:
+            raise WorldError("Player account not found.")
+        await db.commit()
+        return {"landmark":WORLD_LANDMARKS[world_id-1][0],"coins":reward,"potions":potions}
+    except sqlite3.IntegrityError as exc:
         await db.rollback()
         raise WorldError("You have already discovered this landmark.") from exc
-    reward=100+world_id*25
-    potions=1 if world_id%2 else 2
-    await db.execute("UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",(reward,potions,user_id))
-    await db.commit()
-    return {"landmark":WORLD_LANDMARKS[world_id-1][0],"coins":reward,"potions":potions}
+    except Exception:
+        await db.rollback()
+        raise
