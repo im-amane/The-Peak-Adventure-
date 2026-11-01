@@ -253,30 +253,51 @@ async def get_party_battle(db,party_id):
     return await cur.fetchone()
 
 
-async def reward_party_battle(db,battle_id,user_id,coins,xp):
-    if not all(isinstance(v,int) and not isinstance(v,bool) and v>=0 for v in (battle_id,user_id,coins,xp)) or user_id<=0:
+async def reward_party_battle(db, battle_id, user_id, coins, xp):
+    if not _valid_id(battle_id) or not _valid_id(user_id):
+        raise PartyError("Invalid co-op battle or player account.")
+    if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in (coins, xp)):
         raise PartyError("Invalid co-op reward.")
-    cur=await db.execute("SELECT party_id,status FROM party_battles WHERE battle_id=?",(battle_id,))
-    battle=await cur.fetchone()
-    if not battle or battle["status"]!="won": raise PartyError("This co-op battle has not been won.")
-    cur=await db.execute("SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",(battle["party_id"],user_id))
-    if not await cur.fetchone(): raise PartyError("Only party members can claim co-op rewards.")
     try:
-        await db.execute("INSERT INTO party_battle_rewards(battle_id,user_id) VALUES(?,?)",(battle_id,user_id))
-    except Exception as exc:
+        await db.execute("BEGIN IMMEDIATE")
+        cur = await db.execute(
+            "SELECT party_id,status FROM party_battles WHERE battle_id=?",
+            (battle_id,),
+        )
+        battle = await cur.fetchone()
+        if not battle or battle["status"] != "won":
+            raise PartyError("This co-op battle has not been won.")
+        cur = await db.execute(
+            "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
+            (battle["party_id"], user_id),
+        )
+        if not await cur.fetchone():
+            raise PartyError("Only party members can claim co-op rewards.")
+        await db.execute(
+            "INSERT INTO party_battle_rewards(battle_id,user_id) VALUES(?,?)",
+            (battle_id, user_id),
+        )
+        cur = await db.execute("SELECT level,xp FROM players WHERE user_id=?", (user_id,))
+        player = await cur.fetchone()
+        if not player:
+            raise PartyError("Player account not found.")
+        from game_rules import xp_required
+        level, xp_total = player["level"], player["xp"] + xp
+        while level < 100 and xp_total >= xp_required(level):
+            xp_total -= xp_required(level)
+            level += 1
+        await db.execute(
+            "UPDATE players SET coins=coins+?,level=?,xp=? WHERE user_id=?",
+            (coins, level, xp_total, user_id),
+        )
+        await db.commit()
+        return {"coins": coins, "xp": xp, "level": level}
+    except aiosqlite.IntegrityError as exc:
         await db.rollback()
         raise PartyError("Co-op reward already claimed.") from exc
-    cur=await db.execute("SELECT level,xp FROM players WHERE user_id=?",(user_id,))
-    player=await cur.fetchone()
-    if not player: raise PartyError("Player account not found.")
-    from game_rules import xp_required
-    level,xp_total=player["level"],player["xp"]+xp
-    while level<100 and xp_total>=xp_required(level):
-        xp_total-=xp_required(level);level+=1
-    await db.execute("UPDATE players SET coins=coins+?,level=?,xp=? WHERE user_id=?",(coins,level,xp_total,user_id))
-    await db.commit()
-    return {"coins":coins,"xp":xp,"level":level}
-
+    except Exception:
+        await db.rollback()
+        raise
 
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not _valid_id(user_id):
