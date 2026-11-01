@@ -246,6 +246,60 @@ class GameRulesTests(unittest.TestCase):
             with self.subTest(boss=boss, hp=hp, max_hp=max_hp), self.assertRaises(ValueError):
                 get_boss_phase(boss, hp, max_hp)
 
+    def test_shared_enemy_turn_resolution_applies_traits_and_returns_consistent_state(self):
+        from game_rules import resolve_enemy_turn
+
+        common = dict(
+            trait_effect="lifesteal", turn_count=3, monster_hp_before=80,
+            monster_hp_after_action=60, monster_max_hp=100,
+            monster_attack_power=40, monster_speed=10, player_hp=100,
+            player_max_hp=100, player_level=1, armor_defense=0,
+            class_defense=0, class_speed=0, player_damage=20,
+            action="attack", random_bonus=0, dodge_roll=100,
+            is_boss=False, boss_name="Test Beast", hero_class="Knight",
+        )
+        result = resolve_enemy_turn(**common)
+        self.assertEqual(result["boss_phase"], 1)
+        self.assertEqual(result["enemy_damage"], 38)
+        self.assertFalse(result["evaded"])
+        self.assertEqual(result["player_hp"], 62)
+        self.assertEqual(result["monster_hp"], 70)
+        self.assertIn("The monster steals 9 HP.", result["effect_notes"])
+
+    def test_shared_enemy_turn_resolution_handles_dodge_reflect_and_poison(self):
+        from game_rules import resolve_enemy_turn
+
+        result = resolve_enemy_turn(
+            trait_effect="poison", turn_count=1, monster_hp_before=100,
+            monster_hp_after_action=80, monster_max_hp=100,
+            monster_attack_power=40, monster_speed=0, player_hp=100,
+            player_max_hp=100, player_level=1, armor_defense=0,
+            class_defense=0, class_speed=100, player_damage=20,
+            action="attack", random_bonus=0, dodge_roll=1,
+            is_boss=False, boss_name="Venom", hero_class="Archer",
+        )
+        self.assertTrue(result["evaded"])
+        self.assertEqual(result["enemy_damage"], 0)
+        self.assertEqual(result["player_hp"], 98)
+        self.assertIn("Poison deals 2 damage.", result["effect_notes"])
+
+    def test_shared_enemy_turn_resolution_rejects_boolean_and_invalid_health(self):
+        from game_rules import resolve_enemy_turn
+
+        args = dict(
+            trait_effect="armored", turn_count=1, monster_hp_before=100,
+            monster_hp_after_action=80, monster_max_hp=100,
+            monster_attack_power=40, monster_speed=0, player_hp=100,
+            player_max_hp=100, player_level=1, armor_defense=0,
+            class_defense=0, class_speed=0, player_damage=20,
+            action="attack", random_bonus=0, dodge_roll=1,
+            is_boss=False, boss_name="Test", hero_class="Knight",
+        )
+        with self.assertRaises(ValueError):
+            resolve_enemy_turn(**{**args, "turn_count": True})
+        with self.assertRaises(ValueError):
+            resolve_enemy_turn(**{**args, "monster_hp_after_action": 101})
+
     def test_nearby_monster_levels_reject_invalid_player_level(self):
         for level in (0, 101, True, 1.5):
             with self.subTest(level=level), self.assertRaises(ValueError):
