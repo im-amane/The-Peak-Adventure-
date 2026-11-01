@@ -3558,7 +3558,13 @@ async def api_social(request: web.Request):
                     if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int:
                         return web.json_response({"error": "A valid target_id is required."}, status=400)
                     party, _ = await get_party_info(db, user_id)
-                    target = await get_player(payload["target_id"])
+                    cur = await db.execute(
+                        "SELECT class_selected FROM players WHERE user_id=?",
+                        (payload["target_id"],),
+                    )
+                    target = await cur.fetchone()
+                    if not target:
+                        raise PartyError("That player has not joined the adventure yet.")
                     if not target["class_selected"]:
                         raise PartyError("That player must choose a hero class first.")
                     cur = await db.execute(
