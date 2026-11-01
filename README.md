@@ -197,3 +197,10 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Use `/players username` to find matching player accounts.
 - Public profiles appear in search; friends-only profiles are visible only to accepted friends.
 - Search results show the player ID and level. Friend requests can still be sent by replying to a player's message in a shared group.
+
+
+## Roaming world events
+- `/event` shows the shared active event for the player's current world.
+- `/event attack` contributes damage, with a 30-second per-player cooldown.
+- Players who contributed damage can claim a one-time reward with `/event claim EVENT_ID`.
+- Events are shared by all players in a world and expire after one hour.
