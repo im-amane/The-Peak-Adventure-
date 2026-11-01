@@ -141,6 +141,9 @@
     if(previousLevel !== null && data.level > previousLevel && sceneRef && sceneRef.playLevelUpAnimation){
       sceneRef.playLevelUpAnimation();
     }
+    if(previousHp !== null && previousHp > 0 && data.hp <= 0 && sceneRef && sceneRef.playDeathAnimation){
+      sceneRef.playDeathAnimation();
+    }
     if(previousHp !== null && previousHp <= 0 && data.hp > 0 && sceneRef && sceneRef.playRespawnAnimation){
       sceneRef.playRespawnAnimation();
     }
@@ -988,9 +991,18 @@
         this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
       }
     }
+    playDeathAnimation(){
+      if(!this.hero)return;
+      this.tweens.killTweensOf(this.hero);
+      if(this.heroWalkTween){this.heroWalkTween.stop();this.heroWalkTween=null;}
+      if(this.heroIdle){this.heroIdle.stop();this.heroIdle=null;}
+      this.tweens.add({targets:this.hero,alpha:0.35,angle:90,scaleY:0.72,duration:420,ease:"Cubic.easeIn"});
+    }
     playRespawnAnimation(){
       if(!this.hero)return;
-      this.tweens.add({targets:this.hero,alpha:1,angle:0,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
+      this.tweens.killTweensOf(this.hero);
+      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:this.heroBaseScaleX||1,scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
+      this.heroIdle=this.tweens.add({targets:this.hero,y:this.hero.y-3,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
     }
     playLevelUpAnimation(){
       if(!this.hero)return;
