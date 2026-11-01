@@ -13,6 +13,12 @@ services:
         sync: false
       - key: DATABASE_PATH
         value: /data/peak_adventure.db
+      - key: BACKUP_DIR
+        value: /data/backups
+      - key: BACKUP_INTERVAL_SECONDS
+        value: "21600"
+      - key: BACKUP_RETENTION
+        value: "7"
       - key: WEB_HOST
         value: 0.0.0.0
     disk:
