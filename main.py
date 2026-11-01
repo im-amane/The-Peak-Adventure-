@@ -3381,6 +3381,35 @@ async def api_daily_mission_claim(request: web.Request):
     })
 
 
+async def api_weekly_quest_claim(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Weekly quest request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Weekly quest payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or set(payload) != {"quest_id"}:
+        return web.json_response({"error": "A quest_id is required."}, status=400)
+    quest_id = payload.get("quest_id")
+    if not isinstance(quest_id, str) or len(quest_id) > 64:
+        return web.json_response({"error": "Invalid weekly quest ID."}, status=400)
+    try:
+        async with db_lock:
+            async with player_locks[user["id"]]:
+                reward = await claim_weekly_reward(db, user["id"], quest_id)
+                state = await miniapp_state(user)
+    except WeeklyQuestError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response({
+        "message": f"Weekly quest claimed: +{reward['coins']} coins and +{reward['potions']} potions.",
+        "state": state,
+    })
+
+
 async def api_story(request: web.Request):
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
@@ -3687,6 +3716,7 @@ async def start_web_server():
     app.router.add_post("/api/story", api_story)
     app.router.add_post("/api/quest/claim", api_quest_claim)
     app.router.add_post("/api/daily-mission/claim", api_daily_mission_claim)
+    app.router.add_post("/api/weekly-quest/claim", api_weekly_quest_claim)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
