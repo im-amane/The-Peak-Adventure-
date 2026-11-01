@@ -976,6 +976,7 @@
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
       this.heroBaseScaleX=this.hero.scaleX||1;
+      this.heroFacing=1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
@@ -1086,7 +1087,7 @@
     playRespawnAnimation(){
       if(!this.hero)return;
       this.tweens.killTweensOf(this.hero);
-      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:this.heroBaseScaleX||1,scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
+      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:(this.heroBaseScaleX||1)*(this.heroFacing||1),scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
       this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
     }
     playLevelUpAnimation(){
@@ -1171,21 +1172,29 @@
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       const moving=dx!==0||dy!==0;
       const sprinting=moving&&sprintHeld;
+      if(dx < -0.01 || dx > 0.01){
+        const nextFacing=dx<0?-1:1;
+        if(nextFacing!==this.heroFacing){
+          this.heroFacing=nextFacing;
+          if(this.heroWalkTween){this.heroWalkTween.stop();this.heroWalkTween=null;}
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
+        }
+      }
       if(moving){
         if(this.heroIdle){
           this.heroIdle.stop();
           this.heroIdle=null;
         }
         if(!this.heroWalkTween){
-          this.hero.setScale(this.heroBaseScaleX,1);
-          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
+          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*this.heroFacing*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
         this.hero.setRotation(dx*0.045);
       }else{
         if(this.heroWalkTween){
           this.heroWalkTween.stop();
           this.heroWalkTween=null;
-          this.hero.setScale(this.heroBaseScaleX,1);
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
           this.hero.setRotation(0);
         }
         if(!this.heroIdle){
