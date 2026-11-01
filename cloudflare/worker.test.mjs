@@ -510,6 +510,16 @@ test("premium shop API is forwarded through the edge allowlist", async () => {
 });
 
 
+test("battle entry resets stale walking tweens and limb rotations", () => {
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  assert.match(game, /resetHeroMovementPose\(\)\{/);
+  assert.match(game, /this\.heroWalkTween\.stop\(\);\s*this\.heroWalkTween=null;/);
+  assert.match(game, /this\.heroIdle\.stop\(\);\s*this\.heroIdle=null;/);
+  assert.match(game, /this\.hero\.setRotation\(0\)/);
+  assert.match(game, /Object\.values\(this\.hero\.limbs\|\|\{\}\)\.forEach\(limb=>\{limb\.rotation=0;\}\)/);
+  assert.match(game, /ui\.encounter\.disabled=true;\s*this\.resetHeroMovementPose\(\);\s*return;/);
+});
+
 test("hero idle animation does not tween world position and yields to walking", () => {
   const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
   assert.match(game, /targets:this\.hero, scaleY:1\.025, duration:650/);
