@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from game_rules import BOSS_LEVELS, expected_monster_power, validate_monster_catalogue
+from game_rules import BOSS_LEVELS, calculate_enemy_damage, expected_monster_power, validate_monster_catalogue
 
 
 class GameRulesTests(unittest.TestCase):
@@ -71,6 +71,19 @@ class GameRulesTests(unittest.TestCase):
         broken[0]["rank"] = "BOSS"
         with self.assertRaisesRegex(ValueError, "Non-boss"):
             validate_monster_catalogue(broken)
+
+    def test_player_defence_reduces_incoming_damage(self):
+        without_defence = calculate_enemy_damage(40, 1, 0, 0, 0, 0)
+        with_class_defence = calculate_enemy_damage(40, 1, 0, 12, 0, 0)
+        with_armor = calculate_enemy_damage(40, 1, 8, 0, 0, 0)
+        self.assertEqual(without_defence, 38)
+        self.assertEqual(with_class_defence, 26)
+        self.assertEqual(with_armor, 30)
+
+    def test_enemy_damage_keeps_minimum_and_trait_modifiers(self):
+        self.assertEqual(calculate_enemy_damage(1, 100, 100, 100, 0, 0), 3)
+        self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, fury=True), 47)
+        self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, special=True), 57)
 
 
 if __name__ == "__main__":
