@@ -45,7 +45,7 @@ async def update_settings(db,user_id,notifications_enabled=None,profile_visibili
     await db.commit()
     return current
 
-async def delete_player_account(db,user_id):
+async def _delete_player_account_unlocked(db,user_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
     cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
     if not await cur.fetchone(): raise AccountError("Player account not found.")
@@ -141,5 +141,15 @@ async def delete_player_account(db,user_id):
     for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards","player_materials","crafted_items","player_worlds","player_presence","world_discoveries","player_story","story_flags","story_reward_claims"):
         await db.execute(f"DELETE FROM {table} WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM players WHERE user_id=?",(user_id,))
-    await db.commit()
     return True
+
+async def delete_player_account(db,user_id):
+    """Delete a player and all linked records as one atomic database operation."""
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        result = await _delete_player_account_unlocked(db,user_id)
+        await db.commit()
+        return result
+    except Exception:
+        await db.rollback()
+        raise
