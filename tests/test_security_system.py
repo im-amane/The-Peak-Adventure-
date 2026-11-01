@@ -1,5 +1,6 @@
 import unittest
 import aiosqlite
+from unittest.mock import patch
 
 from security_system import (
     SecurityEventError, get_security_events, get_suspicious_players,
@@ -30,6 +31,13 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         await record_security_event(self.db, 101, "invalid_battle_action", "x" * 400)
         rows = await get_security_events(self.db, 101)
         self.assertEqual(len(rows[0]["details"]), 240)
+
+    async def test_event_storage_respects_configured_cap(self):
+        with patch("security_system.MAX_SECURITY_EVENTS", 2), patch("security_system.CLEANUP_INTERVAL", 1):
+            for index in range(5):
+                await record_security_event(self.db, 101, "invalid_battle_action", str(index))
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM security_events")
+        self.assertEqual((await cur.fetchone())["total"], 2)
 
     async def test_invalid_event_and_limits_are_rejected(self):
         with self.assertRaises(SecurityEventError):
