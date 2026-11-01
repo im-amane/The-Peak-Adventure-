@@ -66,3 +66,15 @@ test("returns the requested destination when start and goal share a grid cell", 
 
   assert.deepEqual(path, [destination]);
 });
+
+
+test("rejects a path when the starting position is blocked", () => {
+  const path = findPath(
+    { x: 48, y: 48 },
+    { x: 112, y: 48 },
+    [{ x: 48, y: 48, width: 40, height: 40 }],
+    { width: 160, height: 128, cellSize: 32, margin: 0 },
+  );
+
+  assert.deepEqual(path, []);
+});
