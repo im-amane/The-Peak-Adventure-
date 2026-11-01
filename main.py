@@ -2334,6 +2334,27 @@ async def miniapp_state(user: dict):
         }
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     appearance = await get_appearance(db, user_id)
+
+    friend_rows = await list_friends(db, user_id)
+    social_friends = [{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"]} for row in friend_rows]
+    social_party = None
+    try:
+        party_info, party_members = await get_party_info(db, user_id)
+        social_party = {"party_id":party_info["party_id"],"leader_id":party_info["leader_id"],
+            "members":[{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"]} for row in party_members]}
+    except PartyError:
+        pass
+    guild_cur = await db.execute("SELECT g.guild_id,g.name,g.guild_level,g.guild_xp,gm.role FROM guild_members gm JOIN guilds g ON g.guild_id=gm.guild_id WHERE gm.user_id=?", (user_id,))
+    guild_row = await guild_cur.fetchone()
+    social_guild = None
+    if guild_row:
+        guild_members_cur = await db.execute("SELECT p.user_id,p.username,p.level,gm.role FROM guild_members gm JOIN players p ON p.user_id=gm.user_id WHERE gm.guild_id=? ORDER BY gm.role DESC,p.level DESC", (guild_row["guild_id"],))
+        guild_members_rows = await guild_members_cur.fetchall()
+        social_guild = {"guild_id":guild_row["guild_id"],"name":guild_row["name"],"level":guild_row["guild_level"],
+            "xp":guild_row["guild_xp"],"role":guild_row["role"],
+            "members":[{"user_id":row["user_id"],"username":row["username"] or "Adventurer","level":row["level"],"role":row["role"]} for row in guild_members_rows]}
+    trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
+    pending_trades = (await trade_cur.fetchone())["total"]
     await refresh_quest_progress(user_id)
     quest_cur = await db.execute("SELECT quest_id,progress,completed,claimed FROM quest_progress WHERE user_id=?", (user_id,))
     quest_progress = {row["quest_id"]: row for row in await quest_cur.fetchall()}
@@ -2350,6 +2371,7 @@ async def miniapp_state(user: dict):
         "hero_class": p["hero_class"],
         "appearance": appearance,
         "quests": quest_state,
+        "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
