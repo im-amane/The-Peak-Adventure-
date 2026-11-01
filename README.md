@@ -185,3 +185,9 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - The encounter is selected from the leader's currently available world monsters.
 - The leader spends 10 stamina; party members are notified and can attack with `/party battle attack`.
 - Party members receive individual coin and XP rewards when the shared encounter is defeated.
+
+
+## Daily missions
+- `/missions` shows three UTC-resetting objectives for monster wins, crafting and landmark discovery.
+- Claim each completed reward once with `/missions claim MISSION_ID`.
+- Daily missions are separate from the `/daily` login reward and `/weekly` objectives.
