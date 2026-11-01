@@ -724,12 +724,27 @@
     }
   }
 
+  async function requestWithTimeout(path, options) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 20000);
+    try {
+      return await fetch(path, {...options, signal: controller.signal});
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error("The game server took too long to respond. Check your connection and try again.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
   async function loadState() {
     if (!initData) {
       ui.status.textContent = "Open this game from the Telegram bot's private chat.";
       return null;
     }
-    const response = await fetch("/api/state", {
+    const response = await requestWithTimeout("/api/state", {
       headers: {"X-Telegram-Init-Data": initData},
       cache: "no-store"
     });
@@ -746,7 +761,7 @@
   }
 
   async function postApi(path, body) {
-    const response = await fetch(path, {
+    const response = await requestWithTimeout(path, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Telegram-Init-Data": initData},
       body: JSON.stringify(body || {}),
