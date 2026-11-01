@@ -155,6 +155,32 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
             await attack_party_battle(self.db,party_id,202,10)
 
 
+
+    async def test_concurrent_party_members_can_attack_without_transaction_collisions(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, invite_id, 202, True)
+        battle_id = await start_party_battle(
+            self.db, party_id, 101, 8, "Stormglass Behemoth", 100
+        )
+
+        results = await asyncio.gather(
+            attack_party_battle(self.db, party_id, 101, 20),
+            attack_party_battle(self.db, party_id, 202, 30),
+            return_exceptions=True,
+        )
+
+        self.assertTrue(all(not isinstance(result, Exception) for result in results))
+        battle = await get_party_battle(self.db, party_id)
+        self.assertEqual(battle["battle_id"], battle_id)
+        self.assertEqual(battle["hp"], 50)
+        cur = await self.db.execute(
+            "SELECT SUM(damage) AS total FROM party_battle_contributions WHERE battle_id=?",
+            (battle_id,),
+        )
+        contribution = await cur.fetchone()
+        self.assertEqual(contribution["total"], 50)
+
     async def test_concurrent_reward_claims_are_applied_exactly_once(self):
         party_id = await create_party(self.db, 101)
         battle_id = await start_party_battle(
