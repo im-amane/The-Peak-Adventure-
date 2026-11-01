@@ -133,7 +133,11 @@
   function applyState(data, message) {
     const previousRegion = gameState ? gameState.region : null;
     const previousMonster = gameState ? gameState.monster.level : null;
+    const previousLevel = gameState ? gameState.level : null;
     gameState = data;
+    if(previousLevel !== null && data.level > previousLevel && sceneRef && sceneRef.playLevelUpAnimation){
+      sceneRef.playLevelUpAnimation();
+    }
     ui.name.textContent = data.first_name || "Adventurer";
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
     ui.level.textContent = "Lv. " + data.level;
@@ -713,7 +717,8 @@
       playSound(action === "skill" ? "skill" : action === "potion" ? "potion" : action === "attack" ? "attack" : "error");
       if(sceneRef && result.message){
         if(/hits you|poison deals|reflected for/i.test(result.message))sceneRef.playCombatAnimation("hit");
-        if(/victory|defeated/i.test(result.message))sceneRef.playCombatAnimation("victory");
+        if(/you were defeated|your hero has fallen/i.test(result.message))sceneRef.playCombatAnimation("death");
+        else if(/victory|monster .* defeated/i.test(result.message))sceneRef.playCombatAnimation("victory");
       }
       applyState(result.state, result.message);
     } catch (error) {
@@ -946,8 +951,21 @@
         this.tweens.add({targets:aura,scale:2,alpha:0,duration:380,onComplete:()=>aura.destroy()});
       }else if(action==="hit"){
         this.tweens.add({targets:this.hero,alpha:0.35,duration:65,yoyo:true,repeat:2});
+      }else if(action==="death"){
+        this.tweens.add({targets:this.hero,alpha:0.12,angle:82,y:this.hero.y+9,duration:420,ease:"Cubic.easeIn"});
       }else if(action==="victory"){
         this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
+        this.playLevelUpAnimation();
+      }
+    }
+    playLevelUpAnimation(){
+      if(!this.hero)return;
+      const ring=this.add.circle(this.hero.x,this.hero.y,18,0xffdf83,0).setStrokeStyle(3,0xffdf83,0.9).setDepth(12);
+      this.tweens.add({targets:ring,scale:3.2,alpha:0,duration:650,ease:"Cubic.easeOut",onComplete:()=>ring.destroy()});
+      for(let index=0;index<10;index++){
+        const angle=(Math.PI*2*index)/10;
+        const mote=this.add.circle(this.hero.x,this.hero.y,3,0xffe8a8,0.95).setDepth(13);
+        this.tweens.add({targets:mote,x:this.hero.x+Math.cos(angle)*52,y:this.hero.y+Math.sin(angle)*52,alpha:0,scale:0.25,duration:520,ease:"Cubic.easeOut",onComplete:()=>mote.destroy()});
       }
     }
     challenge(){
