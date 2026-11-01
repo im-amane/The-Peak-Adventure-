@@ -14,10 +14,10 @@ async def init_account_tables(db):
       sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""")
-    try:
+    cur = await db.execute("PRAGMA table_info(player_settings)")
+    columns = {row["name"] for row in await cur.fetchall()}
+    if "sound_enabled" not in columns:
         await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
-    except aiosqlite.OperationalError:
-        pass
     await db.commit()
 
 async def get_settings(db,user_id):
