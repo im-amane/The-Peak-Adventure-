@@ -111,6 +111,30 @@
   }
 
 
+
+  function renderSocial(social) {
+    if (!ui.socialOverview) return;
+    ui.socialOverview.replaceChildren();
+    const addCard=(title,lines)=>{
+      const card=document.createElement("article"); card.className="social-card";
+      const heading=document.createElement("h3"); heading.textContent=title; card.appendChild(heading);
+      if (!lines.length) lines=["No entries yet."];
+      lines.forEach(line=>{
+        const p=document.createElement("p"); p.className="social-member"; p.textContent=line; card.appendChild(p);
+      });
+      ui.socialOverview.appendChild(card);
+    };
+    addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
+    const party=social.party;
+    addCard("Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party. Use /party create."]);
+    const guild=social.guild;
+    addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create."]);
+    if (social.pending_trades) {
+      const note=document.createElement("p"); note.className="small"; note.textContent="🤝 Pending trades: "+social.pending_trades;
+      ui.socialOverview.appendChild(note);
+    }
+  }
+
   function renderQuests(quests) {
     if (!ui.questList) return;
     ui.questList.replaceChildren();
