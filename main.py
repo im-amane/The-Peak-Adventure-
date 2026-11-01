@@ -211,6 +211,8 @@ def menu(include_webapp: bool = False):
          InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
         [InlineKeyboardButton(text="🏅 Achievements", callback_data="achievements"),
          InlineKeyboardButton(text="⚔️ PvP Rank", callback_data="pvprank")],
+        [InlineKeyboardButton(text="👥 Friends", callback_data="friend_list"),
+         InlineKeyboardButton(text="🛡️ Party", callback_data="party_info")],
         [InlineKeyboardButton(text="🏰 Guild", callback_data="guild_info")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
@@ -808,6 +810,20 @@ def friend_request_keyboard(request_id: int):
     ]])
 
 
+
+@dp.callback_query(F.data == "friend_list")
+async def cb_friend_list(call: CallbackQuery):
+    await call.answer()
+    friends = await list_friends(db, call.from_user.id)
+    if not friends:
+        await call.message.answer("👥 Your friend list is empty. Reply to a player's group message with /friend request.")
+        return
+    lines = ["👥 <b>Your Friends</b>"]
+    for index, friend in enumerate(friends, 1):
+        lines.append(f"{index}. {escape(friend['username'] or 'Adventurer')} · Lv.{friend['level']} · ID <code>{friend['user_id']}</code>")
+    await call.message.answer("\\n".join(lines))
+
+
 @dp.message(Command("friend"))
 async def friend_command(message: Message):
     args = (message.text or "").split(maxsplit=2)
@@ -936,6 +952,16 @@ async def party_text(user_id: int):
         icon = "👑" if member["user_id"] == party["leader_id"] else "•"
         lines.append(f"{icon} {escape(member['username'] or 'Adventurer')} · Lv.{member['level']}")
     return "\n".join(lines)
+
+
+
+@dp.callback_query(F.data == "party_info")
+async def cb_party_info(call: CallbackQuery):
+    await call.answer()
+    try:
+        await call.message.answer(await party_text(call.from_user.id))
+    except PartyError as exc:
+        await call.message.answer(escape(str(exc)))
 
 
 @dp.message(Command("party"))
