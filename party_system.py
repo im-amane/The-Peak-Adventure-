@@ -4,6 +4,22 @@ from __future__ import annotations
 import aiosqlite
 
 
+
+_DB_WRITE_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+def _serialize_db_write(function):
+    @wraps(function)
+    async def wrapped(db, *args, **kwargs):
+        lock = _DB_WRITE_LOCKS.get(id(db))
+        if lock is None:
+            lock = asyncio.Lock()
+            _DB_WRITE_LOCKS[id(db)] = lock
+        async with lock:
+            return await function(db, *args, **kwargs)
+    return wrapped
+
+
 MAX_PARTY_SIZE = 4
 
 
@@ -66,6 +82,7 @@ async def init_party_tables(db: aiosqlite.Connection) -> None:
     await db.commit()
 
 
+@_serialize_db_write
 async def create_party(db: aiosqlite.Connection, leader_id: int) -> int:
     if not _valid_id(leader_id):
         raise PartyError("Invalid player account.")
@@ -79,6 +96,7 @@ async def create_party(db: aiosqlite.Connection, leader_id: int) -> int:
     return party_id
 
 
+@_serialize_db_write
 async def invite_to_party(
     db: aiosqlite.Connection, party_id: int, inviter_id: int, target_id: int
 ) -> int:
@@ -116,6 +134,7 @@ async def invite_to_party(
     return int(cur.lastrowid)
 
 
+@_serialize_db_write
 async def respond_to_party_invite(
     db: aiosqlite.Connection, invite_id: int, target_id: int, accept: bool
 ) -> None:
@@ -157,6 +176,7 @@ async def respond_to_party_invite(
 
 
 
+@_serialize_db_write
 async def start_party_battle(db, party_id, user_id, monster_level, monster_name, monster_hp):
     if not _valid_id(party_id) or not _valid_id(user_id):
         raise PartyError("Invalid party or player account.")
@@ -187,6 +207,7 @@ async def start_party_battle(db, party_id, user_id, monster_level, monster_name,
         await db.rollback()
         raise
 
+@_serialize_db_write
 async def attack_party_battle(db, party_id, user_id, damage):
     if not _valid_id(party_id) or not _valid_id(user_id):
         raise PartyError("Invalid party or player account.")
@@ -253,6 +274,7 @@ async def get_party_battle(db,party_id):
     return await cur.fetchone()
 
 
+@_serialize_db_write
 async def reward_party_battle(db, battle_id, user_id, coins, xp):
     if not _valid_id(battle_id) or not _valid_id(user_id):
         raise PartyError("Invalid co-op battle or player account.")
@@ -299,6 +321,7 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         await db.rollback()
         raise
 
+@_serialize_db_write
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not _valid_id(user_id):
         raise PartyError("Invalid player account.")
@@ -334,6 +357,7 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     return new_leader
 
 
+@_serialize_db_write
 async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -> None:
     if not _valid_id(party_id) or not _valid_id(user_id):
         raise PartyError("Invalid party or player account.")
