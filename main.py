@@ -1950,7 +1950,7 @@ async def help_cmd(message: Message):
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/admin - Bot administration (authorized IDs only)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
-        "/auction - Browse gear auctions; /auction sell weapon|armor price [hours]\\n/bid ID amount - Place a bid\\n"
+        "/auction - Browse gear auctions; /auction sell weapon|armor price [hours]\n/bid ID amount - Place a bid\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n"
         "/map - View your current region\n/travel - View unlocked worlds and fast travel\n"
         "/dungeons - View dungeons\n/dungeon enter|status|abandon|claim - Dungeon controls\n"
