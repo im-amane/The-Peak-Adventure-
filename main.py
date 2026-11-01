@@ -28,7 +28,7 @@ from group_system import GroupError, attack_group_raid, award_group_xp, claim_gr
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status
+from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -1424,6 +1424,42 @@ async def guild_command(message: Message):
         await message.answer("No guild raid is active." if not raid else f"🐉 {escape(raid['boss_name'])}: {raid['hp']}/{raid['max_hp']} HP · {raid['status'].upper()}")
         return
 
+
+    if action == "war":
+        if not membership or len(args) < 3:
+            await message.answer("Usage: /guild war challenge guild_id | accept war_id | decline war_id | status war_id")
+            return
+        parts = args[2].split()
+        if len(parts) != 2 or not parts[1].isdigit():
+            await message.answer("Usage: /guild war challenge guild_id | accept war_id | decline war_id | status war_id")
+            return
+        sub, identifier = parts[0].lower(), int(parts[1])
+        try:
+            if sub == "challenge":
+                war_id = await declare_guild_war(db, membership["guild_id"], user_id, identifier)
+                target_cur = await db.execute("SELECT name,leader_id FROM guilds WHERE guild_id=?", (identifier,))
+                target = await target_cur.fetchone()
+                try:
+                    await message.bot.send_message(target["leader_id"], "⚔️ Your guild has received a war challenge. Use /guild war accept " + str(war_id) + " or /guild war decline " + str(war_id) + ".")
+                    delivery = "The target leader was notified."
+                except Exception:
+                    delivery = "The target leader must start the bot to receive the invitation."
+                await message.answer("⚔️ War challenge #" + str(war_id) + " sent to " + escape(target["name"]) + ". " + delivery)
+            elif sub in {"accept", "decline"}:
+                status = await respond_guild_war(db, identifier, user_id, sub == "accept")
+                await message.answer("Guild war is now active." if status == "active" else "Guild war challenge declined.")
+            elif sub == "status":
+                war = await get_guild_war(db, identifier)
+                if not war or membership["guild_id"] not in {war["challenger_guild"], war["target_guild"]}:
+                    await message.answer("Guild war not found.")
+                    return
+                await message.answer("⚔️ <b>Guild War #" + str(identifier) + "</b>\nScore: " + str(war["challenger_score"]) + " - " + str(war["target_score"]) + "\nStatus: " + war["status"].upper())
+            else:
+                await message.answer("Use challenge, accept, decline or status.")
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
+        return
+
     if action == "top":
         cur = await db.execute(
             "SELECT g.guild_id, g.name, g.guild_level, g.guild_xp, COUNT(m.user_id) AS members "
@@ -1598,10 +1634,16 @@ async def duel_action(call: CallbackQuery):
             await award_group_xp(db,duel["chat_id"],20)
         except GroupError:
             pass
+    war_result = None
     if duel["status"] == "finished" and duel["winner_id"]:
         await record_player_guild_activity(duel["winner_id"], "battle")
+        war_result = await record_guild_war_duel(db, duel["challenger_id"], duel["opponent_id"], duel["winner_id"])
+    duel_message = await duel_text(duel)
+    if war_result:
+        duel_message += "\n\n⚔️ Guild War score: " + str(war_result["challenger_score"]) + " - " + str(war_result["target_score"])
+        if war_result["status"] == "completed": duel_message += "\n🏆 Guild War completed! Winning guild ID: " + str(war_result["winner_guild"])
     markup = duel_keyboard(duel_id) if duel["status"] == "active" else None
-    await call.message.edit_text(await duel_text(duel), reply_markup=markup)
+    await call.message.edit_text(duel_message, reply_markup=markup)
 
 
 @dp.message(Command("pvprank"))
