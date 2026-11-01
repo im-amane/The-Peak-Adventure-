@@ -83,6 +83,20 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(AccountError): await update_settings(self.db,1,None,"private")
  async def test_invalid_account_rejected(self):
   with self.assertRaises(AccountError): await get_settings(self.db,True)
+
+ async def test_account_deletion_respects_outer_transaction(self):
+  await self.db.execute("INSERT INTO security_events VALUES(2,1,'invalid_battle_action',1,'pending event',CURRENT_TIMESTAMP)")
+  self.assertTrue(self.db.in_transaction)
+  await delete_player_account(self.db,1)
+  self.assertTrue(self.db.in_transaction)
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT 1 FROM security_events WHERE event_id=2")
+  self.assertIsNone(await cur.fetchone())
+
  async def test_delete_account_removes_security_events(self):
   await self.db.execute("INSERT INTO security_events VALUES(1,1,'invalid_battle_action',2,'bad action',CURRENT_TIMESTAMP)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
