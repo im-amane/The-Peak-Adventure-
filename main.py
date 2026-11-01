@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import random
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -142,6 +143,15 @@ async def init_db():
       turn_user_id INTEGER, status TEXT NOT NULL DEFAULT 'pending',
       winner_id INTEGER, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS guilds (
+      guild_id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+      leader_id INTEGER NOT NULL, guild_level INTEGER NOT NULL DEFAULT 1,
+      guild_xp INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS guild_members (
+      user_id INTEGER PRIMARY KEY, guild_id INTEGER NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member', joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     migrations = [
@@ -183,6 +193,7 @@ def menu():
          InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
         [InlineKeyboardButton(text="🏅 Achievements", callback_data="achievements"),
          InlineKeyboardButton(text="⚔️ PvP Rank", callback_data="pvprank")],
+        [InlineKeyboardButton(text="🏰 Guild", callback_data="guild_info")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
     ]
@@ -548,6 +559,148 @@ async def duel_text(duel):
     return "\n".join(lines)
 
 
+async def guild_summary(guild_id: int):
+    cur = await db.execute(
+        "SELECT g.*, COUNT(m.user_id) AS member_count FROM guilds g "
+        "LEFT JOIN guild_members m ON m.guild_id=g.guild_id WHERE g.guild_id=? GROUP BY g.guild_id",
+        (guild_id,),
+    )
+    guild = await cur.fetchone()
+    if not guild:
+        return None
+    cur = await db.execute(
+        "SELECT p.username, p.level, gm.role FROM guild_members gm "
+        "JOIN players p ON p.user_id=gm.user_id WHERE gm.guild_id=? ORDER BY gm.role DESC, p.level DESC",
+        (guild_id,),
+    )
+    members = await cur.fetchall()
+    lines = [
+        f"🏰 <b>{escape(guild['name'])}</b> · Guild Lv.{guild['guild_level']}",
+        f"👥 Members: {guild['member_count']}/20 · Guild XP: {guild['guild_xp']}/{guild['guild_level'] * 500}",
+    ]
+    for member in members:
+        icon = "👑" if member["role"] == "leader" else "•"
+        lines.append(f"{icon} {escape(member['username'] or 'Adventurer')} · Lv.{member['level']}")
+    return "\n".join(lines)
+
+
+@dp.message(Command("guild"))
+async def guild_command(message: Message):
+    args = message.text.split(maxsplit=2)
+    action = args[1].lower() if len(args) > 1 else "info"
+    user_id = message.from_user.id
+    p = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+    cur = await db.execute("SELECT guild_id, role FROM guild_members WHERE user_id=?", (user_id,))
+    membership = await cur.fetchone()
+
+    if action == "create":
+        if membership:
+            await message.answer("You are already in a guild. Leave it before creating another.")
+            return
+        if len(args) < 3:
+            await message.answer("Usage: <code>/guild create Guild Name</code> (3–20 characters).")
+            return
+        name = " ".join(args[2].split()).strip()
+        if not 3 <= len(name) <= 20 or not re.fullmatch(r"[A-Za-z0-9 _-]+", name):
+            await message.answer("Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.")
+            return
+        debit = await db.execute("UPDATE players SET coins=coins-100 WHERE user_id=? AND coins>=100", (user_id,))
+        if debit.rowcount == 0:
+            await message.answer("Creating a guild costs 100 coins.")
+            return
+        try:
+            cur = await db.execute("INSERT INTO guilds(name, leader_id) VALUES (?, ?)", (name, user_id))
+        except aiosqlite.IntegrityError:
+            await db.rollback()
+            await message.answer("That guild name is already taken.")
+            return
+        guild_id = cur.lastrowid
+        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'leader')", (user_id, guild_id))
+        await db.commit()
+        await message.answer(f"🏰 Guild <b>{escape(name)}</b> created! Guild ID: <code>{guild_id}</code>.")
+        return
+
+    if action == "join":
+        if membership:
+            await message.answer("You are already in a guild.")
+            return
+        if len(args) < 3 or not args[2].isdigit():
+            await message.answer("Usage: <code>/guild join guild_id</code>.")
+            return
+        guild_id = int(args[2])
+        cur = await db.execute("SELECT name FROM guilds WHERE guild_id=?", (guild_id,))
+        guild = await cur.fetchone()
+        if not guild:
+            await message.answer("Guild not found.")
+            return
+        cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (guild_id,))
+        if (await cur.fetchone())["total"] >= 20:
+            await message.answer("This guild has reached its 20-member limit.")
+            return
+        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'member')", (user_id, guild_id))
+        await db.commit()
+        await message.answer(f"✅ You joined <b>{escape(guild['name'])}</b>.")
+        return
+
+    if action == "leave":
+        if not membership:
+            await message.answer("You are not in a guild.")
+            return
+        if membership["role"] == "leader":
+            cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
+            if (await cur.fetchone())["total"] > 1:
+                await message.answer("Guild leaders cannot leave while members remain. Use /guild disband or transfer leadership.")
+                return
+            await db.execute("DELETE FROM guilds WHERE guild_id=?", (membership["guild_id"],))
+        await db.execute("DELETE FROM guild_members WHERE user_id=?", (user_id,))
+        await db.commit()
+        await message.answer("You left your guild.")
+        return
+
+    if action == "disband":
+        if not membership or membership["role"] != "leader":
+            await message.answer("Only a guild leader can disband a guild.")
+            return
+        await db.execute("DELETE FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
+        await db.execute("DELETE FROM guilds WHERE guild_id=?", (membership["guild_id"],))
+        await db.commit()
+        await message.answer("🏰 Your guild has been disbanded.")
+        return
+
+    if action == "top":
+        cur = await db.execute(
+            "SELECT g.guild_id, g.name, g.guild_level, g.guild_xp, COUNT(m.user_id) AS members "
+            "FROM guilds g LEFT JOIN guild_members m ON m.guild_id=g.guild_id "
+            "GROUP BY g.guild_id ORDER BY g.guild_level DESC, g.guild_xp DESC LIMIT 10"
+        )
+        rows = await cur.fetchall()
+        lines = ["🏆 <b>Top Guilds</b>"]
+        for i, row in enumerate(rows, 1):
+            lines.append(f"{i}. <b>{escape(row['name'])}</b> · Lv.{row['guild_level']} · {row['members']} members · ID {row['guild_id']}")
+        await message.answer("\n".join(lines))
+        return
+
+    if action == "info" and membership:
+        text = await guild_summary(membership["guild_id"])
+        await message.answer(text or "Guild not found.")
+        return
+    if action == "info":
+        await message.answer("You are not in a guild. Use <code>/guild create Name</code> or <code>/guild join ID</code>.")
+        return
+    await message.answer("Guild commands: /guild create Name, /guild join ID, /guild leave, /guild info, /guild top, /guild disband.")
+
+
+@dp.callback_query(F.data == "guild_info")
+async def cb_guild_info(call: CallbackQuery):
+    await call.answer()
+    cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (call.from_user.id,))
+    membership = await cur.fetchone()
+    if not membership:
+        await call.message.answer("You are not in a guild. Use /guild create Name or /guild join ID.")
+        return
+    await call.message.answer(await guild_summary(membership["guild_id"]))
+
+
 @dp.message(Command("duel"))
 async def create_duel(message: Message):
     if message.chat.type not in {"group", "supergroup"}:
@@ -732,6 +885,7 @@ async def help_cmd(message: Message):
         "/claimquest quest_id - Claim a completed quest reward\n"
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
+        "/guild create|join|leave|info|top|disband - Guild management\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
 
