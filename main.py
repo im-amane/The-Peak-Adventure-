@@ -358,16 +358,15 @@ async def player_text(p):
 
 
 async def build_battle_monster(user_id: int, battle):
-    """Build the correct per-player monster variant without mutating the catalogue."""
+    """Build the exact evolved/elite variant stored for this encounter."""
     monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
-    if battle["is_elite"]:
-        monster = scale_elite_monster(monster)
-    evolution = await get_evolution_state(db, user_id, battle["monster_level"])
-    if evolution["evolved"]:
+    if battle["is_evolved"]:
         monster = scale_evolved_monster(monster)
         monster["is_evolved"] = True
     else:
         monster["is_evolved"] = False
+    if battle["is_elite"]:
+        monster = scale_elite_monster(monster)
     return monster
 
 
