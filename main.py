@@ -16,12 +16,19 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
+from aiohttp import web
+from aiogram.types import WebAppInfo
 
 from game_rules import validate_monster_catalogue
+from telegram_auth import validate_init_data
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
+WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
+WEB_PORT = int(os.getenv("PORT", os.getenv("WEB_PORT", "8080")))
+WEB_DIR = Path(__file__).with_name("webapp")
 MONSTERS = json.loads(Path(__file__).with_name("monsters.json").read_text(encoding="utf-8"))
 validate_monster_catalogue(MONSTERS)
 MONSTER_BY_LEVEL = {m["level"]: m for m in MONSTERS}
@@ -131,7 +138,7 @@ async def get_player(user_id: int, username: str | None = None):
 
 
 def menu():
-    return InlineKeyboardMarkup(inline_keyboard=[
+    rows = [
         [InlineKeyboardButton(text="🗺️ Explore", callback_data="explore"),
          InlineKeyboardButton(text="👤 Profile", callback_data="profile")],
         [InlineKeyboardButton(text="🎒 Inventory", callback_data="inventory"),
@@ -140,7 +147,10 @@ def menu():
          InlineKeyboardButton(text="🧙 Hero Class", callback_data="class_menu")],
         [InlineKeyboardButton(text="🎁 Daily Reward", callback_data="daily"),
          InlineKeyboardButton(text="🏆 Leaderboard", callback_data="leaderboard")],
-    ])
+    ]
+    if WEBAPP_URL:
+        rows.insert(0, [InlineKeyboardButton(text="🎮 Open 2D Adventure", web_app=WebAppInfo(url=WEBAPP_URL))])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def class_keyboard():
@@ -374,6 +384,19 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
     boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
     return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}"
+
+
+@dp.message(F.web_app_data)
+async def webapp_data(message: Message):
+    try:
+        payload = json.loads(message.web_app_data.data)
+    except (TypeError, json.JSONDecodeError):
+        await message.answer("The game sent an invalid action.")
+        return
+    if payload.get("action") == "explore":
+        await start_battle(message.from_user.id, message.from_user.username, message)
+    else:
+        await message.answer("Unknown Mini App action.")
 
 
 @dp.message(Command("start"))
@@ -789,15 +812,17 @@ async def battle_action(call: CallbackQuery):
         await _battle_action_unlocked(call)
 
 
-async def main():
+{server}async def main():
     if not TOKEN:
         raise RuntimeError("BOT_TOKEN is missing. Add it to your .env file.")
     await init_db()
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    runner = await start_web_server()
     log.info("Starting The Peak Adventure bot")
     try:
         await dp.start_polling(bot)
     finally:
+        await runner.cleanup()
         await bot.session.close()
         if db:
             await db.close()
