@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "./worker.mjs";
+import "../webapp/pathfinding.js";
 import { readFileSync } from "node:fs";
 
 test("rejects paths outside the game API allowlist", async () => {
@@ -366,4 +367,32 @@ test("world portal requires proximity and an unlocked next world", () => {
   assert.match(game, /nearPortal=Phaser\.Math\.Distance\.Between\(this\.hero\.x,this\.hero\.y,this\.portalX,this\.portalY\)<72/);
   assert.match(game, /ui\.portalTravel\.disabled=!nearPortal\|\|!nextWorld\|\|!nextWorld\.unlocked/);
   assert.match(game, /ui\.portalTravel\.addEventListener\("click"/);
+});
+
+
+test("A-star pathfinding routes around obstacles without cutting corners", () => {
+  const path = globalThis.PeakPathfinding.findPath(
+    { x: 50, y: 50 },
+    { x: 250, y: 50 },
+    [{ x: 150, y: 50, width: 60, height: 80 }],
+    { width: 320, height: 200, cellSize: 20, margin: 0 },
+  );
+  assert.ok(path.length > 0);
+  assert.deepEqual(path[path.length - 1], { x: 250, y: 50 });
+  for (const point of path) {
+    assert.ok(Math.abs(point.x - 150) >= 30 || Math.abs(point.y - 50) >= 40);
+  }
+});
+
+test("A-star pathfinding rejects blocked and out-of-bounds destinations", () => {
+  const options = { width: 200, height: 160, cellSize: 20, margin: 0 };
+  const obstacle = [{ x: 120, y: 80, width: 60, height: 60 }];
+  assert.deepEqual(
+    globalThis.PeakPathfinding.findPath({ x: 20, y: 20 }, { x: 120, y: 80 }, obstacle, options),
+    [],
+  );
+  assert.deepEqual(
+    globalThis.PeakPathfinding.findPath({ x: 20, y: 20 }, { x: 240, y: 80 }, [], options),
+    [],
+  );
 });
