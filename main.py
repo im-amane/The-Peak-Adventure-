@@ -1668,7 +1668,10 @@ async def api_explore(request: web.Request):
                     (user_id, level),
                 )
                 boss_defeated = await cur.fetchone() is not None
-            monster_level = requested_monster_level if requested_monster_level in nearby_monster_levels(level, boss_defeated) else random.choice(nearby_monster_levels(level, boss_defeated))
+            available_monster_levels = nearby_monster_levels(level, boss_defeated)
+            if requested_monster_level is not None and requested_monster_level not in available_monster_levels:
+                return web.json_response({"error": "That monster is not available at your current level."}, status=409)
+            monster_level = requested_monster_level if requested_monster_level is not None else random.choice(available_monster_levels)
             monster = MONSTER_BY_LEVEL[monster_level]
             await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
             await db.execute(
