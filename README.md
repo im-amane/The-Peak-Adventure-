@@ -65,6 +65,10 @@ On Windows, activate with `.venv\\Scripts\\activate`.
 - `/duel` - Challenge a player by replying to their message in a group
 - `/pvprank` - PvP rankings
 - `/guild create|join|leave|info|top|disband` - Guild management
+- `/trade` - Start a trade by replying to a player in a group
+- `/offer trade_id coins potions` - Set your offer
+- `/confirmtrade trade_id` - Confirm the current trade
+- `/canceltrade trade_id` - Cancel a trade
 - `/leaderboard` - Top adventurers
 - `/help` - Show commands
 
