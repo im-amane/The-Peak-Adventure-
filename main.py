@@ -3356,6 +3356,11 @@ async def miniapp_state(user: dict):
          "other_username":row["other_username"] or "Adventurer","created_at":row["created_at"]}
         for row in pending_trade_rows
     ]
+    trade_count_cur = await db.execute(
+        "SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)",
+        (user_id,user_id),
+    )
+    pending_trade_count = (await trade_count_cur.fetchone())["total"]
     dungeon_state = await get_dungeon_state(db, user_id)
     dungeon_choices = available_dungeons(p["level"])
     claimed_cur = await db.execute("SELECT dungeon_id FROM dungeon_rewards WHERE user_id=?", (user_id,))
@@ -3382,7 +3387,7 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
-                    "pending_trades": pending_trades, "pending_trade_count": len(pending_trades)},
+                    "pending_trades": pending_trades, "pending_trade_count": pending_trade_count},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
@@ -3856,6 +3861,17 @@ async def api_social(request: web.Request):
                     if trade_cur.rowcount != 1:
                         return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
                     result = {"trade_id":payload["trade_id"],"status":trade_status}
+                elif action == "trade_cancel":
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_cur = await db.execute(
+                        """UPDATE trades SET status='cancelled',initiator_confirmed=0,partner_confirmed=0
+                           WHERE trade_id=? AND (initiator_id=? OR partner_id=?) AND status IN ('pending','open')""",
+                        (payload["trade_id"],user_id,user_id),
+                    )
+                    if trade_cur.rowcount != 1:
+                        return web.json_response({"error": "This trade cannot be cancelled by you."}, status=409)
+                    result = {"trade_id":payload["trade_id"],"status":"cancelled"}
                 elif action in {"guild_chat", "guild_send"}:
                     expected = {"action", "message"} if action == "guild_send" else {"action"}
                     if set(payload) != expected:
