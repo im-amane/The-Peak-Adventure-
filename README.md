@@ -121,6 +121,7 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/guild missions|claim ID` - Daily guild missions and XP
 - `/guild raid start|status|attack` - Shared guild boss raids
 - `/guild war challenge|accept|decline|status` - Best-of-five guild wars scored by PvP duels
+- `/guild chat message` and `/guild history` - Persistent guild member chat
 - `/trade` - Start a trade by replying to a player in a group
 - `/offer trade_id coins potions` - Set your offer
 - `/confirmtrade trade_id` - Confirm the current trade
