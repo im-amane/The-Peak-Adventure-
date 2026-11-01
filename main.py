@@ -1905,6 +1905,53 @@ async def heal(message: Message):
 
 
 
+
+@dp.message(Command("dungeons"))
+async def dungeons_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    rows = available_dungeons(player["level"])
+    lines = ["🗝️ <b>Dungeon Atlas</b>"]
+    for dungeon in rows:
+        marker = "🔓" if dungeon["unlocked"] else "🔒"
+        lines.append(marker + " " + str(dungeon["id"]) + ". " + dungeon["name"] + " · World " + str(dungeon["world"]) + " · Lv." + str(dungeon["min_level"]))
+    lines.append("Enter with /dungeon enter ID.")
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("dungeon"))
+async def dungeon_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    args = (message.text or "").split(maxsplit=2)
+    action = args[1].lower() if len(args) > 1 else "status"
+    try:
+        if action == "enter":
+            if len(args) < 3 or not args[2].isdigit():
+                await message.answer("Usage: /dungeon enter ID")
+                return
+            dungeon_id = int(args[2])
+            if not 1 <= dungeon_id <= 10:
+                raise DungeonError("Dungeon ID must be between 1 and 10.")
+            await travel_to_world(db, message.from_user.id, player["level"], dungeon_id)
+            state = await enter_dungeon(db, message.from_user.id, player["level"], dungeon_id)
+            await message.answer("🗝️ Entered <b>" + escape(state["name"]) + "</b>. Room 1/3: defeat a level " + str(state["target_level"]) + " or stronger monster.")
+        elif action == "status":
+            state = await get_dungeon_state(db, message.from_user.id)
+            if not state:
+                await message.answer("No dungeon run. Use /dungeons to choose one.")
+                return
+            await message.answer("🗝️ <b>" + escape(state["name"]) + "</b>\nRoom: " + str(state["room"]) + "/3 · Target monster level " + str(state["target_level"]) + "\nStatus: " + state["status"].upper())
+        elif action == "abandon":
+            await abandon_dungeon(db, message.from_user.id)
+            await message.answer("Dungeon run abandoned.")
+        elif action == "claim":
+            coins, potions = await claim_dungeon_reward(db, message.from_user.id)
+            await message.answer("🏆 Dungeon reward claimed: +" + str(coins) + " coins and +" + str(potions) + " potions.")
+        else:
+            await message.answer("Commands: /dungeon enter ID, /dungeon status, /dungeon abandon, /dungeon claim.")
+    except DungeonError as exc:
+        await message.answer(escape(str(exc)))
+
+
 @dp.message(Command("travel"))
 async def travel_command(message: Message):
     player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
