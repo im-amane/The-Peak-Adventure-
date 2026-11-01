@@ -45,6 +45,17 @@ class GameRulesTests(unittest.TestCase):
         self.assertIn("second seal", second_world[-1]["story"])
         self.assertIn("first blue spark", second_world[-1]["story"])
 
+    def test_third_world_stories_name_their_monster_and_advance_the_seal_mystery(self):
+        third_world = self.monsters[20:30]
+        for monster in third_world:
+            self.assertIn(monster["name"].casefold(), monster["story"].casefold())
+            self.assertIn("Stormglass Highlands", monster["story"])
+        self.assertIn("second seal", third_world[0]["story"])
+        self.assertIn("third seal", third_world[6]["story"])
+        self.assertIn("third seal", third_world[-1]["story"])
+        self.assertIn("first blue spark", third_world[-1]["story"])
+        self.assertTrue(third_world[-1]["boss"])
+
     def test_all_ten_combat_traits_are_used(self):
         expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
         self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
