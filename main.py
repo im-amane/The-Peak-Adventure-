@@ -4,6 +4,8 @@ import json
 import logging
 import os
 import random
+from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import aiosqlite
@@ -25,6 +27,7 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(
 log = logging.getLogger("peak-adventure")
 dp = Dispatcher()
 db: aiosqlite.Connection | None = None
+player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 async def init_db():
@@ -43,6 +46,10 @@ async def init_db():
       user_id INTEGER PRIMARY KEY, monster_level INTEGER NOT NULL,
       monster_hp INTEGER NOT NULL, message_id INTEGER
     );
+    CREATE TABLE IF NOT EXISTS daily_claims (
+      user_id INTEGER PRIMARY KEY, claimed_on TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_players_leaderboard ON players(level DESC, wins DESC);
     """)
     await db.commit()
 
@@ -114,7 +121,7 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         await db.commit()
 
 
-async def start_battle(user_id: int, username: str | None, send_target):
+async def _start_battle_unlocked(user_id: int, username: str | None, send_target):
     assert db is not None
     p = await get_player(user_id, username)
     cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
@@ -135,6 +142,25 @@ async def start_battle(user_id: int, username: str | None, send_target):
                      (user_id, monster_level, m["hp"]))
     await db.commit()
     await send_battle(send_target, user_id, "🌲 <b>You enter the wilds...</b>")
+
+
+async def start_battle(user_id: int, username: str | None, send_target):
+    async with player_locks[user_id]:
+        await _start_battle_unlocked(user_id, username, send_target)
+
+
+async def claim_daily_reward(user_id: int) -> bool:
+    assert db is not None
+    async with player_locks[user_id]:
+        today = datetime.now(timezone.utc).date().isoformat()
+        cur = await db.execute("SELECT claimed_on FROM daily_claims WHERE user_id=?", (user_id,))
+        previous = await cur.fetchone()
+        if previous and previous["claimed_on"] == today:
+            return False
+        await db.execute("INSERT INTO daily_claims(user_id, claimed_on) VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET claimed_on=excluded.claimed_on", (user_id, today))
+        await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (user_id,))
+        await db.commit()
+        return True
 
 
 async def finish_battle(user_id: int, won: bool, escaped: bool = False):
@@ -245,11 +271,12 @@ async def quests(message: Message):
 
 @dp.message(Command("daily"))
 async def daily(message: Message):
-    # Daily cooldown is intentionally simple in this first playable version.
-    p = await get_player(message.from_user.id)
-    await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (message.from_user.id,))
-    await db.commit()
-    await message.answer("🎁 Daily starter reward: +50 coins and +1 potion. (Daily claim cooldown will be added in the next update.)")
+    await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    claimed = await claim_daily_reward(message.from_user.id)
+    if claimed:
+        await message.answer("🎁 Daily reward claimed: +50 coins and +1 potion. Come back tomorrow!")
+    else:
+        await message.answer("⏳ You have already claimed today's reward. Come back after the UTC day resets.")
 
 
 @dp.message(Command("leaderboard"))
@@ -295,9 +322,12 @@ async def cb_quests(call: CallbackQuery):
 @dp.callback_query(F.data == "daily")
 async def cb_daily(call: CallbackQuery):
     await call.answer()
-    await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (call.from_user.id,))
-    await db.commit()
-    await call.message.answer("🎁 +50 coins and +1 potion added. Daily cooldown is not yet enforced in this first playable version.")
+    await get_player(call.from_user.id, call.from_user.username)
+    claimed = await claim_daily_reward(call.from_user.id)
+    if claimed:
+        await call.message.answer("🎁 Daily reward claimed: +50 coins and +1 potion. Come back tomorrow!")
+    else:
+        await call.message.answer("⏳ You have already claimed today's reward. Come back after the UTC day resets.")
 
 
 @dp.callback_query(F.data == "leaderboard")
@@ -309,8 +339,7 @@ async def cb_leaderboard(call: CallbackQuery):
         f"{i}. {r['username'] or 'Adventurer'} · Lv.{r['level']} · {r['wins']} wins" for i, r in enumerate(rows, 1)))
 
 
-@dp.callback_query(F.data.startswith("battle:"))
-async def battle_action(call: CallbackQuery):
+async def _battle_action_unlocked(call: CallbackQuery):
     assert db is not None
     await call.answer()
     user_id = call.from_user.id
@@ -328,18 +357,18 @@ async def battle_action(call: CallbackQuery):
         return
     if action == "potion":
         if p["potions"] <= 0:
-            await call.answer("No potions left!", show_alert=True)
+            await call.message.answer("🧪 No potions left!")
             return
         heal_amount = min(80, p["max_hp"] - p["hp"])
         if heal_amount <= 0:
-            await call.answer("HP is already full.", show_alert=True)
+            await call.message.answer("❤️ HP is already full.")
             return
         await db.execute("UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?", (heal_amount, user_id))
         damage = 0
         action_line = f"🧪 You recover {heal_amount} HP."
     elif action == "skill":
         if p["skill_cd"] > 0:
-            await call.answer(f"Skill cooling down: {p['skill_cd']} turn(s).", show_alert=True)
+            await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
             return
         damage = max(25, (p["level"] * 13 + 30) - m["defense"] // 2) * 2
         await db.execute("UPDATE players SET skill_cd=3 WHERE user_id=?", (user_id,))
@@ -365,6 +394,12 @@ async def battle_action(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.\n\n{result}", reply_markup=menu())
         return
     await send_battle(call.message, user_id, f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.", edit=True)
+
+
+@dp.callback_query(F.data.startswith("battle:"))
+async def battle_action(call: CallbackQuery):
+    async with player_locks[call.from_user.id]:
+        await _battle_action_unlocked(call)
 
 
 async def main():
