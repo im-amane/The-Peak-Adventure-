@@ -181,7 +181,8 @@
     constructor(){super("adventure");}
     create(){
       sceneRef=this;
-      const w=this.scale.width,h=this.scale.height;
+      const w=this.scale.width*1.5,h=this.scale.height*1.5;
+      this.worldWidth=w;this.worldHeight=h;
       const idx=Math.max(0,Math.min(9,gameState ? Math.floor((gameState.level-1)/10):0));
       const palette=worldPalettes[idx];
       this.cameras.main.setBackgroundColor(palette.sky);
@@ -235,6 +236,8 @@
         }
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
+      this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
+      this.cameras.main.startFollow(this.hero,true,0.08,0.08);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
       this.npc.setScale(0.9);
       this.obstacles.push({x:this.npc.x,y:this.npc.y,width:34,height:34});
@@ -266,7 +269,7 @@
       this.heroIdle = this.tweens.add({
         targets:this.hero, y:this.hero.y-3, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
       });
-      this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
+      this.add.text(this.cameras.main.width*0.5,28,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5).setScrollFactor(0);
       this.cursors=this.input.keyboard.createCursorKeys();
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
       this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
@@ -301,9 +304,9 @@
       if(this.cursors.up.isDown||this.keys.W.isDown||pressedDirections.has("up"))dy=-1;
       if(this.cursors.down.isDown||this.keys.S.isDown||pressedDirections.has("down"))dy=1;
       if(dx&&dy){dx*=0.707;dy*=0.707;}
-      const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.scale.width-24);
+      const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.worldWidth-24);
       if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
-      const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
+      const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
       if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
       let closest=null,closestDistance=Infinity;
       this.monsters.forEach(entry=>{
