@@ -10,6 +10,7 @@ const ROUTES = new Map([
   ["/api/appearance", new Set(["POST"])],
   ["/api/quest/claim", new Set(["POST"])],
   ["/api/settings", new Set(["GET", "POST"])],
+  ["/api/dungeon", new Set(["POST"])],
   ["/api/story", new Set(["POST"])],
 ]);
 
