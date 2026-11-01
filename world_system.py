@@ -7,6 +7,20 @@ WORLD_NAMES=(
  "Eternal Hour","Origin Realm",
 )
 
+
+WORLD_LANDMARKS=(
+ ("Whispering Tree","An ancient tree whispers names of heroes who have not been born."),
+ ("Buried Sun Dial","A brass dial points toward a sun that vanished beneath the desert."),
+ ("Stormglass Spire","A crystal tower stores the thunder of the first storm."),
+ ("Hollow Throne","The throne remembers the king who sacrificed his shadow."),
+ ("Furnace Heart","A sealed furnace still beats like a sleeping dragon."),
+ ("Frostbound Observatory","An astronomer froze time to keep one star from falling."),
+ ("Rift Wound","A scar in the earth leaks memories from another world."),
+ ("Celestial Archive","A library records every choice the world refused to make."),
+ ("Clockmaker Shrine","A broken clock counts down to a day that already happened."),
+ ("Origin Gate","The first doorway waits for the final seal to break.")
+)
+
 class WorldError(ValueError):
     pass
 
@@ -24,6 +38,10 @@ async def init_world_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
       user_id INTEGER PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )""")
+    await db.execute("""CREATE TABLE IF NOT EXISTS world_discoveries(
+      user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(user_id,world_id)
     )""")
     await db.commit()
 
@@ -67,3 +85,26 @@ def world_encounter_levels(player_level,world_id,boss_defeated=False):
     candidates=nearby_monster_levels(effective,boss_defeated if effective==world_max else False)
     filtered=tuple(level for level in candidates if world_min<=level<=world_max)
     return filtered or (world_min,)
+
+async def get_world_landmark(db,user_id,world_id):
+    if not isinstance(world_id,int) or isinstance(world_id,bool) or not 1<=world_id<=10:
+        raise WorldError("Invalid world.")
+    cur=await db.execute("SELECT 1 FROM world_discoveries WHERE user_id=? AND world_id=?",(user_id,world_id))
+    found=await cur.fetchone()
+    return {"world_id":world_id,"name":WORLD_NAMES[world_id-1],"landmark":WORLD_LANDMARKS[world_id-1][0],
+      "description":WORLD_LANDMARKS[world_id-1][1],"discovered":found is not None}
+
+
+async def discover_world_landmark(db,user_id,player_level,world_id):
+    if world_id>unlocked_world_count(player_level):
+        raise WorldError("This landmark is beyond your unlocked worlds.")
+    try:
+        await db.execute("INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)",(user_id,world_id))
+    except Exception as exc:
+        await db.rollback()
+        raise WorldError("You have already discovered this landmark.") from exc
+    reward=100+world_id*25
+    potions=1 if world_id%2 else 2
+    await db.execute("UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",(reward,potions,user_id))
+    await db.commit()
+    return {"landmark":WORLD_LANDMARKS[world_id-1][0],"coins":reward,"potions":potions}
