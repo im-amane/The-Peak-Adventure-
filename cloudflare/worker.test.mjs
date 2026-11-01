@@ -407,3 +407,30 @@ test("Mini App loads A-star and uses it for tap-to-move navigation", () => {
   assert.match(game, /this\.movePathIndex/);
   assert.match(game, /this\.cameras\.main\.getWorldPoint/);
 });
+
+
+test("A-star pathfinding routes around blocked map obstacles", () => {
+  const path = globalThis.PeakPathfinding.findPath(
+    { x: 32, y: 96 },
+    { x: 256, y: 96 },
+    [{ x: 144, y: 96, width: 64, height: 64 }],
+    { width: 320, height: 220, minY: 32, cellSize: 32 },
+  );
+  assert.ok(path.length > 0);
+  assert.deepEqual(path[path.length - 1], { x: 256, y: 96 });
+  assert.ok(path.some(point => Math.abs(point.y - 96) > 32));
+});
+
+test("A-star rejects blocked goals and invalid world bounds", () => {
+  const blockedGoal = globalThis.PeakPathfinding.findPath(
+    { x: 32, y: 96 },
+    { x: 144, y: 96 },
+    [{ x: 144, y: 96, width: 64, height: 64 }],
+    { width: 320, height: 220, minY: 32, cellSize: 32 },
+  );
+  const invalidBounds = globalThis.PeakPathfinding.findPath(
+    { x: 32, y: 96 }, { x: 256, y: 96 }, [], { width: 0, height: 0 },
+  );
+  assert.deepEqual(blockedGoal, []);
+  assert.deepEqual(invalidBounds, []);
+});
