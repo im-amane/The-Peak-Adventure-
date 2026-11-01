@@ -7,6 +7,7 @@ EVENT_TYPES = {
     "invalid_social_action",
     "invalid_dungeon_action",
     "invalid_world_action",
+    "invalid_story_action",
     "invalid_reward_claim",
     "repeated_rate_limit",
 }
