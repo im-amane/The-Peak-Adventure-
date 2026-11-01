@@ -61,6 +61,10 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await consume_xp_boost(self.db, 101))
         await self.db.commit()
 
+    async def test_xp_boost_rejects_invalid_player_id(self):
+        with self.assertRaises(PremiumError):
+            await consume_xp_boost(self.db, True)
+
     async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
         with self.assertRaises(PremiumError):
