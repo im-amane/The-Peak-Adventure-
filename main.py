@@ -41,6 +41,7 @@ from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
+from roaming_event_system import RoamingEventError, attack_roaming_event, claim_roaming_event_reward, get_or_create_roaming_event, init_roaming_event_tables
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
@@ -262,6 +263,7 @@ async def init_db():
     await init_report_tables(db)
     await init_weekly_tables(db)
     await init_daily_mission_tables(db)
+    await init_roaming_event_tables(db)
     await init_moderation_tables(db)
     await init_mana_tables(db)
 
@@ -2017,6 +2019,68 @@ async def account_deletion_callback(call: CallbackQuery):
         await call.message.edit_text(escape(str(exc)))
 
 
+@dp.message(Command("event"))
+async def roaming_event_command(message: Message):
+    args = (message.text or "").split(maxsplit=2)
+    action = args[1].lower() if len(args) > 1 else "status"
+    user_id = message.from_user.id
+    if action == "claim":
+        if len(args) < 3 or not args[2].isdigit():
+            await message.answer("Usage: /event claim EVENT_ID")
+            return
+        try:
+            reward = await claim_roaming_event_reward(db, int(args[2]), user_id)
+            await message.answer(
+                f"🏆 Roaming event reward claimed: +{reward['coins']} coins · "
+                f"+{reward['xp']} XP. Your level is now {reward['level']}."
+            )
+        except RoamingEventError as exc:
+            await message.answer(escape(str(exc)))
+        return
+    if action not in {"status", "attack"}:
+        await message.answer("Usage: /event, /event attack, or /event claim EVENT_ID")
+        return
+    player = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+    world_id = await get_current_world(db, user_id, player["level"])
+    boss_level = world_id * 10
+    boss_defeated = False
+    if player["level"] >= boss_level and boss_level in BOSS_LEVELS:
+        cur = await db.execute(
+            "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
+            (user_id, boss_level),
+        )
+        boss_defeated = await cur.fetchone() is not None
+    monster_level = random.choice(world_encounter_levels(player["level"], world_id, boss_defeated))
+    monster = MONSTER_BY_LEVEL[monster_level]
+    try:
+        event = await get_or_create_roaming_event(
+            db, world_id, monster_level, monster["name"], monster["hp"]
+        )
+        if action == "attack":
+            result = await attack_roaming_event(
+                db, event["event_id"], user_id,
+                max(1, player["level"] * 5 + player["weapon_attack"]),
+            )
+            status_line = "🌟 EVENT DEFEATED!" if result["status"] == "completed" else "⚔️ Hit landed."
+            await message.answer(
+                f"{status_line} <b>{escape(event['monster_name'])}</b> · "
+                f"{result['hp']}/{result['max_hp']} HP · Your damage: {result['damage']}\\n"
+                f"Participants: {result['participants']}\\n"
+                + ("Claim with /event claim " + str(event["event_id"]) if result["status"] == "completed"
+                   else "Next attack in 30 seconds. Use /event to check progress.")
+            )
+        else:
+            await message.answer(
+                f"🌍 <b>Roaming World Event #{event['event_id']}</b>\\n"
+                f"World {event['world_id']} · {escape(event['monster_name'])} · Lv.{event['monster_level']}\\n"
+                f"❤️ HP: {event['hp']}/{event['max_hp']}\\n"
+                f"⏳ Ends: {max(0, event['ends_at'] - int(time.time()))} seconds\\n"
+                "Use /event attack to help defeat it. Contributors can claim rewards after victory."
+            )
+    except RoamingEventError as exc:
+        await message.answer(escape(str(exc)))
+
+
 @dp.message(Command("missions"))
 async def daily_missions_command(message: Message):
     args = (message.text or "").split(maxsplit=2)
@@ -2214,7 +2278,7 @@ async def help_cmd(message: Message):
         "<b>📖 Adventure Guide</b>\n"
         "/start - Main menu\n/profile - Your hero stats\n/stamina - Check stamina\n/explore - Find a monster (10 stamina)\n"
         "/inventory - Potions and items\n/map - World and boss milestones\n"
-        "/quests - Current objectives\n/missions - Daily objectives and rewards\n/weekly - Weekly objectives and rewards\n/daily - Daily coins and potion\n"
+        "/quests - Current objectives\n/missions - Daily objectives and rewards\n/weekly - Weekly objectives and rewards\n/event - Shared roaming world event\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/heal - Restore HP (uses 30 coins)\n"
         "/class - View hero classes\n/shop - Buy weapons, armor and potions\n"
         "/claimquest quest_id - Claim a completed quest reward\n"
