@@ -395,7 +395,7 @@
     "advantage": "Storm Harpy gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Storm Harpy is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] Storm clouds gather even though the sky above the highlands has been clear for a hundred years.",
+    "story": "[3/10 · Stormglass Highlands] STORM HARPY circles the ridge where the desert's second seal sent a blue pulse into the clouds. Its wings are torn because it has spent a century keeping lightning away from a nest of orphaned sky-chicks. Tonight, the storm answers a voice rising from beneath the mountains.",
     "trait_effect": "regenerate"
   },
   {
@@ -414,7 +414,7 @@
     "advantage": "Volt Hound gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Volt Hound is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A little spark-beast follows your footsteps, mistaking your shadow for its missing parent.",
+    "story": "[3/10 · Stormglass Highlands] VOLT HOUND follows you through the glass-grass, carrying a cracked collar engraved with a child's name recovered from the Ashen Desert memories. It mistakes your shadow for its missing companion, but when the thunder speaks, the little hound stands between you and the sound.",
     "trait_effect": "fury"
   },
   {
@@ -433,7 +433,7 @@
     "advantage": "Cloud Serpent gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Cloud Serpent is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The mountain birds fly in circles around a tower that no map records.",
+    "story": "[3/10 · Stormglass Highlands] CLOUD SERPENT coils around an invisible tower above the cliffs. Inside its scales you glimpse the missing villagers walking through a sky that has no sun. The serpent guards the tower because its bell is the only thing keeping the third seal from opening too soon.",
     "trait_effect": "swift"
   },
   {
@@ -452,7 +452,7 @@
     "advantage": "Tempest Wisp gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Tempest Wisp is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A cloud serpent carries a message sealed inside a feather made of lightning.",
+    "story": "[3/10 · Stormglass Highlands] TEMPEST WISP slips from the tower carrying a feather of living lightning. It shows you a message left by the Minotaur Warden: the second seal did not imprison the storm; it warned the world that something below was learning to call the sky by name.",
     "trait_effect": "armored"
   },
   {
@@ -471,7 +471,7 @@
     "advantage": "Skybreaker Roc gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Skybreaker Roc is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The storm wraith remembers a kingdom that was erased between two heartbeats.",
+    "story": "[3/10 · Stormglass Highlands] SKYBREAKER ROC dives through the storm and shatters the tower's outer rings. Each fragment shows a different memory of the first blue spark, including one in which the spark was not falling from heaven but escaping from a cage beneath the world.",
     "trait_effect": "drain"
   },
   {
@@ -490,7 +490,7 @@
     "advantage": "Lightning Ogre gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Lightning Ogre is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] A giant refuses to strike first; it is waiting for the thunder to stop calling its name.",
+    "story": "[3/10 · Stormglass Highlands] LIGHTNING OGRE stands guard at a bridge of black glass, refusing to attack until the thunder stops calling it by the name of its dead daughter. When you quiet the voice, it gives you the bridge key and warns that the storm is being fed by a heartbeat under the mountain.",
     "trait_effect": "poison"
   },
   {
@@ -509,7 +509,7 @@
     "advantage": "Stormcaller Witch gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Stormcaller Witch is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The harpy's song reveals that the storms are being summoned from underground.",
+    "story": "[3/10 · Stormglass Highlands] STORMCALLER WITCH has been gathering the final words of the lost sky-guardians, hoping to weave them into a warning strong enough to reach the sealed heart below. She reveals that the third seal is cracking from the inside, not from your victories.",
     "trait_effect": "shield"
   },
   {
@@ -528,7 +528,7 @@
     "advantage": "Thunder Colossus gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Thunder Colossus is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The witch has been collecting the final words of every creature lost to the storm.",
+    "story": "[3/10 · Stormglass Highlands] THUNDER COLOSSUS wakes beneath the black-glass bridge, its chest full of trapped thunder and the names stolen from the desert. It fights because the voice below has promised to return every lost memory if the colossus breaks the last chain. You hear the same voice that spoke after the second seal opened.",
     "trait_effect": "reflect"
   },
   {
@@ -547,7 +547,7 @@
     "advantage": "Storm Wyrm gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Storm Wyrm is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The colossus falls, and the clouds briefly reveal a second moon hanging beneath the world.",
+    "story": "[3/10 · Stormglass Highlands] STORM WYRM guards the final ascent, its horns pierced by fragments of the third seal. When it falls, the clouds part and reveal a second moon beneath the world: a vast eye looking upward. The Wyrm's last breath tells you the Thunder Dragon is not the jailer, but the lock.",
     "trait_effect": "lifesteal"
   },
   {
@@ -566,7 +566,7 @@
     "advantage": "Thunder Dragon gains an edge in Stormglass Highlands terrain and against unprepared foes.",
     "disadvantage": "Thunder Dragon is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
-    "story": "[3/10 · Stormglass Highlands] The thunder seal breaks. A voice in the lightning calls you the heir of a forgotten promise.",
+    "story": "[3/10 · Stormglass Highlands] Thunder Dragon descends through the broken sky as the third seal begins to fail. It carries the names and memories recovered from the meadow and desert inside its lightning heart. Defeating it does not destroy the seal; it lets the dragon release its burden and open the way forward. The voice beneath the world finally speaks without disguise: it remembers creating the first blue spark, and it remembers why it was afraid.",
     "trait_effect": "berserk"
   },
   {
