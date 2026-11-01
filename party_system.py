@@ -7,16 +7,17 @@ from functools import wraps
 
 
 
-_DB_WRITE_LOCKS: dict[int, asyncio.Lock] = {}
+_DB_WRITE_LOCKS: dict[tuple[int, int], asyncio.Lock] = {}
 
 
 def _serialize_db_write(function):
     @wraps(function)
     async def wrapped(db, *args, **kwargs):
-        lock = _DB_WRITE_LOCKS.get(id(db))
+        key = (id(db), id(asyncio.get_running_loop()))
+        lock = _DB_WRITE_LOCKS.get(key)
         if lock is None:
             lock = asyncio.Lock()
-            _DB_WRITE_LOCKS[id(db)] = lock
+            _DB_WRITE_LOCKS[key] = lock
         async with lock:
             return await function(db, *args, **kwargs)
     return wrapped
