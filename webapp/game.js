@@ -39,6 +39,8 @@
   let nearMonster = false;
 
   function applyState(data, message) {
+    const previousRegion = gameState ? gameState.region : null;
+    const previousMonster = gameState ? gameState.monster.level : null;
     gameState = data;
     ui.name.textContent = data.first_name || "Adventurer";
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
@@ -55,14 +57,17 @@
       ui.battleHp.textContent = "❤️ " + battle.hp + " / " + battle.max_hp;
       ui.battleHpFill.style.width = Math.max(0, battle.hp / battle.max_hp * 100) + "%";
       ui.potionCount.textContent = "Health potions: " + data.potions + " · " + battle.special_move;
-      ui.battleMessage.textContent = message || battle.story;
+      ui.battleMessage.textContent = message ? message.replace(/<[^>]*>/g, "") : battle.story;
     }
-    ui.status.textContent = message || (battle
+    ui.status.textContent = (message ? message.replace(/<[^>]*>/g, "") : "") || (battle
       ? "Battle in progress. Choose your action below."
       : data.class_selected ? "The wilds are waiting. Find the creature on the map."
       : "Choose a hero class in the Telegram chat before exploring.");
     ui.encounter.disabled = !nearMonster || !data.class_selected || data.battle_active;
     ui.encounter.textContent = data.battle_active ? "⚔️ Battle in progress" : nearMonster ? "⚔️ Challenge Monster" : "⚔️ Find the monster";
+    if (sceneRef && previousRegion && (previousRegion !== data.region || previousMonster !== data.monster.level)) {
+      sceneRef.scene.restart();
+    }
   }
 
   async function loadState() {
