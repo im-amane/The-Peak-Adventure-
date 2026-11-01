@@ -50,7 +50,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(logs[0]["action"],"coin_adjustment")
   self.assertEqual(logs[0]["actor_id"],999)
  async def test_dashboard_counts(self):
-  self.assertEqual(await dashboard_stats(self.db),{"players":1,"active_battles":0,"guilds":0,"registered_groups":0,"active_duels":0,"security_events_24h":0})
+  self.assertEqual(await dashboard_stats(self.db),{"players":1,"active_battles":0,"guilds":0,"registered_groups":0,"active_duels":0,"security_events_24h":0,"stars_received":0,"premium_gems_issued":0})
  async def test_player_export_contains_account_data(self):
   data=await export_player_data(self.db,101)
   self.assertEqual(data["data"]["profile"][0]["coins"],50)
