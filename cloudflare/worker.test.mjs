@@ -192,3 +192,39 @@ test("dungeon API is POST-only and forwards authenticated requests", async () =>
     globalThis.fetch = originalFetch;
   }
 });
+
+
+test("daily mission claim API is POST-only and forwards Telegram auth", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl;
+  let forwardedAuth;
+  let forwardedBody;
+  globalThis.fetch = async (url, init) => {
+    forwardedUrl = String(url);
+    forwardedAuth = new Headers(init.headers).get("x-telegram-init-data");
+    forwardedBody = init.body;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  try {
+    const getResponse = await worker.fetch(
+      new Request("https://edge.example/api/daily-mission/claim", { method: "GET" }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(getResponse.status, 405);
+    assert.equal(getResponse.headers.get("allow"), "POST");
+    const postResponse = await worker.fetch(
+      new Request("https://edge.example/api/daily-mission/claim", {
+        method: "POST",
+        headers: { "X-Telegram-Init-Data": "signed-data", "Content-Type": "application/json" },
+        body: JSON.stringify({ mission_id: "daily_hunter" }),
+      }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(postResponse.status, 200);
+    assert.equal(forwardedUrl, "https://game.example/api/daily-mission/claim");
+    assert.equal(forwardedAuth, "signed-data");
+    assert.equal(forwardedBody, JSON.stringify({ mission_id: "daily_hunter" }));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
