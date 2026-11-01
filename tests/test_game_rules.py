@@ -36,6 +36,10 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(len({m["unique_power"] for m in self.monsters}), 100)
         self.assertEqual(len({m["story"] for m in self.monsters}), 100)
 
+    def test_all_ten_combat_traits_are_used(self):
+        expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
+        self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
+
     def test_alpha_god_is_level_100_boss(self):
         alpha = self.monsters[-1]
         self.assertEqual(alpha["name"], "THE ALPHA GOD")
