@@ -30,6 +30,13 @@
     worldNavigation: document.getElementById("world-navigation"),
     weeklyQuestList: document.getElementById("weekly-quest-list"),
     socialOverview: document.getElementById("social-overview"),
+    socialSearchForm: document.getElementById("social-search-form"),
+    socialSearchInput: document.getElementById("social-player-search"),
+    socialSearchResults: document.getElementById("social-search-results"),
+    partyCreate: document.getElementById("party-create"),
+    partyTargetId: document.getElementById("party-target-id"),
+    partyInvite: document.getElementById("party-invite"),
+    partyLeave: document.getElementById("party-leave"),
     dungeonStatus: document.getElementById("dungeon-status")
   };
   const worldPalettes = [
@@ -309,17 +316,74 @@
         const p=document.createElement("p"); p.className="social-member"; p.textContent=line; card.appendChild(p);
       });
       ui.socialOverview.appendChild(card);
+      return card;
     };
-    addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
+    const addAction=(parent,label,action,extra={})=>{
+      const button=document.createElement("button"); button.type="button"; button.className="social-action";
+      button.textContent=label; button.dataset.socialAction=action;
+      Object.entries(extra).forEach(([key,value])=>button.dataset[key]=String(value));
+      parent.appendChild(button);
+    };
+    const friendsCard=addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
+    (social.friends||[]).forEach(friend=>addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id}));
+    const requests=social.friend_requests||[];
+    if(requests.length){
+      const card=addCard("Incoming friend requests",requests.map(x=>x.username+" · Lv."+x.level));
+      requests.forEach(request=>{
+        addAction(card,"Accept","friend_accept",{requestId:request.request_id});
+        addAction(card,"Decline","friend_decline",{requestId:request.request_id});
+      });
+    }
     const party=social.party;
-    addCard("Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party. Use /party create."]);
+    addCard("Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party."]);
+    const invites=social.party_invites||[];
+    if(invites.length){
+      const card=addCard("Party invitations",invites.map(x=>x.username+" invited you to party #"+x.party_id));
+      invites.forEach(invite=>{
+        addAction(card,"Accept","party_accept",{inviteId:invite.invite_id});
+        addAction(card,"Decline","party_decline",{inviteId:invite.invite_id});
+      });
+    }
     const guild=social.guild;
-    addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create."]);
-    const guildInvites=(social.pending_guild_invites||[]).map(x=>x.guild_name+" · Invite #"+x.invite_id+" from "+x.inviter_name+" · /guild accept "+x.invite_id);
-    addCard("Guild Invitations",guildInvites);
-    if (social.pending_trades) {
-      const note=document.createElement("p"); note.className="small"; note.textContent="🤝 Pending trades: "+social.pending_trades;
+    addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
+    if(social.pending_trades){
+      const note=document.createElement("p");note.className="small";note.textContent="🤝 Pending trades: "+social.pending_trades;
       ui.socialOverview.appendChild(note);
+    }
+    if(ui.partyCreate)ui.partyCreate.hidden=Boolean(party);
+    if(ui.partyInvite)ui.partyInvite.hidden=!party;
+    if(ui.partyTargetId)ui.partyTargetId.hidden=!party;
+    if(ui.partyLeave)ui.partyLeave.hidden=!party;
+  }
+
+  function renderPlayerSearch(players) {
+    if(!ui.socialSearchResults)return;
+    ui.socialSearchResults.replaceChildren();
+    if(!players.length){
+      const empty=document.createElement("p");empty.className="small";empty.textContent="No visible players found.";
+      ui.socialSearchResults.appendChild(empty);return;
+    }
+    players.forEach(player=>{
+      const row=document.createElement("div");row.className="social-search-result";
+      const label=document.createElement("span");label.textContent=player.username+" · Lv."+player.level;
+      const button=document.createElement("button");button.type="button";button.textContent="Add friend";
+      button.dataset.socialAction="friend_request";button.dataset.targetId=String(player.user_id);
+      row.append(label,button);ui.socialSearchResults.appendChild(row);
+    });
+  }
+
+  async function runSocialAction(payload) {
+    if(requestInFlight||!gameState)return;
+    requestInFlight=true;
+    try{
+      const result=await postApi("/api/social",payload);
+      applyState(result.state,result.message);
+      return result;
+    }catch(error){
+      ui.status.textContent=error.message;
+      throw error;
+    }finally{
+      requestInFlight=false;
     }
   }
 
@@ -879,6 +943,34 @@
     if(button) performWorldAction(button);
   });
 
+  if(ui.socialSearchForm)ui.socialSearchForm.addEventListener("submit",async event=>{
+    event.preventDefault();
+    const query=ui.socialSearchInput.value.trim();
+    if(query.length<2)return;
+    try{
+      const result=await runSocialAction({action:"friend_search",query});
+      renderPlayerSearch(result.result.players||[]);
+    }catch(_){}
+  });
+  if(ui.socialOverview)ui.socialOverview.addEventListener("click",async event=>{
+    const button=event.target.closest("[data-social-action]");
+    if(!button||button.disabled)return;
+    const action=button.dataset.socialAction;
+    const payload={action};
+    if(action==="friend_request")payload.target_id=Number(button.dataset.targetId);
+    if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
+    if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
+    if(action==="party_accept"||action==="party_decline")payload.invite_id=Number(button.dataset.inviteId);
+    button.disabled=true;
+    try{await runSocialAction(payload);}catch(_){button.disabled=false;}
+  });
+  if(ui.partyCreate)ui.partyCreate.addEventListener("click",async()=>{try{await runSocialAction({action:"party_create"});}catch(_){}});
+  if(ui.partyInvite)ui.partyInvite.addEventListener("click",async()=>{
+    const targetId=Number(ui.partyTargetId.value);
+    if(!Number.isSafeInteger(targetId)||targetId<=0){ui.status.textContent="Enter a valid player ID.";return;}
+    try{await runSocialAction({action:"party_invite",target_id:targetId});ui.partyTargetId.value="";}catch(_){}
+  });
+  if(ui.partyLeave)ui.partyLeave.addEventListener("click",async()=>{try{await runSocialAction({action:"party_leave"});}catch(_){}});
   ui.dungeonStatus.addEventListener("click",event=>{
     const button=event.target.closest("[data-dungeon-action]");
     if(button) performDungeonAction(button);
