@@ -7,6 +7,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.db=await aiosqlite.connect(":memory:"); self.db.row_factory=aiosqlite.Row
   await self.db.executescript("""
   CREATE TABLE players(user_id INTEGER PRIMARY KEY,username TEXT,level INTEGER,xp INTEGER);
+  CREATE TABLE security_events(event_id INTEGER PRIMARY KEY,user_id INTEGER,event_type TEXT,severity INTEGER,details TEXT,created_at TEXT);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE guild_members(user_id INTEGER PRIMARY KEY,guild_id INTEGER,role TEXT,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
   CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
@@ -82,6 +83,11 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(AccountError): await update_settings(self.db,1,None,"private")
  async def test_invalid_account_rejected(self):
   with self.assertRaises(AccountError): await get_settings(self.db,True)
+ async def test_delete_account_removes_security_events(self):
+  await self.db.execute("INSERT INTO security_events VALUES(1,1,'invalid_battle_action',2,'bad action',CURRENT_TIMESTAMP)")
+  await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM security_events WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_account_transfers_guild_leadership(self):
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
