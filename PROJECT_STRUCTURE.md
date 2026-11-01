@@ -121,7 +121,7 @@ The-Peak-Adventure/
 - [x] Multiple monster encounter locations
 - [ ] Large multi-zone maps
 - [ ] Portals and landmarks
-- [ ] Dungeons and secret areas
+- [~] Ten persistent three-room dungeons with unlocks, progression and one-time rewards; secret areas pending
 - [ ] World unlock and fast travel
 - [x] Weather and day/night cycle
 
@@ -221,7 +221,7 @@ The-Peak-Adventure/
 - [x] Achievements and claims
 - [x] Daily reward loop
 - [x] NPC region dialogue
-- [ ] Quest journal and detailed story UI
+- [x] Quest journal with progress bars and claimable rewards in Mini App
 - [ ] Branching NPC dialogue
 - [ ] Cinematic story chapters
 - [ ] World and group quest chains
