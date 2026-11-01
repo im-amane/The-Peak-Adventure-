@@ -738,10 +738,14 @@ async def decline_trade(call: CallbackQuery):
 
 @dp.message(Command("offer"))
 async def set_trade_offer(message: Message):
-    if len(message.command) != 4 or not all(part.isdigit() for part in message.command[1:]):
-        await message.answer("Usage: <code>/offer trade_id coins potions</code>.")
+    if len(message.command) not in {4, 5, 6} or not all(part.isdigit() for part in message.command[1:4]):
+        await message.answer("Usage: /offer trade_id coins potions [weapon_name|none] [armor_name|none]. Use underscores for spaces.")
         return
-    trade_id, coins, potions = map(int, message.command[1:])
+    trade_id, coins, potions = map(int, message.command[1:4])
+    weapon_token = message.command[4] if len(message.command) >= 5 else "none"
+    armor_token = message.command[5] if len(message.command) >= 6 else "none"
+    weapon = None if weapon_token.lower() == "none" else weapon_token.replace("_", " ")
+    armor = None if armor_token.lower() == "none" else armor_token.replace("_", " ")
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] != "open":
@@ -751,20 +755,28 @@ async def set_trade_offer(message: Message):
     if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    p = await get_player(user_id, message.from_user.username)
-    if coins > p["coins"] or potions > p["potions"]:
+    player = await get_player(user_id, message.from_user.username)
+    if coins > player["coins"] or potions > player["potions"]:
         await message.answer("Your offer exceeds your current coins or potions.")
         return
+    if weapon and weapon != player["weapon"]:
+        await message.answer("You can only offer the weapon currently equipped by your hero.")
+        return
+    if armor and armor != player["armor"]:
+        await message.answer("You can only offer the armor currently equipped by your hero.")
+        return
+    weapon_attack = player["weapon_attack"] if weapon else None
+    armor_defense = player["armor_defense"] if armor else None
     if user_id == trade["initiator_id"]:
-        await db.execute(
-            "UPDATE trades SET initiator_coins=?, initiator_potions=?, initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
-            (coins, potions, trade_id),
-        )
+        await db.execute("""UPDATE trades SET initiator_coins=?,initiator_potions=?,
+          initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
+          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
+          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
     else:
-        await db.execute(
-            "UPDATE trades SET partner_coins=?, partner_potions=?, initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
-            (coins, potions, trade_id),
-        )
+        await db.execute("""UPDATE trades SET partner_coins=?,partner_potions=?,
+          partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
+          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
+          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
     await db.commit()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
