@@ -40,6 +40,7 @@ from db_backup import create_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
+from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -123,6 +124,16 @@ player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 class DatabaseLockMiddleware:
     async def __call__(self, handler, event, data):
         async with db_lock:
+            sender = getattr(event, "from_user", None)
+            if db is not None and sender and sender.id not in ADMIN_IDS:
+                ban = await get_active_ban(db, sender.id)
+                if ban:
+                    notice = "⛔ Your game account is suspended. Reason: " + escape(ban["reason"])
+                    if isinstance(event, Message):
+                        await event.answer(notice)
+                    elif isinstance(event, CallbackQuery):
+                        await event.answer("Your game account is suspended.", show_alert=True)
+                    return None
             return await handler(event, data)
 
 
@@ -244,6 +255,7 @@ async def init_db():
     await init_stamina_tables(db)
     await init_report_tables(db)
     await init_weekly_tables(db)
+    await init_moderation_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -1968,8 +1980,32 @@ async def admin_command(message: Message):
             f"Players: {stats['players']}\nActive monster battles: {stats['active_battles']}\n"
             f"Guilds: {stats['guilds']}\nRegistered groups: {stats['registered_groups']}\n"
             f"Active PvP duels: {stats['active_duels']}\n\n"
-            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE."
+            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE."
         )
+        return
+    if action=="ban":
+        if len(args)<3:
+            await message.answer("Usage: /admin ban PLAYER_ID reason"); return
+        parts=args[2].split(maxsplit=1)
+        if not parts[0].isdigit() or len(parts)<2:
+            await message.answer("Usage: /admin ban PLAYER_ID reason"); return
+        try:
+            await ban_player(db,message.from_user.id,int(parts[0]),parts[1])
+            await record_admin_action(db,message.from_user.id,"player_ban",int(parts[0]),parts[1])
+            await message.answer(f"⛔ Player <code>{parts[0]}</code> has been suspended.")
+        except ModerationError as exc:
+            await message.answer(escape(str(exc)))
+        return
+    if action=="unban":
+        if len(args)<3 or not args[2].strip().isdigit():
+            await message.answer("Usage: /admin unban PLAYER_ID"); return
+        target=int(args[2].strip())
+        try:
+            await unban_player(db,message.from_user.id,target)
+            await record_admin_action(db,message.from_user.id,"player_unban",target)
+            await message.answer(f"✅ Player <code>{target}</code> has been reinstated.")
+        except ModerationError as exc:
+            await message.answer(escape(str(exc)))
         return
     if action=="reports":
         reports=await list_open_reports(db,25)
@@ -2040,7 +2076,7 @@ async def admin_command(message: Message):
         await record_admin_action(db,message.from_user.id,"broadcast",None,"sent="+str(sent)+", failed="+str(failed))
         await message.answer(f"📢 Broadcast finished. Sent: {sent}. Failed: {failed}.")
         return
-    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE.")
+    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin ban ID reason, /admin unban ID, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE.")
 
 
 @dp.message(Command("export"))
