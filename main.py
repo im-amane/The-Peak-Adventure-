@@ -2637,6 +2637,7 @@ async def miniapp_state(user: dict):
     pending_trades = (await trade_cur.fetchone())["total"]
     dungeon_state = await get_dungeon_state(db, user_id)
     material_state = await get_materials(db, user_id)
+    story_state = await get_story_chapters(db, user_id, p["level"])
     await refresh_quest_progress(user_id)
     quest_cur = await db.execute("SELECT quest_id,progress,completed,claimed FROM quest_progress WHERE user_id=?", (user_id,))
     quest_progress = {row["quest_id"]: row for row in await quest_cur.fetchall()}
@@ -2656,6 +2657,7 @@ async def miniapp_state(user: dict):
         "social": {"friends": social_friends, "party": social_party, "guild": social_guild, "pending_trades": pending_trades},
         "dungeon": dungeon_state,
         "materials": material_state,
+        "story": story_state,
         "online_count": await count_online_players(db),
         "settings": await get_settings(db, user_id),
         "class_skill": class_stats["skill"],
@@ -2754,6 +2756,42 @@ async def api_quest_claim(request: web.Request):
         state = await miniapp_state(user)
     return web.json_response({"message": result, "state": state})
 
+
+
+
+async def api_story(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 4096:
+        return web.json_response({"error": "Story request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Story payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or payload.get("action") not in {"choose", "claim"}:
+        return web.json_response({"error": "Unsupported story action."}, status=400)
+    chapter_id = payload.get("chapter_id")
+    if not isinstance(chapter_id, int) or isinstance(chapter_id, bool):
+        return web.json_response({"error": "Invalid chapter ID."}, status=400)
+    try:
+        async with db_lock:
+            player = await get_player(user["id"])
+            if payload["action"] == "choose":
+                choice_id = payload.get("choice_id")
+                if not isinstance(choice_id, str) or len(choice_id)>40:
+                    return web.json_response({"error":"Invalid story choice."},status=400)
+                result = await choose_story_path(db,user["id"],player["level"],chapter_id,choice_id)
+                message = "Story choice recorded."
+            else:
+                reward = await claim_story_reward(db,user["id"],chapter_id)
+                result = {"reward":reward}
+                message = "Story reward claimed."
+            state = await miniapp_state(user)
+    except StoryError as exc:
+        return web.json_response({"error":str(exc)},status=400)
+    return web.json_response({"message":message,"result":result,"state":state})
 
 
 async def api_settings(request: web.Request):
@@ -2972,6 +3010,7 @@ async def start_web_server():
     app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/appearance", api_appearance)
     app.router.add_route("*", "/api/settings", api_settings)
+    app.router.add_post("/api/story", api_story)
     app.router.add_post("/api/quest/claim", api_quest_claim)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
