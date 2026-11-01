@@ -1400,7 +1400,9 @@ async def guild_command(message: Message):
         sub = parts[2].lower() if len(parts) > 2 else "status"
         if sub == "start":
             try:
-                level = min(100, max(10, ((profile_level := (await db.execute("SELECT guild_level FROM guilds WHERE guild_id=?", (membership["guild_id"],))).fetchone())["guild_level"] + 9) // 10 * 10))
+                guild_cur = await db.execute("SELECT guild_level FROM guilds WHERE guild_id=?", (membership["guild_id"],))
+                guild_row = await guild_cur.fetchone()
+                level = min(100, max(10, ((guild_row["guild_level"] + 9) // 10) * 10))
                 boss = MONSTER_BY_LEVEL[level]
                 raid_id = await start_guild_raid(db, membership["guild_id"], user_id, level, boss["name"], boss["hp"] * 5)
                 await message.answer(f"🐉 <b>GUILD RAID #{raid_id}</b>\n{escape(boss['name'])} · Lv.{level} · {boss['hp']*5} HP")
