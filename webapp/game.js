@@ -1114,6 +1114,20 @@
         y+radius>o.y-o.height/2 && y-radius<o.y+o.height/2
       );
     }
+    resetHeroMovementPose(){
+      if(!this.hero)return;
+      if(this.heroWalkTween){
+        this.heroWalkTween.stop();
+        this.heroWalkTween=null;
+      }
+      if(this.heroIdle){
+        this.heroIdle.stop();
+        this.heroIdle=null;
+      }
+      this.hero.setScale(this.heroBaseScaleX||1,1);
+      this.hero.setRotation(0);
+      Object.values(this.hero.limbs||{}).forEach(limb=>{limb.rotation=0;});
+    }
     update(_,delta){
       if(!this.hero)return;
       this.cycleTime = (this.cycleTime + delta) % 90000;
@@ -1139,7 +1153,12 @@
           this.weatherGraphics.fillCircle(x,y,1+(i%3));
         }
       }
-      if(gameState && gameState.battle_active){clearMovementInput();ui.encounter.disabled=true;return;}
+      if(gameState && gameState.battle_active){
+        clearMovementInput();
+        ui.encounter.disabled=true;
+        this.resetHeroMovementPose();
+        return;
+      }
       // Clamp long frames after tab suspension to prevent large movement jumps.
       const frameDelta=Phaser.Math.Clamp(Number(delta)||0,0,50);
       const baseSpeed=0.18*frameDelta;
