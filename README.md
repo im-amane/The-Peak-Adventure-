@@ -87,6 +87,10 @@ The included Render blueprint uses a paid Starter web service and a persistent d
 - `/heal` - Restore HP at camp
 - `/map` - View the current region
 - `/travel` - View unlocked worlds and fast travel with `/travel 3`
+- `/story` - Read the ten-chapter branching Chronicle
+- `/story chapter ID` - Read a chapter and its NPC dialogue
+- `/story choose CHAPTER choice_id` - Choose a story branch
+- `/story claim CHAPTER` - Claim chapter rewards
 - `/landmarks` - View discovered and undiscovered world landmarks
 - `/discover` - Discover your current world landmark and claim its one-time reward
 - `/materials` - View collected crafting resources
