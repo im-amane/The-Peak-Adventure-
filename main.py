@@ -2042,6 +2042,9 @@ async def roaming_event_command(message: Message):
         await message.answer("Usage: /event, /event attack, or /event claim EVENT_ID")
         return
     player = await get_player(user_id, message.from_user.username or message.from_user.full_name)
+    if not player["class_selected"]:
+        await message.answer("Choose your hero class with /class before joining a roaming event.")
+        return
     world_id = await get_current_world(db, user_id, player["level"])
     boss_level = world_id * 10
     boss_defeated = False
