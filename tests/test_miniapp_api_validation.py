@@ -47,6 +47,32 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         row = await cur.fetchone()
         self.assertEqual(row["event_type"], event_type)
 
+    async def test_miniapp_attack_executes_and_advances_active_battle(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100,armor_defense=1000 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.execute(
+            """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+               VALUES(?,1,10000,0,0,0)""",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        response = await self._call(main.api_action, {"action": "attack"})
+        self.assertEqual(response.status, 200)
+        payload = json.loads(response.text)
+        self.assertIn("message", payload)
+        self.assertIn("state", payload)
+        cur = await main.db.execute(
+            "SELECT turn_count,monster_hp FROM battles WHERE user_id=?",
+            (user_id,),
+        )
+        battle = await cur.fetchone()
+        self.assertEqual(battle["turn_count"], 1)
+        self.assertLess(battle["monster_hp"], 10000)
+
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
         self.assertEqual(response.status, 400)
