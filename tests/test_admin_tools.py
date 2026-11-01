@@ -16,6 +16,8 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE character_appearance(user_id INTEGER PRIMARY KEY,race TEXT);
   CREATE TABLE player_settings(user_id INTEGER PRIMARY KEY,notifications_enabled INTEGER,profile_visibility TEXT);
   CREATE TABLE friend_requests(user_low INTEGER,user_high INTEGER,status TEXT);
+  CREATE TABLE player_materials(user_id INTEGER,material_id TEXT,quantity INTEGER);
+  CREATE TABLE crafted_items(user_id INTEGER,recipe_id TEXT);
   CREATE TABLE monster_discoveries(user_id INTEGER,monster_level INTEGER);
   CREATE TABLE boss_defeats(user_id INTEGER,monster_level INTEGER);
   INSERT INTO players VALUES(101,50);
