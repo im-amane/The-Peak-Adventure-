@@ -80,4 +80,18 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await declare_guild_war(self.db,10,1,20)
   with self.assertRaises(GuildFeatureError): await declare_guild_war(self.db,20,4,10)
 
+
+ async def test_guild_members_can_chat_and_read_history(self):
+  message_id=await send_guild_message(self.db,10,2,"  Rally   at dawn  ")
+  rows=await get_guild_chat(self.db,10,1)
+  self.assertEqual(rows[0]["message_id"],message_id)
+  self.assertEqual(rows[0]["message"],"Rally at dawn")
+  self.assertEqual(rows[0]["username"],"member")
+ async def test_nonmember_cannot_read_or_post_guild_chat(self):
+  with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,3,"Hello")
+  with self.assertRaises(GuildFeatureError): await get_guild_chat(self.db,10,3)
+ async def test_guild_chat_message_length_is_limited(self):
+  with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2," ")
+  with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2,"x"*501)
+
 if __name__=="__main__": unittest.main()
