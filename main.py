@@ -782,6 +782,12 @@ async def confirm_trade(message: Message):
         )
         await db.execute("UPDATE trades SET status='completed' WHERE trade_id=?", (trade_id,))
         await db.commit()
+        if trade["chat_id"] < 0:
+            try:
+                await record_group_activity(db,trade["chat_id"],"trade")
+                await award_group_xp(db,trade["chat_id"],10)
+            except GroupError:
+                pass
         await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
         return
     await message.answer((await trade_summary(trade)) + "\nWaiting for the other player to confirm.")
@@ -1433,6 +1439,12 @@ async def duel_action(call: CallbackQuery):
         await db.commit()
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
+    if duel["status"] == "finished" and duel["chat_id"] < 0 and duel["winner_id"]:
+        try:
+            await record_group_activity(db,duel["chat_id"],"battle")
+            await award_group_xp(db,duel["chat_id"],20)
+        except GroupError:
+            pass
     markup = duel_keyboard(duel_id) if duel["status"] == "active" else None
     await call.message.edit_text(await duel_text(duel), reply_markup=markup)
 
@@ -1492,7 +1504,10 @@ async def admin_command(message: Message):
     if action=="player":
         if len(args)<3 or not args[2].isdigit():
             await message.answer("Usage: /admin player player_id"); return
-        player=await get_player(int(args[2]))
+        cur=await db.execute("SELECT * FROM players WHERE user_id=?",(int(args[2]),))
+        player=await cur.fetchone()
+        if not player:
+            await message.answer("Player account not found."); return
         await message.answer(
             f"👤 <b>{escape(player['username'] or 'Adventurer')}</b> · ID <code>{player['user_id']}</code>\n"
             f"Level {player['level']} · {player['hero_class']} · XP {player['xp']}\n"
