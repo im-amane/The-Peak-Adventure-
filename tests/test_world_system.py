@@ -20,8 +20,8 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(result["name"],"Stormglass Highlands")
   self.assertEqual(await get_current_world(self.db,101,21),3)
  async def test_world_choice_marks_current_and_locked(self):
-  await travel_to_world(self.db,101,31,2)
-  rows=await get_world_choices(self.db,101,31)
+  await travel_to_world(self.db,101,30,2)
+  rows=await get_world_choices(self.db,101,30)
   self.assertTrue(rows[1]["current"]); self.assertFalse(rows[3]["unlocked"])
  async def test_level_downgrade_clamps_current_world(self):
   await travel_to_world(self.db,101,51,5)
