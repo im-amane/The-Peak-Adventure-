@@ -130,3 +130,12 @@ test("allows appearance API POST route", async () => {
   assert.equal(response.status, 405);
   assert.equal(response.headers.get("allow"), "POST");
 });
+
+test("quest claim API is POST-only", async () => {
+  const response = await worker.fetch(
+    new Request("https://edge.example/api/quest/claim", { method: "GET" }),
+    { BACKEND_ORIGIN: "https://game.example" },
+  );
+  assert.equal(response.status, 405);
+  assert.equal(response.headers.get("allow"), "POST");
+});
