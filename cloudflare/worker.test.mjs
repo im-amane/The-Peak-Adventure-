@@ -484,3 +484,27 @@ test("A-star does not move diagonally through two blocked corner cells", () => {
   );
   assert.deepEqual(path, []);
 });
+
+
+test("premium shop API is forwarded through the edge allowlist", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl;
+  globalThis.fetch = async url => {
+    forwardedUrl = String(url);
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(
+      new Request("https://edge.example/api/premium-shop", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "catalog" }),
+      }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(response.status, 200);
+    assert.equal(forwardedUrl, "https://game.example/api/premium-shop");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
