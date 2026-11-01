@@ -243,6 +243,15 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(get_boss_phase(True, 26, 100), 2)
         self.assertEqual(get_boss_phase(True, 25, 100), 3)
 
+    def test_combat_phase_rejects_boolean_and_fractional_values(self):
+        from game_rules import choose_monster_tactic
+
+        for phase in (True, False, 1.0, 2.5):
+            with self.subTest(phase=phase), self.assertRaises(ValueError):
+                calculate_enemy_damage(40, 1, 0, 0, 0, 0, boss_phase=phase)
+            with self.subTest(phase=phase), self.assertRaises(ValueError):
+                choose_monster_tactic("armored", 1, 100, 100, is_boss=True, boss_phase=phase)
+
     def test_boss_phases_increase_incoming_damage(self):
         base = calculate_enemy_damage(40, 1, 0, 0, 0, 0)
         self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, boss_phase=2), int(base * 1.2))
