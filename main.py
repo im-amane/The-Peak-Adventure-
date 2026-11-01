@@ -808,6 +808,17 @@ async def confirm_trade(message: Message):
     if trade["initiator_confirmed"] and trade["partner_confirmed"]:
         initiator = await get_player(trade["initiator_id"])
         partner = await get_player(trade["partner_id"])
+
+        if bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"]) or bool(trade["initiator_armor"]) != bool(trade["partner_armor"]):
+            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
+            await db.commit()
+            await message.answer("Equipment must be exchanged slot-for-slot. Both players must offer a weapon or both leave weapon empty; same for armor.")
+            return
+        if (trade["initiator_weapon"] and (initiator["weapon"] != trade["initiator_weapon"] or initiator["weapon_attack"] != trade["initiator_weapon_attack"])) or (trade["partner_weapon"] and (partner["weapon"] != trade["partner_weapon"] or partner["weapon_attack"] != trade["partner_weapon_attack"])) or (trade["initiator_armor"] and (initiator["armor"] != trade["initiator_armor"] or initiator["armor_defense"] != trade["initiator_armor_defense"])) or (trade["partner_armor"] and (partner["armor"] != trade["partner_armor"] or partner["armor_defense"] != trade["partner_armor_defense"])):
+            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
+            await db.commit()
+            await message.answer("Trade paused: one equipped item changed. Update your offers and confirm again.")
+            return
         if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
                 or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
             await db.execute(
@@ -817,13 +828,17 @@ async def confirm_trade(message: Message):
             await db.commit()
             await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
             return
+        initiator_weapon = (trade["partner_weapon"], trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"], initiator["weapon_attack"])
+        partner_weapon = (trade["initiator_weapon"], trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"], partner["weapon_attack"])
+        initiator_armor = (trade["partner_armor"], trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"], initiator["armor_defense"])
+        partner_armor = (trade["initiator_armor"], trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"], partner["armor_defense"])
         await db.execute(
-            "UPDATE players SET coins=coins-?+?, potions=potions-?+? WHERE user_id=?",
-            (trade["initiator_coins"], trade["partner_coins"], trade["initiator_potions"], trade["partner_potions"], trade["initiator_id"]),
+            "UPDATE players SET coins=coins-?+?,potions=potions-?+?,weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?",
+            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
         )
         await db.execute(
-            "UPDATE players SET coins=coins-?+?, potions=potions-?+? WHERE user_id=?",
-            (trade["partner_coins"], trade["initiator_coins"], trade["partner_potions"], trade["initiator_potions"], trade["partner_id"]),
+            "UPDATE players SET coins=coins-?+?,potions=potions-?+?,weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?",
+            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
         )
         await db.execute("UPDATE trades SET status='completed' WHERE trade_id=?", (trade_id,))
         await db.commit()
