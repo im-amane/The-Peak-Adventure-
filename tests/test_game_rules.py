@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from game_rules import BOSS_LEVELS, calculate_enemy_damage, expected_monster_power, validate_monster_catalogue
+from game_rules import BOSS_LEVELS, calculate_enemy_damage, class_evades, expected_monster_power, skill_cooldown_for_class, validate_monster_catalogue
 
 
 class GameRulesTests(unittest.TestCase):
@@ -88,6 +88,17 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(calculate_enemy_damage(1, 100, 100, 100, 0, 0), 3)
         self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, fury=True), 47)
         self.assertEqual(calculate_enemy_damage(40, 1, 0, 0, 0, 0, special=True), 57)
+
+    def test_class_speed_controls_dodge_chance(self):
+        self.assertFalse(class_evades(0, 1))
+        self.assertTrue(class_evades(10, 10))
+        self.assertFalse(class_evades(10, 11))
+
+    def test_mage_has_faster_skill_cooldown(self):
+        self.assertEqual(skill_cooldown_for_class("Mage"), 3)
+        self.assertEqual(skill_cooldown_for_class("Knight"), 4)
+        self.assertEqual(skill_cooldown_for_class("Archer"), 4)
+        self.assertEqual(skill_cooldown_for_class("Berserker"), 4)
 
 
 if __name__ == "__main__":
