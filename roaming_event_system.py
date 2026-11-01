@@ -145,7 +145,7 @@ async def claim_roaming_event_reward(db, event_id, user_id):
             raise RoamingEventError("Only players who contributed damage can claim this reward.")
         if participant["reward_claimed"]:
             raise RoamingEventError("Your roaming event reward has already been claimed.")
-        cur = await db.execute("SELECT level,xp FROM players WHERE user_id=?", (user_id,))
+        cur = await db.execute("SELECT level,xp,hp,hero_class FROM players WHERE user_id=?", (user_id,))
         player = await cur.fetchone()
         if not player:
             raise RoamingEventError("Player account not found.")
@@ -156,9 +156,11 @@ async def claim_roaming_event_reward(db, event_id, user_id):
         while level < 100 and total_xp >= xp_required(level):
             total_xp -= xp_required(level)
             level += 1
+        class_hp_bonus = {"Knight": 40, "Mage": 0, "Archer": 10, "Berserker": 25}.get(player["hero_class"], 40)
+        max_hp = 120 + (level - 1) * 20 + class_hp_bonus
         await db.execute(
-            "UPDATE players SET coins=coins+?,level=?,xp=? WHERE user_id=?",
-            (coins, level, total_xp, user_id),
+            "UPDATE players SET coins=coins+?,level=?,xp=?,max_hp=?,hp=MIN(hp,?) WHERE user_id=?",
+            (coins, level, total_xp, max_hp, max_hp, user_id),
         )
         await db.execute(
             "UPDATE roaming_event_participants SET reward_claimed=1 WHERE event_id=? AND user_id=?",
