@@ -39,7 +39,7 @@ def validate_monster_catalogue(monsters: list[dict]) -> None:
     }
     numeric_fields = {"power", "attack_power", "defense", "speed", "hp"}
     unique_fields = ("name", "special_move", "unique_power", "story")
-    valid_traits = {"regenerate", "fury", "swift", "armored", "drain"}
+    valid_traits = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
 
     for monster in monsters:
         level = monster.get("level", "unknown")
