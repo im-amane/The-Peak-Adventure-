@@ -48,6 +48,10 @@ async def init_group_tables(db):
       raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY(raid_id,user_id)
     );
+    CREATE TABLE IF NOT EXISTS group_raid_cooldowns(
+      raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY(raid_id,user_id)
+    );
     CREATE TABLE IF NOT EXISTS group_bans(
       chat_id INTEGER NOT NULL,user_id INTEGER NOT NULL,actor_id INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT '',
       PRIMARY KEY(chat_id,user_id)
@@ -181,8 +185,11 @@ async def attack_group_raid(db,chat_id,user_id,damage):
     cur=await db.execute("SELECT * FROM group_raids WHERE chat_id=? AND status='active' ORDER BY raid_id DESC LIMIT 1",(chat_id,))
     raid=await cur.fetchone()
     if not raid: raise GroupError("There is no active group raid.")
+    cur=await db.execute("SELECT 1 FROM group_raid_cooldowns WHERE raid_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)",(raid["raid_id"],user_id))
+    if await cur.fetchone(): raise GroupError("Raid attack cooldown: wait 5 seconds before attacking again.")
     damage=min(damage,raid["hp"]); hp=raid["hp"]-damage; status="won" if hp==0 else "active"
     await db.execute("UPDATE group_raids SET hp=?,status=? WHERE raid_id=? AND status='active'",(hp,status,raid["raid_id"]))
+    await db.execute("INSERT INTO group_raid_cooldowns(raid_id,user_id,last_attack_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(raid_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP",(raid["raid_id"],user_id))
     await db.execute("""INSERT INTO group_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
       ON CONFLICT(raid_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(raid["raid_id"],user_id,damage))
     await db.commit()
