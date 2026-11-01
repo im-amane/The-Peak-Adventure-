@@ -111,7 +111,7 @@
     "disadvantage": "Bramble Fox is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[1/10 · Whispering Meadow] A wounded fox refuses to flee, guarding a nest that is not its own.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 7,
@@ -130,7 +130,7 @@
     "disadvantage": "Glowcap Mushroom is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[1/10 · Whispering Meadow] The mushrooms whisper a name no living villager remembers, then go silent as you approach.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 8,
@@ -149,7 +149,7 @@
     "disadvantage": "Bark Beetle is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[1/10 · Whispering Meadow] A gentle beast has been marked by a dark thread that seems to pull toward the northern hills.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 9,
@@ -168,7 +168,7 @@
     "disadvantage": "Whisper Wolf is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[1/10 · Whispering Meadow] The forest guardian asks you to spare its corrupted kin, even as the corruption takes its voice.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 10,
@@ -187,7 +187,7 @@
     "disadvantage": "Stone Golem is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[1/10 · Whispering Meadow] The first seal is hidden beneath the roots. Its guardian knows the spark chose you, but will not say why.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 11,
@@ -301,7 +301,7 @@
     "disadvantage": "Sunscale Lizard is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
     "story": "[2/10 · Ashen Desert] A stone sentinel bears the names of a thousand travelers who never reached the oasis.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 17,
@@ -320,7 +320,7 @@
     "disadvantage": "Mirage Djinn is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
     "story": "[2/10 · Ashen Desert] The mirage shows a green valley, but every step toward it makes the real world drier.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 18,
@@ -339,7 +339,7 @@
     "disadvantage": "Buried Sentinel is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
     "story": "[2/10 · Ashen Desert] A djinn offers to reveal the truth in exchange for one memory you cannot afford to lose.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 19,
@@ -358,7 +358,7 @@
     "disadvantage": "Minotaur Warden is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
     "story": "[2/10 · Ashen Desert] The buried guardian breaks its chains and begs you not to open the tomb below.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 20,
@@ -377,7 +377,7 @@
     "disadvantage": "Ancient Minotaur is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
     "story": "[2/10 · Ashen Desert] The second seal cracks. Beneath the sand, something answers with a thunderous heartbeat.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 21,
@@ -491,7 +491,7 @@
     "disadvantage": "Lightning Ogre is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
     "story": "[3/10 · Stormglass Highlands] A giant refuses to strike first; it is waiting for the thunder to stop calling its name.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 27,
@@ -510,7 +510,7 @@
     "disadvantage": "Stormcaller Witch is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
     "story": "[3/10 · Stormglass Highlands] The harpy's song reveals that the storms are being summoned from underground.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 28,
@@ -529,7 +529,7 @@
     "disadvantage": "Thunder Colossus is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
     "story": "[3/10 · Stormglass Highlands] The witch has been collecting the final words of every creature lost to the storm.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 29,
@@ -548,7 +548,7 @@
     "disadvantage": "Storm Wyrm is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
     "story": "[3/10 · Stormglass Highlands] The colossus falls, and the clouds briefly reveal a second moon hanging beneath the world.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 30,
@@ -567,7 +567,7 @@
     "disadvantage": "Thunder Dragon is vulnerable to disciplined counters and Nature-aligned attacks.",
     "weakness": "Nature",
     "story": "[3/10 · Stormglass Highlands] The thunder seal breaks. A voice in the lightning calls you the heir of a forgotten promise.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 31,
@@ -681,7 +681,7 @@
     "disadvantage": "Soul Leech is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
     "story": "[4/10 · Hollow Kingdom] The dread hound guards a doorway and whimpers whenever the darkness behind it moves.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 37,
@@ -700,7 +700,7 @@
     "disadvantage": "Blackthorn Reaper is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
     "story": "[4/10 · Hollow Kingdom] A soul leech feeds on sorrow, but leaves one memory untouched: the face of its old friend.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 38,
@@ -719,7 +719,7 @@
     "disadvantage": "Moonless Horror is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
     "story": "[4/10 · Hollow Kingdom] The reaper reveals that the monsters are not invading the world; they are fleeing something.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 39,
@@ -738,7 +738,7 @@
     "disadvantage": "Shadow Wyrm is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
     "story": "[4/10 · Hollow Kingdom] The moonless horror wears the shadow of a child who vanished before the first seal was made.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 40,
@@ -757,7 +757,7 @@
     "disadvantage": "Ancient Shadow Dragon is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
     "story": "[4/10 · Hollow Kingdom] The fourth seal opens. The kingdom's dead speak together: the true enemy was once its protector.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 41,
@@ -871,7 +871,7 @@
     "disadvantage": "Inferno Witch is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
     "story": "[5/10 · Ember Abyss] The lava warden has held the gate shut for centuries, keeping a sleeping fire from waking.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 47,
@@ -890,7 +890,7 @@
     "disadvantage": "Obsidian Behemoth is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
     "story": "[5/10 · Ember Abyss] The inferno witch offers to extinguish the volcano, but the price is the memory of your first victory.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 48,
@@ -909,7 +909,7 @@
     "disadvantage": "Caldera Tyrant is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
     "story": "[5/10 · Ember Abyss] The obsidian behemoth is made from the broken armor of guardians who failed before you.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 49,
@@ -928,7 +928,7 @@
     "disadvantage": "Obsidian Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
     "story": "[5/10 · Ember Abyss] The caldera tyrant reveals that each seal is also a lock on the world's heart.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 50,
@@ -947,7 +947,7 @@
     "disadvantage": "World Destroyer Titan is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
     "story": "[5/10 · Ember Abyss] The fifth seal breaks. A warm voice from inside the fire calls you by a name you have never heard.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 51,
@@ -1061,7 +1061,7 @@
     "disadvantage": "Frost Revenant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
     "story": "[6/10 · Frostfang Peaks] The whiteout harpy guards a nest of eggs that will hatch only when the sky is healed.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 57,
@@ -1080,7 +1080,7 @@
     "disadvantage": "Permafrost Giant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
     "story": "[6/10 · Frostfang Peaks] The frost revenant remembers the face of the one who sealed the mountain gates.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 58,
@@ -1099,7 +1099,7 @@
     "disadvantage": "Winter'S Maw is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
     "story": "[6/10 · Frostfang Peaks] The permafrost giant has been holding back an avalanche with its own frozen body.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 59,
@@ -1118,7 +1118,7 @@
     "disadvantage": "Astral Wyrm is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
     "story": "[6/10 · Frostfang Peaks] Winter's Maw asks you to end its endless watch; it has guarded the sixth seal for too long.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 60,
@@ -1137,7 +1137,7 @@
     "disadvantage": "Celestial Dragon God is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
     "story": "[6/10 · Frostfang Peaks] The sixth seal opens. Under the ice, a heartbeat answers yours in perfect rhythm.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 61,
@@ -1251,7 +1251,7 @@
     "disadvantage": "Void Devourer is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[7/10 · Primordial Rift] The starved horror wears the faces of creatures you saved, asking why you left them behind.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 67,
@@ -1270,7 +1270,7 @@
     "disadvantage": "Rift Colossus is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[7/10 · Primordial Rift] The eclipse knight challenges you to prove that strength can protect rather than consume.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 68,
@@ -1289,7 +1289,7 @@
     "disadvantage": "Abyss Monarch is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[7/10 · Primordial Rift] The void devourer swallows the light of the seventh seal and discovers it cannot digest hope.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 69,
@@ -1308,7 +1308,7 @@
     "disadvantage": "Abyssal Deity is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[7/10 · Primordial Rift] The abyss monarch reveals that the corruption is a wound, not a weapon.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 70,
@@ -1327,7 +1327,7 @@
     "disadvantage": "God Of Destruction is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
     "story": "[7/10 · Primordial Rift] The seventh seal opens. For the first time, the darkness sounds afraid.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 71,
@@ -1441,7 +1441,7 @@
     "disadvantage": "Astral Reaper is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
     "story": "[8/10 · Celestial Ruins] The star eater consumes constellations to keep a sleeping world from waking too soon.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 77,
@@ -1460,7 +1460,7 @@
     "disadvantage": "Nova Titan is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
     "story": "[8/10 · Celestial Ruins] The cosmic behemoth is chained by promises made by heroes whose names have been erased.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 78,
@@ -1479,7 +1479,7 @@
     "disadvantage": "Eternity Maw is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
     "story": "[8/10 · Celestial Ruins] The astral reaper offers to trade its immortality for one more chance to see the sunrise.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 79,
@@ -1498,7 +1498,7 @@
     "disadvantage": "Void Dragon is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
     "story": "[8/10 · Celestial Ruins] Eternity's Maw speaks with the voice of every guardian you have defeated.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 80,
@@ -1517,7 +1517,7 @@
     "disadvantage": "Primordial Dragon God is vulnerable to disciplined counters and Light-aligned attacks.",
     "weakness": "Light",
     "story": "[8/10 · Celestial Ruins] The eighth seal breaks. The stars rearrange into a portrait of the one who created the seals.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 81,
@@ -1631,7 +1631,7 @@
     "disadvantage": "Ruin Emperor is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
     "story": "[9/10 · Eternal Hour] The chrono hydra grows a new head for every future it has already witnessed.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 87,
@@ -1650,7 +1650,7 @@
     "disadvantage": "Endless Devourer is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
     "story": "[9/10 · Eternal Hour] The oblivion knight remembers a timeline where you became the final enemy.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 88,
@@ -1669,7 +1669,7 @@
     "disadvantage": "Eternal Sovereign is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
     "story": "[9/10 · Eternal Hour] The ruin emperor has ruled a thousand endings and fears this one most of all.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 89,
@@ -1688,7 +1688,7 @@
     "disadvantage": "Eternal Tyrant is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
     "story": "[9/10 · Eternal Hour] The endless devourer reveals that every loop began with a single act of mercy.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 90,
@@ -1707,7 +1707,7 @@
     "disadvantage": "Eternal Overlord is vulnerable to disciplined counters and Void-aligned attacks.",
     "weakness": "Void",
     "story": "[9/10 · Eternal Hour] The ninth seal opens. Time stops, and every creature you met turns toward the same distant light.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   },
   {
     "level": 91,
@@ -1821,7 +1821,7 @@
     "disadvantage": "Reality Shatterer is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
     "story": "[10/10 · Origin Realm] The genesis eater consumes the last false memory and exposes the truth beneath the story.",
-    "trait_effect": "regenerate"
+    "trait_effect": "poison"
   },
   {
     "level": 97,
@@ -1840,7 +1840,7 @@
     "disadvantage": "Apex Behemoth is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
     "story": "[10/10 · Origin Realm] The omega seraph offers its wings to mend the sky, knowing it will never fly again.",
-    "trait_effect": "fury"
+    "trait_effect": "shield"
   },
   {
     "level": 98,
@@ -1859,7 +1859,7 @@
     "disadvantage": "The Void Emperor is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
     "story": "[10/10 · Origin Realm] The reality shatterer breaks the final barrier and shows you the world before fear existed.",
-    "trait_effect": "swift"
+    "trait_effect": "reflect"
   },
   {
     "level": 99,
@@ -1878,7 +1878,7 @@
     "disadvantage": "The Last Silence is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
     "story": "[10/10 · Origin Realm] The apex behemoth falls, but instead of vanishing it becomes a bridge toward the final throne.",
-    "trait_effect": "armored"
+    "trait_effect": "lifesteal"
   },
   {
     "level": 100,
@@ -1897,6 +1897,6 @@
     "disadvantage": "The Alpha God is vulnerable to disciplined counters and Order-aligned attacks.",
     "weakness": "Order",
     "story": "[10/10 · Origin Realm] The Alpha God awakens. Every creature was a fragment of its dream, and the last battle will decide whether that dream ends or begins again.",
-    "trait_effect": "drain"
+    "trait_effect": "berserk"
   }
 ]
