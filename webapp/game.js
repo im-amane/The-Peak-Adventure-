@@ -704,8 +704,13 @@
     requestInFlight = true;
     document.querySelectorAll("[data-action]").forEach(button => button.disabled = true);
     try {
+      if(sceneRef && sceneRef.playCombatAnimation)sceneRef.playCombatAnimation(action);
       const result = await postApi("/api/action", {action});
       playSound(action === "skill" ? "skill" : action === "potion" ? "potion" : action === "attack" ? "attack" : "error");
+      if(sceneRef && result.message){
+        if(/hits you|poison deals|reflected for/i.test(result.message))sceneRef.playCombatAnimation("hit");
+        if(/victory|defeated/i.test(result.message))sceneRef.playCombatAnimation("victory");
+      }
       applyState(result.state, result.message);
     } catch (error) {
       ui.battleMessage.textContent = error.message;
@@ -888,6 +893,27 @@
         else if(nearNpc)this.talkToNpc();
       });
       this.physics=null;
+    }
+    playCombatAnimation(action){
+      if(!this.hero)return;
+      const limbs=this.hero.limbs||{};
+      if(action==="attack"||action==="skill"){
+        const arm=limbs.rightArm;
+        if(arm)this.tweens.add({targets:arm,rotation:action==="skill"?-1.9:-1.45,duration:95,yoyo:true,repeat:1,ease:"Back.easeOut"});
+        const target=this.selectedMonster&&this.selectedMonster.sprite;
+        if(target)this.tweens.add({targets:target,x:target.x+9,duration:55,yoyo:true,repeat:2,ease:"Sine.easeInOut"});
+        if(action==="skill"){
+          const pulse=this.add.circle(this.hero.x,this.hero.y,24,0x8edbff,0.28).setDepth(9);
+          this.tweens.add({targets:pulse,scale:2.4,alpha:0,duration:300,onComplete:()=>pulse.destroy()});
+        }
+      }else if(action==="potion"){
+        const aura=this.add.circle(this.hero.x,this.hero.y,22,0x8bd89b,0.24).setDepth(9);
+        this.tweens.add({targets:aura,scale:2,alpha:0,duration:380,onComplete:()=>aura.destroy()});
+      }else if(action==="hit"){
+        this.tweens.add({targets:this.hero,alpha:0.35,duration:65,yoyo:true,repeat:2});
+      }else if(action==="victory"){
+        this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
+      }
     }
     challenge(){
       if(this.selectedMonster)startEncounter(this.selectedMonster.level);
