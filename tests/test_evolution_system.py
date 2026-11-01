@@ -6,6 +6,7 @@ from evolution_system import (
     EvolutionError,
     get_evolution_state,
     init_evolution_tables,
+    is_evolved_spawn,
     record_monster_defeat,
     scale_evolved_monster,
 )
@@ -48,6 +49,14 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evolved["attack_power"], 26)
         self.assertEqual(evolved["defense"], 12)
         self.assertEqual(evolved["speed"], 8)
+
+    async def test_evolved_spawn_probability_requires_mastery(self):
+        self.assertTrue(is_evolved_spawn(True, 1))
+        self.assertTrue(is_evolved_spawn(True, 25))
+        self.assertFalse(is_evolved_spawn(True, 26))
+        self.assertFalse(is_evolved_spawn(False, 1))
+        with self.assertRaises(ValueError):
+            is_evolved_spawn(True, 101)
 
     async def test_invalid_mastery_input_is_rejected(self):
         with self.assertRaises(EvolutionError):
