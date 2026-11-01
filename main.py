@@ -1454,7 +1454,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         return
     if action == "flee":
         result = await finish_battle(user_id, False, escaped=True)
-        await call.message.edit_text(result, reply_markup=menu())
+        await call.message.edit_text(result, reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     if action == "potion":
         if p["potions"] <= 0:
