@@ -26,6 +26,7 @@ from friend_system import FriendError, init_friend_tables, list_friends, remove_
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
+from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -193,6 +194,7 @@ async def init_db():
     await init_friend_tables(db)
     await init_party_tables(db)
     await init_group_tables(db)
+    await init_character_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -2075,11 +2077,13 @@ async def miniapp_state(user: dict):
             "phase": get_boss_phase(active_monster["boss"], battle_row["monster_hp"], active_monster["hp"]),
         }
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
+    appearance = await get_appearance(db, user_id)
     return {
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
         "class_selected": bool(p["class_selected"]),
         "battle_active": battle is not None,
         "hero_class": p["hero_class"],
+        "appearance": appearance,
         "class_skill": class_stats["skill"],
         "weapon": p["weapon"],
         "weapon_attack": p["weapon_attack"],
@@ -2157,6 +2161,22 @@ async def api_explore(request: web.Request):
             )
             await db.commit()
     return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
+
+
+async def api_appearance(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 4096:
+        return web.json_response({"error": "Appearance request is too large."}, status=413)
+    try:
+        payload = await request.json()
+        appearance = await save_appearance(db, user["id"], payload)
+    except (ValueError, AppearanceError) as exc:
+        return web.json_response({"error": str(exc)}, status=400)
+    async with db_lock:
+        return web.json_response({"message": "Character appearance saved.", "state": await miniapp_state(user)})
 
 
 async def api_action(request: web.Request):
@@ -2325,6 +2345,7 @@ async def start_web_server():
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
+    app.router.add_post("/api/appearance", api_appearance)
     app.router.add_get("/healthz", healthz)
     runner = web.AppRunner(app)
     await runner.setup()
