@@ -3341,8 +3341,21 @@ async def miniapp_state(user: dict):
          "inviter_level":row["inviter_level"]}
         for row in pending_guild_invites
     ]
-    trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
-    pending_trades = (await trade_cur.fetchone())["total"]
+    trade_cur = await db.execute(
+        """SELECT t.trade_id,t.initiator_id,t.partner_id,t.created_at,
+                  p.username AS other_username
+           FROM trades t
+           JOIN players p ON p.user_id=CASE WHEN t.initiator_id=? THEN t.partner_id ELSE t.initiator_id END
+           WHERE t.status='pending' AND (t.initiator_id=? OR t.partner_id=?)
+           ORDER BY t.created_at DESC,t.trade_id DESC LIMIT 10""",
+        (user_id,user_id,user_id),
+    )
+    pending_trade_rows = await trade_cur.fetchall()
+    pending_trades = [
+        {"trade_id":row["trade_id"],"incoming":row["partner_id"] == user_id,
+         "other_username":row["other_username"] or "Adventurer","created_at":row["created_at"]}
+        for row in pending_trade_rows
+    ]
     dungeon_state = await get_dungeon_state(db, user_id)
     dungeon_choices = available_dungeons(p["level"])
     claimed_cur = await db.execute("SELECT dungeon_id FROM dungeon_rewards WHERE user_id=?", (user_id,))
@@ -3369,7 +3382,7 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
-                    "pending_trades": pending_trades},
+                    "pending_trades": pending_trades, "pending_trade_count": len(pending_trades)},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
@@ -3831,6 +3844,18 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
                     await respond_guild_invite(db, payload["invite_id"], user_id, action == "guild_accept")
                     result = {"accepted": action == "guild_accept"}
+                elif action in {"trade_accept", "trade_decline"}:
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_status = "open" if action == "trade_accept" else "declined"
+                    trade_cur = await db.execute(
+                        """UPDATE trades SET status=?
+                           WHERE trade_id=? AND partner_id=? AND status='pending'""",
+                        (trade_status,payload["trade_id"],user_id),
+                    )
+                    if trade_cur.rowcount != 1:
+                        return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
+                    result = {"trade_id":payload["trade_id"],"status":trade_status}
                 elif action in {"guild_chat", "guild_send"}:
                     expected = {"action", "message"} if action == "guild_send" else {"action"}
                     if set(payload) != expected:
