@@ -1,0 +1,24 @@
+:root{color-scheme:dark;--bg:#0d1420;--panel:#182333;--line:#344459;--text:#f4f1e8;--muted:#a9b5c5;--gold:#e6bd69;--green:#8fbf8f}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#24334a 0,#0d1420 55%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+.app-shell{max-width:920px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) 14px calc(20px + env(safe-area-inset-bottom))}
+.topbar,.world-heading,.hero-line,.level-line{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.topbar{margin-bottom:14px}.eyebrow{font-size:10px;letter-spacing:.2em;color:var(--gold);font-weight:800}
+h1{font-size:26px;line-height:1.05;margin:2px 0 0;font-family:Georgia,serif}
+h2{font-size:18px;margin:3px 0 0;font-family:Georgia,serif}
+.coin-pill,.monster-label{border:1px solid var(--line);background:#111c2a;border-radius:999px;padding:8px 12px;font-size:13px}
+.hero-hud,.world-panel,.bottom-note{background:rgba(24,35,51,.94);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 12px 30px #0003}
+.hero-line strong{font-size:15px}.hero-line span,.level-line{font-size:12px;color:var(--muted)}
+.level-line{margin:9px 0 6px}.xp-track{height:7px;border-radius:10px;background:#0b111b;overflow:hidden}.xp-track div{height:100%;width:0;background:linear-gradient(90deg,#6b9b81,#d7c27b);transition:width .3s}
+.world-heading{margin-bottom:10px}.monster-label{font-size:11px;color:#e6c5a1}
+#game{width:100%;height:min(58vw,430px);min-height:260px;border-radius:12px;overflow:hidden;border:1px solid #4b5a65;background:#314a3e}
+#game canvas{display:block;width:100%!important;height:100%!important;object-fit:contain}
+.map-hint{font-size:11px;color:var(--muted);padding:8px 2px 2px}
+.mobile-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.dpad{display:flex;flex-direction:column;gap:4px;align-items:center}.dpad div{display:flex;gap:4px}
+button{border:1px solid #64758a;background:#24364a;color:white;border-radius:10px;min-width:42px;min-height:38px;font-size:16px;font-weight:700;touch-action:none}
+button:active{background:#526b79;transform:translateY(1px)}
+.encounter-button{flex:1;max-width:260px;min-height:48px;background:#79502b;border-color:#b78a53;color:#fff4d8}
+.encounter-button:disabled{opacity:.45;filter:grayscale(.7)}
+.bottom-note{text-align:center;padding:12px}.bottom-note p{margin:2px}.small{font-size:10px;color:var(--muted)}
+@media(min-width:700px){.app-shell{padding-top:24px}.mobile-controls{max-width:520px;margin:12px auto 0}.dpad button{min-width:48px;min-height:42px}}
