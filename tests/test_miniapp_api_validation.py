@@ -72,6 +72,8 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         battle = await cur.fetchone()
         self.assertEqual(battle["turn_count"], 1)
         self.assertLess(battle["monster_hp"], 77)
+        player = await main.get_player(user_id)
+        self.assertLess(player["hp"], 100)
 
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
