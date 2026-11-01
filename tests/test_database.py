@@ -36,7 +36,7 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await main.claim_daily_reward(987654322))
 
     async def test_new_gameplay_tables_and_elite_battle_flag_exist(self):
-        for table in ("player_stamina", "player_mana", "player_weekly_quests", "player_reports", "player_bans", "player_daily_missions", "roaming_events", "roaming_event_participants"):
+        for table in ("player_stamina", "player_mana", "player_weekly_quests", "player_reports", "player_bans", "player_daily_missions", "roaming_events", "roaming_event_participants", "player_monster_mastery", "dungeon_runs", "dungeon_rewards"):
             cur = await main.db.execute(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 (table,),
@@ -45,6 +45,7 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("PRAGMA table_info(battles)")
         columns = {row["name"] for row in await cur.fetchall()}
         self.assertIn("is_elite", columns)
+        self.assertIn("is_evolved", columns)
 
     async def test_miniapp_state_exposes_unlocked_dungeon_choices(self):
         user = {"id": 987654323, "first_name": "DungeonHero"}
@@ -56,6 +57,13 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(state["dungeon"])
         self.assertEqual(len(state["daily_missions"]), 3)
         self.assertTrue(all(item["progress"] == 0 for item in state["daily_missions"]))
+
+    async def test_miniapp_state_exposes_weekly_missions(self):
+        user = {"id": 987654324, "first_name": "QuestHero"}
+        state = await main.miniapp_state(user)
+        self.assertGreaterEqual(len(state["weekly_quests"]), 1)
+        self.assertEqual(len(state["daily_missions"]), 3)
+        self.assertTrue(all("claimed" in item for item in state["daily_missions"]))
 
     async def test_multiplayer_tables_exist(self):
         for table in ("duels", "guilds", "guild_members", "trades", "quest_progress", "achievement_progress"):
