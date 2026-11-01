@@ -30,6 +30,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE quest_progress(user_id INTEGER,quest_id TEXT);
   CREATE TABLE achievement_progress(user_id INTEGER,achievement_id TEXT);
   CREATE TABLE character_appearance(user_id INTEGER PRIMARY KEY);
+  CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,dungeon_id INTEGER);
+  CREATE TABLE dungeon_rewards(user_id INTEGER,dungeon_id INTEGER);
   INSERT INTO players VALUES(1,'leader',10,0),(2,'member',20,0);
   INSERT INTO guilds VALUES(5,1);
   INSERT INTO guild_members VALUES(1,5,'leader',CURRENT_TIMESTAMP),(2,5,'member',CURRENT_TIMESTAMP);
