@@ -78,3 +78,25 @@ test("rejects a path when the starting position is blocked", () => {
 
   assert.deepEqual(path, []);
 });
+
+
+test("respects the configured A-star node budget", () => {
+  const path = findPath(
+    { x: 16, y: 16 },
+    { x: 272, y: 272 },
+    [],
+    { width: 320, height: 320, cellSize: 16, maxNodes: 1 },
+  );
+  assert.deepEqual(path, []);
+});
+
+test("ignores malformed obstacles without breaking valid routes", () => {
+  const path = findPath(
+    { x: 16, y: 16 },
+    { x: 112, y: 16 },
+    [{ x: NaN, y: 40, width: 20, height: 20 }, null],
+    { width: 160, height: 96, cellSize: 16, margin: 0 },
+  );
+  assert.ok(path.length > 0);
+  assert.deepEqual(path.at(-1), { x: 112, y: 16 });
+});
