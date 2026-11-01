@@ -56,6 +56,8 @@ On Windows, activate with `.venv\\Scripts\\activate`.
 - `/bestiary` - View discovered monsters
 - `/quests` - View story quests and claimable rewards
 - `/claimquest <quest_id>` - Claim a completed quest
+- `/achievements` - View achievements
+- `/claimachievement <achievement_id>` - Claim an achievement
 - `/daily` - Claim the daily reward
 - `/leaderboard` - Top adventurers
 - `/help` - Show commands
