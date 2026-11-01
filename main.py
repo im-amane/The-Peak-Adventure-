@@ -2299,15 +2299,17 @@ async def miniapp_state(user: dict):
         "Ember Abyss", "Frostfang Peaks", "Primordial Rift", "Celestial Ruins",
         "Eternal Hour", "Origin Realm",
     ]
-    region_index = min(9, (p["level"] - 1) // 10)
+    world_id = await get_current_world(db, user_id, p["level"])
+    region_index = world_id - 1
+    boss_level = world_id * 10
     boss_defeated = False
-    if p["level"] in BOSS_LEVELS:
+    if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
         cur = await db.execute(
             "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
-            (user_id, p["level"]),
+            (user_id, boss_level),
         )
         boss_defeated = await cur.fetchone() is not None
-    nearby_levels = nearby_monster_levels(p["level"], boss_defeated)
+    nearby_levels = world_encounter_levels(p["level"], world_id, boss_defeated)
     nearby_monsters = [
         {
             "name": MONSTER_BY_LEVEL[level]["name"],
