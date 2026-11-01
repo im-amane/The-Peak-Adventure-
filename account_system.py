@@ -101,6 +101,19 @@ async def delete_player_account(db,user_id):
     await db.execute("DELETE FROM group_raid_contributions WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM duels WHERE challenger_id=? OR opponent_id=?",(user_id,user_id))
+    # Return escrow and close/reopen auctions before deleting the player's account.
+    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auction_listings'")
+    if await cur.fetchone():
+        cur=await db.execute("SELECT listing_id,current_bid,highest_bidder FROM auction_listings WHERE seller_id=? AND status='active'",(user_id,))
+        for listing in await cur.fetchall():
+            if listing["highest_bidder"] is not None:
+                await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(listing["current_bid"],listing["highest_bidder"]))
+            await db.execute("UPDATE auction_listings SET status='cancelled' WHERE listing_id=?",(listing["listing_id"],))
+        cur=await db.execute("SELECT listing_id,current_bid FROM auction_listings WHERE highest_bidder=? AND status='active'",(user_id,))
+        for listing in await cur.fetchall():
+            await db.execute("UPDATE players SET coins=coins+? WHERE user_id!=? AND user_id=(SELECT seller_id FROM auction_listings WHERE listing_id=?)",(0,user_id,listing["listing_id"]))
+            await db.execute("UPDATE auction_listings SET highest_bidder=NULL,current_bid=0 WHERE listing_id=?",(listing["listing_id"],))
+        await db.execute("DELETE FROM auction_stash WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
     for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards","player_materials","crafted_items","player_worlds","player_presence","world_discoveries","player_story","story_flags","story_reward_claims"):
         await db.execute(f"DELETE FROM {table} WHERE user_id=?",(user_id,))
