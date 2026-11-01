@@ -351,7 +351,7 @@
         },
         {
           "name": "Monster discovery/bestiary basics",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "100 individually authored and lore-consistent stories",
@@ -793,8 +793,8 @@
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 90,
-    "partial": 8,
+    "complete": 91,
+    "partial": 7,
     "pending": 71,
     "total": 169,
     "percentage": 53
