@@ -675,7 +675,6 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     evolution = await record_monster_defeat(db, user_id, b["monster_level"])
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
-    await record_monster_defeat(db, user_id, m["level"])
     await record_weekly_progress(db, user_id, "wins")
     await record_daily_progress(db, user_id, "wins")
     if m["boss"]:
@@ -683,9 +682,13 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
     await db.commit()
     await refresh_quest_progress(user_id)
-    level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
-    boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
-    return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}"
+    level_note = f"\\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
+    boss_note = "\\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
+    evolution_note = (
+        "\\n✨ Mastery complete! This monster's evolved form can now appear."
+        if evolution["evolved"] and evolution["defeats"] == 5 else ""
+    )
+    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}"
 
 
 @dp.message(F.web_app_data)
