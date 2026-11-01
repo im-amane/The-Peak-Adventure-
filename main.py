@@ -2031,7 +2031,9 @@ async def request_account_deletion(message: Message):
     await message.answer(
         "Delete your account permanently?\n"
         "This removes your character, inventory, progress, quests, achievements, friends, trades and social records. "
-        "Guild leadership or group ownership will be transferred when possible. This cannot be undone.\n\n"
+        "Guild leadership or group ownership will be transferred when possible. "
+        "Any unused Peak Gems, premium items and purchase history will also be deleted; this command does not issue refunds. "
+        "This cannot be undone.\n\n"
         "Your Telegram account is not affected.",
         reply_markup=keyboard
     )
