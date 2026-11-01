@@ -185,3 +185,8 @@ button:disabled{cursor:not-allowed}
 
 
 .gem-pill{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1px solid #755e9d;border-radius:999px;background:rgba(77,57,112,.35);color:#eadcff;font-weight:800;font-size:12px}
+
+
+.sprint-control{min-width:76px;min-height:48px;padding:8px 10px;background:#354b3d;border-color:#85a77b;color:#efffe8;font-size:12px;touch-action:none;user-select:none;-webkit-user-select:none}
+.sprint-control[aria-pressed="true"]{background:#78602b;border-color:#e6bd69;box-shadow:0 0 0 2px #e6bd6944}
+@media(max-width:520px){.mobile-controls{flex-wrap:wrap}.sprint-control{min-width:100%;min-height:42px}.dpad{flex:1}}
