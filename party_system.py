@@ -43,6 +43,7 @@ async def init_party_tables(db: aiosqlite.Connection) -> None:
       ON party_members(party_id, joined_at);
     """)
 
+    await db.executescript("""
     CREATE TABLE IF NOT EXISTS party_battles(
       battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
       monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
@@ -61,6 +62,7 @@ async def init_party_tables(db: aiosqlite.Connection) -> None:
       battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY(battle_id,user_id)
     );
+    """)
     await db.commit()
 
 
