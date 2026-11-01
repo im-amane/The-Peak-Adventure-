@@ -62,6 +62,8 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
         "appearance":("SELECT * FROM character_appearance WHERE user_id=?",(user_id,)),
         "settings":("SELECT * FROM player_settings WHERE user_id=?",(user_id,)),
         "friends":("SELECT * FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id)),
+        "materials":("SELECT * FROM player_materials WHERE user_id=?",(user_id,)),
+        "crafted_items":("SELECT * FROM crafted_items WHERE user_id=?",(user_id,)),
     }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
