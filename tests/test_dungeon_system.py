@@ -41,6 +41,19 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
    await advance_dungeon(self.db,1,state["target_level"])
   self.assertEqual(await claim_dungeon_reward(self.db,1),(150,2))
   with self.assertRaises(DungeonError):await claim_dungeon_reward(self.db,1)
+ async def test_enter_rejects_invalid_level_types(self):
+  for level in (True,0,101):
+   with self.assertRaises(DungeonError):await enter_dungeon(self.db,1,level,1)
+ async def test_reward_claim_rolls_back_when_player_is_missing(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  for _ in range(3):
+   state=await get_dungeon_state(self.db,1)
+   await advance_dungeon(self.db,1,state["target_level"])
+  await self.db.execute("DELETE FROM players WHERE user_id=1");await self.db.commit()
+  with self.assertRaisesRegex(DungeonError,"Player account not found"):
+   await claim_dungeon_reward(self.db,1)
+  cur=await self.db.execute("SELECT 1 FROM dungeon_rewards WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
  async def test_abandon_active_run(self):
   await enter_dungeon(self.db,1,1,1)
   await abandon_dungeon(self.db,1)
