@@ -41,6 +41,15 @@ class TelegramAuthTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_init_data(data, self.token)
 
+    def test_oversized_init_data_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "too large"):
+            validate_init_data("x" * 8193, self.token)
+
+    def test_too_many_fields_are_rejected(self):
+        data = self.make_init_data() + "".join(f"&extra{i}=x" for i in range(25))
+        with self.assertRaisesRegex(ValueError, "Malformed"):
+            validate_init_data(data, self.token)
+
 
 if __name__ == "__main__":
     unittest.main()
