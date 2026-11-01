@@ -585,7 +585,7 @@
     "advantage": "Grave Lantern gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Grave Lantern is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The road into the Hollow Kingdom is lined with lanterns that burn without flame.",
+    "story": "[4/10 · Hollow Kingdom] GRAVE LANTERN waits at the border of the Hollow Kingdom, where the Thunder Dragon's released memories have become pale lights. One lantern burns blue whenever you pass, showing a child standing beside the first seal and holding the same spark that began your journey.",
     "trait_effect": "regenerate"
   },
   {
@@ -604,7 +604,7 @@
     "advantage": "Hollow Knight gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Hollow Knight is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A grave-lantern lights the way for spirits who cannot remember their own deaths.",
+    "story": "[4/10 · Hollow Kingdom] HOLLOW KNIGHT blocks the old royal road, its armor bearing the crest of your village. It remembers escorting the missing child into the kingdom before the seals were built, but its oath forbids it from revealing who ordered the journey.",
     "trait_effect": "fury"
   },
   {
@@ -623,7 +623,7 @@
     "advantage": "Ashen Banshee gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Ashen Banshee is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The hollow knight kneels before you, though its armor bears the crest of your village.",
+    "story": "[4/10 · Hollow Kingdom] ASHEN BANSHEE sings the lullaby once heard beside the meadow's cracked bell. Each verse restores a memory to the spirits, and each restored spirit points toward the palace where the fourth seal was forged from the kingdom's own dead.",
     "trait_effect": "swift"
   },
   {
@@ -642,7 +642,7 @@
     "advantage": "Crypt Spider gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Crypt Spider is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A banshee sings a lullaby that matches the melody from the meadow's first bell.",
+    "story": "[4/10 · Hollow Kingdom] CRYPT SPIDER has woven a silver tapestry showing your battles in the meadow, desert and highlands. At its center is a scene that has not happened: you standing before a throne while a familiar child asks you to forgive the world.",
     "trait_effect": "armored"
   },
   {
@@ -661,7 +661,7 @@
     "advantage": "Dread Hound gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Dread Hound is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The crypt spider has woven a tapestry showing every battle you have fought, including one that has not happened.",
+    "story": "[4/10 · Hollow Kingdom] DREAD HOUND guards a doorway beneath the palace and trembles whenever the darkness behind it moves. It recognizes the scent of the Thunder Dragon on you, then lowers its head as if begging you not to mistake the thing beyond the door for another monster.",
     "trait_effect": "drain"
   },
   {
@@ -680,7 +680,7 @@
     "advantage": "Soul Leech gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Soul Leech is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The dread hound guards a doorway and whimpers whenever the darkness behind it moves.",
+    "story": "[4/10 · Hollow Kingdom] SOUL LEECH feeds on the grief of the kingdom's ghosts, but refuses to consume one memory: the face of the child who once gave it shelter. When you free the memory, it reveals that the fourth seal was built to contain the kingdom's protector after its heart broke.",
     "trait_effect": "poison"
   },
   {
@@ -699,7 +699,7 @@
     "advantage": "Blackthorn Reaper gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Blackthorn Reaper is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] A soul leech feeds on sorrow, but leaves one memory untouched: the face of its old friend.",
+    "story": "[4/10 · Hollow Kingdom] BLACKTHORN REAPER cuts the chains binding the restless dead, one name at a time. It tells you the child in the tapestry was the kingdom's last heir, and that the first blue spark was created to carry the heir's promise beyond the sealed gates.",
     "trait_effect": "shield"
   },
   {
@@ -718,7 +718,7 @@
     "advantage": "Moonless Horror gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Moonless Horror is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The reaper reveals that the monsters are not invading the world; they are fleeing something.",
+    "story": "[4/10 · Hollow Kingdom] MOONLESS HORROR tears open its own shadow to show you the truth: the monsters across every world were fleeing the same grief-stricken guardian. The fourth seal does not hold a demon; it holds a protector who begged to be forgotten.",
     "trait_effect": "reflect"
   },
   {
@@ -737,7 +737,7 @@
     "advantage": "Shadow Wyrm gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Shadow Wyrm is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The moonless horror wears the shadow of a child who vanished before the first seal was made.",
+    "story": "[4/10 · Hollow Kingdom] SHADOW WYRM circles the palace roof, wearing the silhouette of the child who vanished before the first seal was made. It gives you the key to the throne room, warning that the guardian will recognize your voice and ask why you took so long.",
     "trait_effect": "lifesteal"
   },
   {
@@ -756,7 +756,7 @@
     "advantage": "Ancient Shadow Dragon gains an edge in Hollow Kingdom terrain and against unprepared foes.",
     "disadvantage": "Ancient Shadow Dragon is vulnerable to disciplined counters and Earth-aligned attacks.",
     "weakness": "Earth",
-    "story": "[4/10 · Hollow Kingdom] The fourth seal opens. The kingdom's dead speak together: the true enemy was once its protector.",
+    "story": "[4/10 · Hollow Kingdom] Ancient Shadow Dragon rises from the throne beneath the Hollow Kingdom, carrying the fourth seal in its broken heart. When you defeat it, the dead speak the guardian's true name and the seal opens without erasing them. The child from the tapestry appears in the fading light and tells you the first blue spark was never a weapon: it was a promise that someone would come back.",
     "trait_effect": "berserk"
   },
   {
