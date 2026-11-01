@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, resolve_enemy_turn, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
@@ -3195,44 +3195,36 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     p = await get_player(user_id)
-    previous_boss_phase = get_boss_phase(m["boss"], b["monster_hp"], m["hp"])
-    current_boss_phase = get_boss_phase(m["boss"], new_enemy_hp, m["hp"])
-    enemy_tactic = choose_monster_tactic(m["trait_effect"], turn_count, new_enemy_hp, m["hp"], is_boss=m["boss"], boss_phase=current_boss_phase)
-    special_turn = enemy_tactic == "special"
-    enemy_damage = calculate_enemy_damage(
-        m["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
-        m["speed"], random.randint(-3, 6),
-        fury=m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3),
-        special=special_turn,
-        boss_phase=current_boss_phase,
+    combat_result = resolve_enemy_turn(
+        trait_effect=m["trait_effect"],
+        turn_count=turn_count,
+        monster_hp_before=b["monster_hp"],
+        monster_hp_after_action=new_enemy_hp,
+        monster_max_hp=m["hp"],
+        monster_attack_power=m["attack_power"],
+        monster_speed=m["speed"],
+        player_hp=p["hp"],
+        player_max_hp=p["max_hp"],
+        player_level=p["level"],
+        armor_defense=p["armor_defense"],
+        class_defense=class_stats["defense"],
+        class_speed=class_stats["speed"],
+        player_damage=damage,
+        action=action,
+        random_bonus=random.randint(-3, 6),
+        dodge_roll=random.randint(1, 100),
+        is_boss=m["boss"],
+        boss_name=m["name"],
+        hero_class=p["hero_class"],
     )
-    if m["trait_effect"] == "berserk" and new_enemy_hp <= int(m["hp"] * 0.5):
-        enemy_damage = int(enemy_damage * 1.35)
-    evaded = class_evades(class_stats["speed"], random.randint(1, 100))
-    if evaded:
-        enemy_damage = 0
-    reflect_damage = max(1, damage // 5) if m["trait_effect"] == "reflect" and action != "potion" else 0
-    poison_damage = max(1, p["max_hp"] // 40) if m["trait_effect"] == "poison" else 0
-    new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
-    effect_notes = []
-    if current_boss_phase > previous_boss_phase:
-        effect_notes.append(f"👑 {m['name']} enters BOSS PHASE {current_boss_phase}!")
-    if evaded:
-        effect_notes.append(f"💨 Your {p['hero_class']} speed dodges the monster's strike.")
-    if reflect_damage:
-        effect_notes.append(f"🪞 Your strike is reflected for {reflect_damage} damage.")
-    if poison_damage:
-        effect_notes.append(f"☠️ Poison deals {poison_damage} damage.")
-    if enemy_damage > 0 and m["trait_effect"] == "drain":
-        new_enemy_hp = min(m["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-    elif enemy_damage > 0 and m["trait_effect"] == "lifesteal":
-        stolen = max(1, enemy_damage // 4)
-        new_enemy_hp = min(m["hp"], new_enemy_hp + stolen)
-        effect_notes.append(f"🩸 The monster steals {stolen} HP.")
-    await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
-    await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
-    await db.commit()
-    await restore_mana(db, user_id, TURN_MANA_REGEN)
+    new_enemy_hp = combat_result["monster_hp"]
+    enemy_damage = combat_result["enemy_damage"]
+    evaded = combat_result["evaded"]
+    special_turn = combat_result["special_turn"]
+    reflect_damage = combat_result["reflect_damage"]
+    poison_damage = combat_result["poison_damage"]
+    new_hp = combat_result["player_hp"]
+    effect_notes = combat_result["effect_notes"]
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     if new_hp == 0:
         result = await finish_battle(user_id, False)
@@ -4232,50 +4224,36 @@ async def api_action(request: web.Request):
             message = await finish_battle(user_id, True)
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
-        previous_boss_phase = get_boss_phase(monster["boss"], battle["monster_hp"], monster["hp"])
-        current_boss_phase = get_boss_phase(monster["boss"], new_enemy_hp, monster["hp"])
-        enemy_tactic = choose_monster_tactic(monster["trait_effect"], turn_count, new_enemy_hp, monster["hp"], is_boss=monster["boss"], boss_phase=current_boss_phase)
-        special_turn = enemy_tactic == "special"
-        enemy_damage = calculate_enemy_damage(
-            monster["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
-            monster["speed"], random.randint(-3, 6),
-            fury=monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3),
-            special=special_turn,
-            boss_phase=current_boss_phase,
+        combat_result = resolve_enemy_turn(
+            trait_effect=monster["trait_effect"],
+            turn_count=turn_count,
+            monster_hp_before=battle["monster_hp"],
+            monster_hp_after_action=new_enemy_hp,
+            monster_max_hp=monster["hp"],
+            monster_attack_power=monster["attack_power"],
+            monster_speed=monster["speed"],
+            player_hp=p["hp"],
+            player_max_hp=p["max_hp"],
+            player_level=p["level"],
+            armor_defense=p["armor_defense"],
+            class_defense=class_stats["defense"],
+            class_speed=class_stats["speed"],
+            player_damage=damage,
+            action=action,
+            random_bonus=random.randint(-3, 6),
+            dodge_roll=random.randint(1, 100),
+            is_boss=monster["boss"],
+            boss_name=monster["name"],
+            hero_class=p["hero_class"],
         )
-        if monster["trait_effect"] == "berserk" and new_enemy_hp <= int(monster["hp"] * 0.5):
-            enemy_damage = int(enemy_damage * 1.35)
-        evaded = class_evades(class_stats["speed"], random.randint(1, 100))
-        if evaded:
-            enemy_damage = 0
-        reflect_damage = max(1, damage // 5) if monster["trait_effect"] == "reflect" and action != "potion" else 0
-        poison_damage = max(1, p["max_hp"] // 40) if monster["trait_effect"] == "poison" else 0
-        new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
-        effect_notes = []
-        if current_boss_phase > previous_boss_phase:
-            effect_notes.append(f"{monster['name']} enters BOSS PHASE {current_boss_phase}!")
-        if evaded:
-            effect_notes.append(f"Your {p['hero_class']} speed dodges the monster's strike.")
-        if reflect_damage:
-            effect_notes.append(f"Your strike is reflected for {reflect_damage} damage.")
-        if poison_damage:
-            effect_notes.append(f"Poison deals {poison_damage} damage.")
-        if enemy_damage > 0 and monster["trait_effect"] == "drain":
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-        elif enemy_damage > 0 and monster["trait_effect"] == "lifesteal":
-            stolen = max(1, enemy_damage // 4)
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + stolen)
-            effect_notes.append(f"The monster steals {stolen} HP.")
-        await db.execute(
-            "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
-            (new_enemy_hp, turn_count, user_id),
-        )
-        await db.execute(
-            "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-            (new_hp, user_id),
-        )
-        await db.commit()
-        await restore_mana(db, user_id, TURN_MANA_REGEN)
+        new_enemy_hp = combat_result["monster_hp"]
+        enemy_damage = combat_result["enemy_damage"]
+        evaded = combat_result["evaded"]
+        special_turn = combat_result["special_turn"]
+        reflect_damage = combat_result["reflect_damage"]
+        poison_damage = combat_result["poison_damage"]
+        new_hp = combat_result["player_hp"]
+        effect_notes = combat_result["effect_notes"]
         effect_text = " " + " ".join(effect_notes) if effect_notes else ""
         if new_hp == 0:
             message = await finish_battle(user_id, False)
