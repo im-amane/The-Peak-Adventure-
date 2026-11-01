@@ -88,6 +88,17 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM security_events WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["n"],0)
+ async def test_account_deletion_rolls_back_partial_changes(self):
+  await self.db.execute("""CREATE TRIGGER block_player_delete BEFORE DELETE ON players
+   WHEN OLD.user_id=1 BEGIN SELECT RAISE(ABORT,'blocked'); END""")
+  with self.assertRaises(Exception):
+   await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
+  self.assertEqual((await cur.fetchone())["leader_id"],1)
+  cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["role"],"leader")
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
  async def test_delete_account_transfers_guild_leadership(self):
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
