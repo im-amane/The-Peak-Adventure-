@@ -119,6 +119,17 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(PartyError):
             await start_party_battle(self.db,party_id,202,10,"Root Warden",100)
 
+    async def test_party_cannot_start_second_active_coop_battle(self):
+        party_id = await create_party(self.db, 101)
+        await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        with self.assertRaisesRegex(PartyError, "already has an active"):
+            await start_party_battle(self.db, party_id, 101, 11, "Ash Sentinel", 120)
+
+    async def test_invalid_coop_monster_name_is_rejected(self):
+        party_id = await create_party(self.db, 101)
+        with self.assertRaisesRegex(PartyError, "monster name"):
+            await start_party_battle(self.db, party_id, 101, 10, "   ", 100)
+
     async def test_party_member_can_attack_shared_boss(self):
         party_id=await create_party(self.db,101)
         invite=await invite_to_party(self.db,party_id,101,202)
