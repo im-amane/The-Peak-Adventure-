@@ -2430,15 +2430,16 @@ async def api_explore(request: web.Request):
             return web.json_response({"error": "Your hero is exhausted. Use /heal in the Telegram chat."}, status=409)
         cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
         if not await cur.fetchone():
-            level = p["level"]
+            world_id = await get_current_world(db, user_id, p["level"])
+            boss_level = world_id * 10
             boss_defeated = False
-            if level in BOSS_LEVELS:
+            if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
                 cur = await db.execute(
                     "SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?",
-                    (user_id, level),
+                    (user_id, boss_level),
                 )
                 boss_defeated = await cur.fetchone() is not None
-            available_monster_levels = nearby_monster_levels(level, boss_defeated)
+            available_monster_levels = world_encounter_levels(p["level"], world_id, boss_defeated)
             if requested_monster_level is not None and requested_monster_level not in available_monster_levels:
                 return web.json_response({"error": "That monster is not available at your current level."}, status=409)
             monster_level = requested_monster_level if requested_monster_level is not None else random.choice(available_monster_levels)
