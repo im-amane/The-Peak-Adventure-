@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 
 load_dotenv()
@@ -1506,9 +1506,10 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     p = await get_player(user_id)
-    special_turn = turn_count % (2 if m["trait_effect"] == "swift" else 3) == 0
     previous_boss_phase = get_boss_phase(m["boss"], b["monster_hp"], m["hp"])
     current_boss_phase = get_boss_phase(m["boss"], new_enemy_hp, m["hp"])
+    enemy_tactic = choose_monster_tactic(m["trait_effect"], turn_count, new_enemy_hp, m["hp"], is_boss=m["boss"], boss_phase=current_boss_phase)
+    special_turn = enemy_tactic == "special"
     enemy_damage = calculate_enemy_damage(
         m["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
         m["speed"], random.randint(-3, 6),
@@ -1771,9 +1772,10 @@ async def api_action(request: web.Request):
             message = await finish_battle(user_id, True)
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
-        special_turn = turn_count % (2 if monster["trait_effect"] == "swift" else 3) == 0
         previous_boss_phase = get_boss_phase(monster["boss"], battle["monster_hp"], monster["hp"])
         current_boss_phase = get_boss_phase(monster["boss"], new_enemy_hp, monster["hp"])
+        enemy_tactic = choose_monster_tactic(monster["trait_effect"], turn_count, new_enemy_hp, monster["hp"], is_boss=monster["boss"], boss_phase=current_boss_phase)
+        special_turn = enemy_tactic == "special"
         enemy_damage = calculate_enemy_damage(
             monster["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
             monster["speed"], random.randint(-3, 6),
