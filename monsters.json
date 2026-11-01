@@ -15,7 +15,7 @@
     "advantage": "Baby Slime gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Baby Slime is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The meadow's smallest creatures have begun gathering around a blue spark that fell from the sky.",
+    "story": "[1/10 · Whispering Meadow] BABY SLIME was the first creature to gather around the fallen blue spark. It was not guarding the light; it was keeping it warm until someone brave enough arrived.",
     "trait_effect": "regenerate"
   },
   {
@@ -34,7 +34,7 @@
     "advantage": "Meadow Moth gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Meadow Moth is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A lost field mouse leaves crumbs beside the trail, hoping the frightened creature will follow them home.",
+    "story": "[1/10 · Whispering Meadow] MEADOW MOTH carried pollen from every flower touched by the spark. Each glowing trail led to a missing villager's doorstep, as if the moth remembered people the village had forgotten.",
     "trait_effect": "fury"
   },
   {
@@ -53,7 +53,7 @@
     "advantage": "Dewdrop Sprite gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Dewdrop Sprite is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The village children recognize this creature's glow from a lullaby their grandparents stopped singing.",
+    "story": "[1/10 · Whispering Meadow] DEWDROP SPRITE heard the old lullaby inside the spark and began singing it at dusk. The tune made the meadow bloom, but one verse always ended in a child's frightened cry.",
     "trait_effect": "swift"
   },
   {
@@ -72,7 +72,7 @@
     "advantage": "Mossling gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Mossling is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A tiny guardian carries a broken bell; each time it rings, one missing villager remembers the way home.",
+    "story": "[1/10 · Whispering Meadow] MOSSLING rang a cracked bell whenever the corruption crept closer. Its tiny hands shook with every strike, yet it never stopped warning the sleeping village.",
     "trait_effect": "armored"
   },
   {
@@ -91,7 +91,7 @@
     "advantage": "Pebble Toad gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Pebble Toad is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The forest's old paths rearrange themselves whenever this creature cries out.",
+    "story": "[1/10 · Whispering Meadow] PEBBLE TOAD guarded the stream where the blue spark first landed. Beneath its stones lay a map of roots, all pointing toward a sealed chamber under the oldest tree.",
     "trait_effect": "drain"
   },
   {
@@ -110,7 +110,7 @@
     "advantage": "Bramble Fox gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Bramble Fox is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A wounded fox refuses to flee, guarding a nest that is not its own.",
+    "story": "[1/10 · Whispering Meadow] BRAMBLE FOX stood between the corruption and a nest of orphaned birds. It fought like a monster, but every wound it took was meant for something smaller.",
     "trait_effect": "poison"
   },
   {
@@ -129,7 +129,7 @@
     "advantage": "Glowcap Mushroom gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Glowcap Mushroom is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The mushrooms whisper a name no living villager remembers, then go silent as you approach.",
+    "story": "[1/10 · Whispering Meadow] GLOWCAP MUSHROOM lit a hidden path with spores that formed the names of the missing. One name appeared brighter than the rest: the name carved into the first seal.",
     "trait_effect": "shield"
   },
   {
@@ -148,7 +148,7 @@
     "advantage": "Bark Beetle gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Bark Beetle is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] A gentle beast has been marked by a dark thread that seems to pull toward the northern hills.",
+    "story": "[1/10 · Whispering Meadow] BARK BEETLE carried a black thread embedded beneath its shell. When the thread tugged north, the beetle resisted, because it knew the thread was leading the darkness toward the village.",
     "trait_effect": "reflect"
   },
   {
@@ -167,7 +167,7 @@
     "advantage": "Whisper Wolf gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Whisper Wolf is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The forest guardian asks you to spare its corrupted kin, even as the corruption takes its voice.",
+    "story": "[1/10 · Whispering Meadow] WHISPER WOLF was once the meadow's guardian. The corruption stole its voice, but not its memory; it begged you silently to save the creatures still trapped beyond the roots.",
     "trait_effect": "lifesteal"
   },
   {
@@ -186,7 +186,7 @@
     "advantage": "Stone Golem gains an edge in Whispering Meadow terrain and against unprepared foes.",
     "disadvantage": "Stone Golem is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[1/10 · Whispering Meadow] The first seal is hidden beneath the roots. Its guardian knows the spark chose you, but will not say why.",
+    "story": "[1/10 · Whispering Meadow] STONE GOLEM rose from beneath the oldest tree as the first seal's keeper. It recognized the blue spark as the key, then challenged you because the seal would open only for someone willing to protect the meadow.",
     "trait_effect": "berserk"
   },
   {
