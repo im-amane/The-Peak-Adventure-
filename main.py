@@ -31,7 +31,7 @@ from account_system import AccountError, delete_player_account, get_settings, in
 from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war
 from world_system import WORLD_NAMES, WorldError, get_current_world, get_world_choices, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
-from crafting_system import CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
+from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -1911,6 +1911,41 @@ async def heal(message: Message):
             await message.answer("🪙 You need 30 coins to heal.")
 
 
+
+
+
+@dp.message(Command("materials"))
+async def materials_command(message: Message):
+    materials = await get_materials(db, message.from_user.id)
+    lines = ["🧱 <b>Crafting Materials</b>"]
+    if not materials or not any(materials.values()):
+        lines.append("No materials yet. Defeat monsters to collect crafting resources.")
+    else:
+        for material_id, quantity in materials.items():
+            lines.append(MATERIALS.get(material_id, material_id) + " x" + str(quantity))
+    await message.answer("\n".join(lines))
+
+
+@dp.message(Command("craft"))
+async def craft_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) == 1:
+        recipes = await list_recipes(player["level"])
+        lines = ["⚒️ <b>Crafting Recipes</b>"]
+        for recipe in recipes:
+            status = "🔓" if recipe["unlocked"] else "🔒"
+            costs = ", ".join(MATERIALS[key] + " x" + str(value) for key,value in recipe["cost"].items())
+            lines.append(status + " <b>" + recipe["id"] + "</b> · " + recipe["name"] + " · Lv." + str(recipe["level"]) + "\n" + costs)
+        lines.append("Craft with /craft recipe_id. View supplies with /materials.")
+        await message.answer("\n".join(lines))
+        return
+    try:
+        recipe = await craft_item(db, message.from_user.id, player["level"], args[1].strip().lower())
+        stat = "+" + str(recipe["attack"]) + " ATK" if recipe["slot"] == "weapon" else "+" + str(recipe["defense"]) + " DEF"
+        await message.answer("⚒️ Crafted <b>" + recipe["name"] + "</b> and equipped it. " + stat)
+    except CraftingError as exc:
+        await message.answer(escape(str(exc)))
 
 
 @dp.message(Command("dungeons"))
