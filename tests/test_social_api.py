@@ -35,6 +35,58 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         self.temp_dir.cleanup()
 
 
+    async def test_abandoned_trades_expire_without_affecting_recent_trades(self):
+        initiator_id = 987654940
+        partner_id = 987654941
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        stale_pending = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'pending',datetime('now','-25 hours'))""",
+            (-100123, initiator_id, partner_id),
+        )
+        stale_open = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'open',datetime('now','-2 days'))""",
+            (-100123, partner_id, initiator_id),
+        )
+        recent = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'pending',datetime('now','-23 hours'))""",
+            (-100123, initiator_id, partner_id),
+        )
+        await main.db.commit()
+
+        expired_count = await main.expire_stale_trades()
+        self.assertEqual(expired_count, 2)
+        cur = await main.db.execute(
+            "SELECT trade_id,status FROM trades WHERE trade_id IN (?,?,?)",
+            (stale_pending.lastrowid, stale_open.lastrowid, recent.lastrowid),
+        )
+        statuses = {row["trade_id"]: row["status"] for row in await cur.fetchall()}
+        self.assertEqual(statuses[stale_pending.lastrowid], "expired")
+        self.assertEqual(statuses[stale_open.lastrowid], "expired")
+        self.assertEqual(statuses[recent.lastrowid], "pending")
+
+    async def test_expired_trade_invitation_cannot_be_accepted(self):
+        initiator_id = 987654942
+        partner_id = 987654943
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        cur = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'pending',datetime('now','-3 days'))""",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "TradePartner"}):
+            response = await main.api_social(FakeRequest({"action": "trade_accept", "trade_id": trade_id}))
+        self.assertEqual(response.status, 409)
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "expired")
+
     async def test_trade_invitation_can_only_be_answered_by_invited_player(self):
         initiator_id = 987654911
         partner_id = 987654912
