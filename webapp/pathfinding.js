@@ -36,6 +36,7 @@
     };
 
     if (pointBlocked(goal)) return [];
+    if (startKey === goalKey) return [{ x: goal.x, y: goal.y }];
 
     const blocked = (x, y) => {
       if (x < 0 || x >= cols || y < 0 || y >= rows) return true;
