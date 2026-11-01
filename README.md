@@ -6,7 +6,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project re
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
 - 100-level monster catalogue, 10 boss milestones and the original power curve
 - 100 distinct monster names, signature moves, unique-power labels and connected story entries
-- Monster combat traits: regeneration, fury, speed, armor and drain
+- Ten monster combat traits: regeneration, fury, speed, armor, drain, poison, shield, reflection, lifesteal and berserk
 - Turn-based combat with attack, class skill, potions and escape
 - Elemental matchups, weapon attack bonuses and armor defence bonuses
 - Equipment shop with level-gated weapons, armor and potions
