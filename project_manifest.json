@@ -398,7 +398,7 @@
         },
         {
           "name": "Party creation and invitations",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Co-op exploration",
@@ -415,6 +415,10 @@
         {
           "name": "Matchmaking and anti-abuse limits",
           "status": "pending"
+        },
+        {
+          "name": "Party membership management and leader handoff",
+          "status": "complete"
         }
       ]
     },
@@ -785,18 +789,18 @@
     }
   ],
   "progress_summary": {
-    "total_items": 169,
-    "complete_items": 92,
+    "total_items": 170,
+    "complete_items": 94,
     "partial_items": 7,
-    "pending_items": 70,
-    "fully_implemented_percent": 54,
+    "pending_items": 69,
+    "fully_implemented_percent": 55,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 92,
+    "complete": 94,
     "partial": 7,
-    "pending": 70,
-    "total": 169,
-    "percentage": 54
+    "pending": 69,
+    "total": 170,
+    "percentage": 55
   }
 }
