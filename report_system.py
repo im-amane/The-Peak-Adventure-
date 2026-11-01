@@ -1,0 +1,83 @@
+"""Player reports with duplicate protection and an auditable review lifecycle."""
+import time
+
+
+class ReportError(ValueError):
+    pass
+
+
+def _player_id(value, label):
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        raise ReportError(f"Invalid {label} account.")
+
+
+async def init_report_tables(db):
+    await db.execute("""CREATE TABLE IF NOT EXISTS player_reports(
+      report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      reporter_id INTEGER NOT NULL,
+      target_id INTEGER NOT NULL,
+      reason TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','reviewed','dismissed')),
+      created_at INTEGER NOT NULL,
+      reviewed_by INTEGER,
+      review_note TEXT NOT NULL DEFAULT '',
+      reviewed_at INTEGER
+    )""")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_player_reports_status ON player_reports(status,created_at)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_player_reports_reporter ON player_reports(reporter_id,target_id,created_at)")
+    await db.commit()
+
+
+async def submit_player_report(db, reporter_id, target_id, reason, now=None):
+    _player_id(reporter_id, "reporter")
+    _player_id(target_id, "target")
+    if reporter_id == target_id:
+        raise ReportError("You cannot report your own account.")
+    clean = " ".join(str(reason or "").split())
+    if not 10 <= len(clean) <= 500:
+        raise ReportError("Report reason must be between 10 and 500 characters.")
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (target_id,))
+    if not await cur.fetchone():
+        raise ReportError("That player account does not exist.")
+    now = int(time.time() if now is None else now)
+    cur = await db.execute(
+        "SELECT report_id FROM player_reports WHERE reporter_id=? AND target_id=? AND status='open' AND created_at>=? ORDER BY report_id DESC LIMIT 1",
+        (reporter_id, target_id, now - 86400),
+    )
+    if await cur.fetchone():
+        raise ReportError("You already have an open report for this player.")
+    cur = await db.execute(
+        "INSERT INTO player_reports(reporter_id,target_id,reason,created_at) VALUES(?,?,?,?)",
+        (reporter_id, target_id, clean, now),
+    )
+    await db.commit()
+    return cur.lastrowid
+
+
+async def list_open_reports(db, limit=25):
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+        raise ReportError("Invalid report list limit.")
+    cur = await db.execute(
+        """SELECT report_id,reporter_id,target_id,reason,created_at
+           FROM player_reports WHERE status='open'
+           ORDER BY created_at ASC,report_id ASC LIMIT ?""", (limit,)
+    )
+    return await cur.fetchall()
+
+
+async def resolve_player_report(db, report_id, admin_id, status, note=""):
+    _player_id(admin_id, "administrator")
+    if not isinstance(report_id, int) or isinstance(report_id, bool) or report_id <= 0:
+        raise ReportError("Invalid report ID.")
+    if status not in {"reviewed", "dismissed"}:
+        raise ReportError("Report status must be reviewed or dismissed.")
+    clean_note = " ".join(str(note or "").split())[:300]
+    cur = await db.execute(
+        """UPDATE player_reports SET status=?,reviewed_by=?,review_note=?,reviewed_at=?
+           WHERE report_id=? AND status='open'""",
+        (status, admin_id, clean_note, int(time.time()), report_id),
+    )
+    if cur.rowcount != 1:
+        raise ReportError("Open report not found; it may already be resolved.")
+    await db.commit()
+    return True
