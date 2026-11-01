@@ -117,7 +117,7 @@ node --test cloudflare/worker.test.mjs
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
 ## Remaining development
-The Mini App now includes obstacle collision, a solid NPC with ten region-specific dialogue lines, multiple level-appropriate monster encounters and selectable battle targets. Remaining work includes larger multi-zone maps with portals and landmarks, polished frame-by-frame sprite sheets, richer NPC quests and branching dialogue, deeper story cinematics, sound, co-op parties, guild invites, equipment trading, deployment hardening, balance testing and live Telegram testing. The 100-monster narrative catalogue also needs a dedicated editorial pass so each entry feels individually authored rather than template-like.
+The Mini App now includes obstacle collision, a solid NPC with ten region-specific dialogue lines, multiple level-appropriate monster encounters and selectable battle targets. Remaining work includes larger multi-zone maps with portals and landmarks, polished frame-by-frame sprite sheets, richer NPC quests and branching dialogue, deeper story cinematics, sound, co-op exploration/battles and team boss raids, guild invites, equipment trading, deployment hardening, balance testing and live Telegram testing. The 100-monster narrative catalogue also needs a dedicated editorial pass so each entry feels individually authored rather than template-like.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
