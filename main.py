@@ -13,7 +13,7 @@ from pathlib import Path
 import aiosqlite
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from dotenv import load_dotenv
@@ -25,9 +25,11 @@ from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, remove_friend, respond_to_friend_request, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, respond_to_party_invite
 from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
+ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", ""))
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
@@ -1469,6 +1471,75 @@ async def start(message: Message):
         reply_markup=menu(include_webapp=message.chat.type == "private"))
 
 
+
+@dp.message(Command("admin"))
+async def admin_command(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("⛔ This command is restricted to bot administrators.")
+        return
+    args=(message.text or "").split(maxsplit=2)
+    action=args[1].lower() if len(args)>1 else "stats"
+    if action=="stats":
+        stats=await dashboard_stats(db)
+        await message.answer(
+            "🛠️ <b>THE PEAK ADMIN PANEL</b>\n"
+            f"Players: {stats['players']}\nActive monster battles: {stats['active_battles']}\n"
+            f"Guilds: {stats['guilds']}\nRegistered groups: {stats['registered_groups']}\n"
+            f"Active PvP duels: {stats['active_duels']}\n\n"
+            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE."
+        )
+        return
+    if action=="player":
+        if len(args)<3 or not args[2].isdigit():
+            await message.answer("Usage: /admin player player_id"); return
+        player=await get_player(int(args[2]))
+        await message.answer(
+            f"👤 <b>{escape(player['username'] or 'Adventurer')}</b> · ID <code>{player['user_id']}</code>\n"
+            f"Level {player['level']} · {player['hero_class']} · XP {player['xp']}\n"
+            f"HP {player['hp']}/{player['max_hp']} · Coins {player['coins']} · Wins {player['wins']}"
+        )
+        return
+    if action=="coins":
+        if len(args)<3:
+            await message.answer("Usage: /admin coins player_id amount_delta"); return
+        parts=args[2].split()
+        if len(parts)!=2 or not parts[0].isdigit() or not re.fullmatch(r"-?\d+",parts[1]):
+            await message.answer("Usage: /admin coins player_id amount_delta"); return
+        try:
+            balance=await adjust_player_coins(db,int(parts[0]),int(parts[1]))
+            await message.answer(f"✅ Player <code>{parts[0]}</code> coin balance is now {balance}.")
+        except AdminError as exc: await message.answer(escape(str(exc)))
+        return
+    if action=="announce":
+        if len(args)<3 or not args[2].strip():
+            await message.answer("Usage: /admin announce your announcement"); return
+        cur=await db.execute("SELECT user_id FROM players")
+        player_ids=[row["user_id"] for row in await cur.fetchall()]
+        sent=failed=0
+        text=escape(args[2].strip()[:3500])
+        for index,user_id in enumerate(player_ids,1):
+            try:
+                await message.bot.send_message(user_id,"📢 <b>THE PEAK ANNOUNCEMENT</b>\n\n"+text)
+                sent+=1
+            except Exception:
+                failed+=1
+            if index%20==0: await asyncio.sleep(1)
+        await message.answer(f"📢 Broadcast finished. Sent: {sent}. Failed: {failed}.")
+        return
+    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE.")
+
+
+@dp.message(Command("export"))
+async def export_account(message: Message):
+    try:
+        data=await export_player_data(db,message.from_user.id)
+    except AdminError as exc:
+        await message.answer(escape(str(exc))); return
+    payload=json.dumps(data,ensure_ascii=False,indent=2,default=str).encode("utf-8")
+    document=BufferedInputFile(payload,filename=f"peak-adventure-{message.from_user.id}-export.json")
+    await message.answer_document(document,caption="Your personal account data export. Keep this file private.")
+
+
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
     await message.answer(
@@ -1485,6 +1556,7 @@ async def help_cmd(message: Message):
         "/party create|invite|accept|decline|info|leave|disband - Party management\n"
         "/guild create|join|leave|info|top|disband - Guild management\n"
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
+        "/admin - Bot administration (authorized IDs only)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
         "/monster level - Inspect a monster\n/bestiary - View discovered monsters\n\n"
         "During battle use Attack, Special Skill, Potion or Escape buttons.")
