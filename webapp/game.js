@@ -116,7 +116,7 @@
     }
     renderQuests(data.quests || []);
     renderSocial(data.social || {});
-    renderDungeon(data.dungeon || null);
+    renderDungeon(data.dungeon || null, data.dungeons || []);
     renderMaterials(data.materials || {});
     renderStory(data.story || []);
     if (data.settings) {
@@ -222,11 +222,72 @@
     });
   }
 
-  function renderDungeon(dungeon) {
+  function renderDungeon(dungeon, choices) {
     if (!ui.dungeonStatus) return;
-    ui.dungeonStatus.textContent = dungeon
-      ? "🗝️ " + dungeon.name + " · Room " + dungeon.room + "/3 · " + dungeon.status.toUpperCase() + " · target monster Lv." + dungeon.target_level + ". Use /dungeon in chat for controls."
-      : "🗝️ No active dungeon. Use /dungeons in chat to explore hidden places.";
+    ui.dungeonStatus.replaceChildren();
+    const heading=document.createElement("h3");
+    heading.textContent="🗝️ Dungeon Expedition";
+    ui.dungeonStatus.appendChild(heading);
+    if (dungeon) {
+      const summary=document.createElement("p");
+      summary.className="small";
+      summary.textContent=dungeon.name+" · Room "+dungeon.room+"/"+dungeon.room_count+" · "+dungeon.status.toUpperCase()
+        +(dungeon.status==="active" ? " · Defeat a monster at Lv."+dungeon.target_level+" or higher to advance." : " · Rewards: "+dungeon.reward_coins+" coins and "+dungeon.reward_potions+" potions.");
+      ui.dungeonStatus.appendChild(summary);
+      if (dungeon.status==="completed") {
+        const claim=document.createElement("button");
+        claim.type="button"; claim.className="dungeon-action"; claim.dataset.dungeonAction="claim";
+        claim.textContent="🎁 Claim dungeon reward";
+        ui.dungeonStatus.appendChild(claim);
+      } else if (dungeon.status==="active") {
+        const abandon=document.createElement("button");
+        abandon.type="button"; abandon.className="dungeon-action secondary"; abandon.dataset.dungeonAction="abandon";
+        abandon.textContent="Leave dungeon";
+        ui.dungeonStatus.appendChild(abandon);
+      }
+      return;
+    }
+    const intro=document.createElement("p");
+    intro.className="small";
+    intro.textContent="Choose an unlocked dungeon. Each expedition has three guardian rooms.";
+    ui.dungeonStatus.appendChild(intro);
+    const available=(Array.isArray(choices)?choices:[]).filter(item=>item.unlocked&&!item.claimed);
+    if (!available.length) {
+      const empty=document.createElement("p"); empty.className="small";
+      empty.textContent="No unclaimed dungeons are unlocked yet. Explore and level up to reveal more.";
+      ui.dungeonStatus.appendChild(empty);
+      return;
+    }
+    available.forEach(item=>{
+      const row=document.createElement("div"); row.className="dungeon-choice";
+      const label=document.createElement("span");
+      label.textContent="World "+item.world+" · "+item.name+" · Lv."+item.min_level;
+      const button=document.createElement("button");
+      button.type="button"; button.className="dungeon-action";
+      button.dataset.dungeonAction="enter"; button.dataset.dungeonId=String(item.id);
+      button.textContent="Enter";
+      row.append(label,button); ui.dungeonStatus.appendChild(row);
+    });
+  }
+
+  async function performDungeonAction(button) {
+    if (requestInFlight || !gameState) return;
+    const action=button.dataset.dungeonAction;
+    const dungeonId=Number(button.dataset.dungeonId);
+    if (!["enter","abandon","claim"].includes(action)) return;
+    requestInFlight=true;
+    ui.dungeonStatus.querySelectorAll("button").forEach(item=>item.disabled=true);
+    try {
+      const result=await postApi("/api/dungeon",action==="enter"?{action,dungeon_id:dungeonId}:{action});
+      applyState(result.state,result.message);
+    } catch(error) {
+      const notice=document.createElement("p"); notice.className="small"; notice.textContent=error.message;
+      ui.dungeonStatus.appendChild(notice);
+      await loadState().catch(()=>null);
+    } finally {
+      requestInFlight=false;
+      if(gameState) applyState(gameState);
+    }
   }
 
   function renderSocial(social) {
@@ -592,6 +653,11 @@
     if (soundEnabled) playSound("potion");
   });
 
+
+  ui.dungeonStatus.addEventListener("click",event=>{
+    const button=event.target.closest("[data-dungeon-action]");
+    if(button) performDungeonAction(button);
+  });
 
   document.getElementById("save-settings").addEventListener("click", async () => {
     if (requestInFlight || !gameState) return;
