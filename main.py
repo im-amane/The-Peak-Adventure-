@@ -37,6 +37,7 @@ from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_re
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
 from rate_limit import SlidingWindowRateLimiter
 from db_backup import create_backup
+from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -238,6 +239,7 @@ async def init_db():
     await init_presence_tables(db)
     await init_story_tables(db)
     await init_auction_tables(db)
+    await init_stamina_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -365,6 +367,12 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         return
     if p["hp"] <= 0:
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
+        return
+    try:
+        await consume_stamina(db, user_id, EXPLORE_COST)
+    except StaminaError as exc:
+        state = await get_stamina(db, user_id)
+        await send_target.answer("⚡ " + escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
         return
     world_id = await get_current_world(db, user_id, p["level"])
     boss_level = world_id * 10
@@ -2016,6 +2024,20 @@ async def profile(message: Message):
     await message.answer(await player_text(p))
 
 
+@dp.message(Command("stamina"))
+async def stamina_command(message: Message):
+    state = await get_stamina(db, message.from_user.id)
+    bars = "🟩" * (state["stamina"] // 10) + "⬛" * (10 - state["stamina"] // 10)
+    regen = "Full" if state["stamina"] >= state["max_stamina"] else f"{state['next_regen_seconds']} seconds"
+    await message.answer(
+        f"⚡ <b>Stamina</b>\\n{bars}\\n"
+        f"{state['stamina']}/{state['max_stamina']}\\n"
+        f"Explore cost: {EXPLORE_COST} stamina\\n"
+        f"Next regeneration: {regen}\\n"
+        "Regeneration: 1 stamina every 5 minutes."
+    )
+
+
 @dp.message(Command("explore"))
 async def explore(message: Message):
     await start_battle(message.from_user.id, message.from_user.username, message)
@@ -2828,6 +2850,7 @@ async def miniapp_state(user: dict):
         "xp_required": xp_needed(p["level"]),
         "hp": p["hp"],
         "max_hp": p["max_hp"],
+        "stamina": await get_stamina(db, user_id),
         "potions": p["potions"],
         "skill_cd": p["skill_cd"],
         "coins": p["coins"],
