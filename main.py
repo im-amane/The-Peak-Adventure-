@@ -3226,6 +3226,10 @@ async def _battle_action_unlocked(call: CallbackQuery):
     new_hp = combat_result["player_hp"]
     effect_notes = combat_result["effect_notes"]
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
+    await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
+    await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
+    await db.commit()
+    await restore_mana(db, user_id, TURN_MANA_REGEN)
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
@@ -4255,6 +4259,16 @@ async def api_action(request: web.Request):
         new_hp = combat_result["player_hp"]
         effect_notes = combat_result["effect_notes"]
         effect_text = " " + " ".join(effect_notes) if effect_notes else ""
+        await db.execute(
+            "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
+            (new_enemy_hp, turn_count, user_id),
+        )
+        await db.execute(
+            "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+            (new_hp, user_id),
+        )
+        await db.commit()
+        await restore_mana(db, user_id, TURN_MANA_REGEN)
         if new_hp == 0:
             message = await finish_battle(user_id, False)
             return web.json_response({
