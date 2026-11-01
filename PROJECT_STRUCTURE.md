@@ -58,8 +58,8 @@ The-Peak-Adventure/
 - [x] /leaderboard and PvP rankings
 - [~] Inline callback battle controls
 - [~] Bot error handling and operational logging
-- [ ] Admin command panel
-- [ ] Broadcast and announcement system
+- [x] Admin command panel
+- [x] Broadcast and announcement system
 
 ### 02. Personal Player System
 
@@ -74,7 +74,7 @@ The-Peak-Adventure/
 - [x] Daily reward cooldown
 - [~] Bestiary discovery
 - [ ] Player settings and preferences
-- [ ] Account recovery and data export
+- [~] Account recovery and data export (JSON export implemented; account deletion workflow pending)
 
 ### 03. Character Design System
 
