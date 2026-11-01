@@ -73,8 +73,8 @@ The-Peak-Adventure/
 - [x] Achievements and one-time rewards
 - [x] Daily reward cooldown
 - [~] Bestiary discovery
-- [ ] Player settings and preferences
-- [~] Account recovery and data export (JSON export implemented; account deletion workflow pending)
+- [x] Player settings and preferences
+- [x] Account recovery, JSON export, privacy settings and confirmed account deletion (JSON export implemented; account deletion workflow pending)
 
 ### 03. Character Design System
 
@@ -238,7 +238,7 @@ The-Peak-Adventure/
 - [ ] Anti-cheat and economy abuse detection
 - [ ] Rate limiting and abuse protection audit
 - [ ] Database backup and restore automation
-- [ ] Privacy controls and data deletion workflow
+- [x] Privacy controls and data deletion workflow
 - [ ] Production monitoring and alerting
 
 ### 14. Testing and Deployment
