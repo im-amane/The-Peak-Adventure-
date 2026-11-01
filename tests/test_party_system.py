@@ -159,6 +159,12 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         cur=await self.db.execute("SELECT coins FROM players WHERE user_id=202")
         self.assertEqual((await cur.fetchone())["coins"],50)
 
+    async def test_coop_attack_rejects_invalid_player_id(self):
+        party_id = await create_party(self.db, 101)
+        await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        with self.assertRaisesRegex(PartyError, "Invalid party or player"):
+            await attack_party_battle(self.db, party_id, 0, 10)
+
     async def test_coop_attack_cooldown(self):
         party_id=await create_party(self.db,101)
         await start_party_battle(self.db,party_id,101,10,"Root Warden",1000)
