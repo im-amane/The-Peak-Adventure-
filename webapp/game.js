@@ -873,6 +873,7 @@
         }
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
+      this.heroBaseScaleX=this.hero.scaleX||1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
@@ -1053,13 +1054,13 @@
       const moving=dx!==0||dy!==0;
       if(moving){
         if(!this.heroWalkTween){
-          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
         this.hero.setRotation(dx*0.045);
       }else if(this.heroWalkTween){
         this.heroWalkTween.stop();
         this.heroWalkTween=null;
-        this.hero.setScale(1);
+        this.hero.setScale(this.heroBaseScaleX,1);
         this.hero.setRotation(0);
       }
       const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.worldWidth-24);
