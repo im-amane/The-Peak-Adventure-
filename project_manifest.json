@@ -763,7 +763,7 @@
         },
         {
           "name": "Mini App browser/device QA",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "Live Telegram bot test",
