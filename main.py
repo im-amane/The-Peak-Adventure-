@@ -94,6 +94,19 @@ ACHIEVEMENTS = [
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("peak-adventure")
 dp = Dispatcher()
+
+@dp.errors()
+async def handle_unhandled_error(event):
+    """Log unexpected Telegram update failures without exposing internals to players."""
+    error = event.exception
+    log.error(
+        "Unhandled Telegram update error: %s",
+        type(error).__name__,
+        exc_info=(type(error), error, error.__traceback__),
+    )
+    return True
+
+
 db: aiosqlite.Connection | None = None
 db_lock = asyncio.Lock()
 player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
