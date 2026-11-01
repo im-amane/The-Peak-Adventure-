@@ -103,6 +103,7 @@
     renderQuests(data.quests || []);
     renderSocial(data.social || {});
     renderDungeon(data.dungeon || null);
+    renderMaterials(data.materials || {});
     ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
     ui.region.textContent = data.region;
     ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
@@ -137,6 +138,22 @@
 
 
 
+
+
+  function renderMaterials(materials) {
+    if (!ui.inventoryMaterials) return;
+    ui.inventoryMaterials.replaceChildren();
+    const names={iron_ore:"Iron Ore",ember_shard:"Ember Shard",frost_crystal:"Frost Crystal",void_essence:"Void Essence",star_dust:"Star Dust"};
+    const entries=Object.entries(materials).filter(([,quantity])=>quantity>0);
+    if (!entries.length) {
+      const empty=document.createElement("span"); empty.className="small"; empty.textContent="Crafting materials: defeat monsters to collect resources.";
+      ui.inventoryMaterials.appendChild(empty); return;
+    }
+    entries.forEach(([id,quantity])=>{
+      const chip=document.createElement("span"); chip.className="material-chip";
+      chip.textContent=(names[id]||id)+" ×"+quantity; ui.inventoryMaterials.appendChild(chip);
+    });
+  }
 
   function renderDungeon(dungeon) {
     if (!ui.dungeonStatus) return;
