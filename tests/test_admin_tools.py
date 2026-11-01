@@ -1,6 +1,6 @@
 import unittest
 import aiosqlite
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, parse_admin_ids
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions
 
 class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
@@ -25,6 +25,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE boss_defeats(user_id INTEGER,monster_level INTEGER);
   INSERT INTO players VALUES(101,50);
   """)
+  await init_admin_tables(self.db)
  async def asyncTearDown(self): await self.db.close()
  def test_admin_id_parser_ignores_bad_values(self):
   self.assertEqual(parse_admin_ids("101, abc, 202, -3,0,101"),{101,202})
@@ -38,6 +39,11 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
    with self.assertRaises(AdminError): await adjust_player_coins(self.db,101,value)
  async def test_unknown_player_is_rejected(self):
   with self.assertRaises(AdminError): await adjust_player_coins(self.db,202,10)
+ async def test_coin_adjustment_is_audited(self):
+  await adjust_player_coins(self.db,101,10,999)
+  logs=await recent_admin_actions(self.db)
+  self.assertEqual(logs[0]["action"],"coin_adjustment")
+  self.assertEqual(logs[0]["actor_id"],999)
  async def test_dashboard_counts(self):
   self.assertEqual(await dashboard_stats(self.db),{"players":1,"active_battles":0,"guilds":0,"registered_groups":0,"active_duels":0})
  async def test_player_export_contains_account_data(self):
