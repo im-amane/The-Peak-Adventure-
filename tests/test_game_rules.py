@@ -283,6 +283,20 @@ class GameRulesTests(unittest.TestCase):
         self.assertEqual(result["player_hp"], 98)
         self.assertIn("Poison deals 2 damage.", result["effect_notes"])
 
+    def test_shared_enemy_turn_preserves_legacy_over_max_player_health(self):
+        from game_rules import resolve_enemy_turn
+
+        result = resolve_enemy_turn(
+            trait_effect="armored", turn_count=1, monster_hp_before=100,
+            monster_hp_after_action=80, monster_max_hp=100,
+            monster_attack_power=40, monster_speed=0, player_hp=150,
+            player_max_hp=100, player_level=1, armor_defense=0,
+            class_defense=0, class_speed=0, player_damage=20,
+            action="attack", random_bonus=0, dodge_roll=100,
+            is_boss=False, boss_name="Test", hero_class="Knight",
+        )
+        self.assertEqual(result["player_hp"], 112)
+
     def test_shared_enemy_turn_resolution_rejects_boolean_and_invalid_health(self):
         from game_rules import resolve_enemy_turn
 
