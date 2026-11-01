@@ -41,6 +41,7 @@ from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
+from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -258,6 +259,7 @@ async def init_db():
     await init_report_tables(db)
     await init_weekly_tables(db)
     await init_moderation_tables(db)
+    await init_mana_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -2124,6 +2126,16 @@ async def profile(message: Message):
     await message.answer(await player_text(p))
 
 
+@dp.message(Command("mana"))
+async def mana_command(message: Message):
+    state=await get_mana(db,message.from_user.id)
+    bars="🔷"*(state["mana"]//10)+"⬛"*(10-state["mana"]//10)
+    await message.answer(
+        f"🔮 <b>Mana</b>\\n{bars}\\n{state['mana']}/{state['max_mana']}\\n"
+        f"Skill cost: {SKILL_MANA_COST} · Regen: 1 per minute · Battle turn restore: {TURN_MANA_REGEN}"
+    )
+
+
 @dp.message(Command("stamina"))
 async def stamina_command(message: Message):
     state = await get_stamina(db, message.from_user.id)
@@ -2754,6 +2766,11 @@ async def _battle_action_unlocked(call: CallbackQuery):
         if p["skill_cd"] > 0:
             await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
             return
+        try:
+            await consume_mana(db, user_id, SKILL_MANA_COST)
+        except ManaError as exc:
+            await call.message.answer("🔮 " + escape(str(exc)))
+            return
         damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
         await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
         action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
@@ -2783,6 +2800,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         regen = max(1, m["hp"] // 50)
         new_enemy_hp = min(m["hp"], new_enemy_hp + regen)
     if new_enemy_hp == 0:
+        await restore_mana(db, user_id, TURN_MANA_REGEN)
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
         await db.commit()
         result = await finish_battle(user_id, True)
@@ -2826,6 +2844,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
     await db.commit()
+    await restore_mana(db, user_id, TURN_MANA_REGEN)
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     if new_hp == 0:
         result = await finish_battle(user_id, False)
@@ -2954,6 +2973,7 @@ async def miniapp_state(user: dict):
         "hp": p["hp"],
         "max_hp": p["max_hp"],
         "stamina": await get_stamina(db, user_id),
+        "mana": await get_mana(db, user_id),
         "potions": p["potions"],
         "skill_cd": p["skill_cd"],
         "coins": p["coins"],
