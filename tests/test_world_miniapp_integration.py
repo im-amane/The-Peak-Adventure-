@@ -33,8 +33,6 @@ class MiniAppWorldIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state["worlds"][1]["unlocked"])
         self.assertEqual(state["landmark"]["landmark"], "Whispering Tree")
 
-        await main.db.execute("UPDATE players SET level=11 WHERE user_id=?", (user["id"],))
-        await main.db.commit()
         # Unlock world 2 on the persisted player before testing fast travel.
         await main.db.execute("UPDATE players SET level=? WHERE user_id=?", (11, user["id"]))
         await main.db.commit()
