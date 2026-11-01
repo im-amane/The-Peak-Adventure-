@@ -503,7 +503,22 @@
         }
       });
     }else{
-      addCard("Trading",["No pending trade invitations. Start a trade with /trade in a Telegram group."]);
+      addCard("Trading",["No pending trade invitations."]);
+    }
+    const openTrades=social.open_trades||[];
+    if(openTrades.length){
+      const card=addCard("Active trades",openTrades.map(trade=>
+        "#"+trade.trade_id+" with "+trade.other_username+
+        " · Your offer: "+trade.my_coins+" coins, "+trade.my_potions+" potions"+
+        " · Their offer: "+trade.their_coins+" coins, "+trade.their_potions+" potions"+
+        " · Confirmations: "+(trade.my_confirmed?"✅":"⌛")+" / "+(trade.their_confirmed?"✅":"⌛")
+      ));
+      openTrades.forEach(trade=>{
+        const note=document.createElement("p");note.className="small";
+        note.textContent="Edit offers in the Telegram bot with /offer "+trade.trade_id+" COINS POTIONS, then confirm with /confirmtrade "+trade.trade_id+".";
+        card.appendChild(note);
+        addAction(card,"Cancel trade #"+trade.trade_id,"trade_cancel",{tradeId:trade.trade_id});
+      });
     }
     if(ui.partyCreate)ui.partyCreate.hidden=Boolean(party);
     if(ui.partyInvite)ui.partyInvite.hidden=!party;
