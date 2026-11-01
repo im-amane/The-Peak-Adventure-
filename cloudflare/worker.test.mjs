@@ -421,6 +421,15 @@ test("A-star pathfinding routes around blocked map obstacles", () => {
   assert.ok(path.some(point => Math.abs(point.y - 96) > 32));
 });
 
+test("A-star returns a direct destination inside the same grid cell", () => {
+  const destination = { x: 42, y: 90 };
+  const path = globalThis.PeakPathfinding.findPath(
+    { x: 35, y: 82 }, destination, [],
+    { width: 320, height: 220, minY: 32, cellSize: 32 },
+  );
+  assert.deepEqual(path, [destination]);
+});
+
 test("A-star rejects blocked goals and invalid world bounds", () => {
   const blockedGoal = globalThis.PeakPathfinding.findPath(
     { x: 32, y: 96 },
