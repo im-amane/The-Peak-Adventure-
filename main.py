@@ -357,15 +357,14 @@ async def player_text(p):
             f"⚔️ PvP Record: <b>{p['pvp_wins']}W / {p['pvp_losses']}L</b>")
 
 
-async def build_battle_monster(user_id: int, battle):
+def build_battle_monster(battle):
     """Build the exact evolved/elite variant stored for this encounter."""
     monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
-    if battle["is_evolved"]:
+    monster["is_evolved"] = bool(battle["is_evolved"])
+    monster["is_elite"] = bool(battle["is_elite"])
+    if monster["is_evolved"]:
         monster = scale_evolved_monster(monster)
-        monster["is_evolved"] = True
-    else:
-        monster["is_evolved"] = False
-    if battle["is_elite"]:
+    if monster["is_elite"]:
         monster = scale_elite_monster(monster)
     return monster
 
@@ -377,11 +376,7 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
     p = await get_player(user_id)
     if not battle:
         return
-    m = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
-    if battle["is_evolved"]:
-        m = scale_evolved_monster(m)
-    if battle["is_elite"]:
-        m = scale_elite_monster(m)
+    m = build_battle_monster(battle)
     text = (f"{intro}\n\n" if intro else "") + (
         f"⚔️ <b>ENCOUNTER: {m['name']}</b>\n"
         f"🏷️ Monster level: {m['level']} {'👑 BOSS' if m['boss'] else ('💀 ELITE' if battle['is_elite'] else ('✨ EVOLVED' if battle['is_evolved'] else ''))}\n"
@@ -625,11 +620,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     b = await cur.fetchone()
     if not b:
         return None
-    m = dict(MONSTER_BY_LEVEL[b["monster_level"]])
-    if b["is_evolved"]:
-        m = scale_evolved_monster(m)
-    if b["is_elite"]:
-        m = scale_elite_monster(m)
+    m = build_battle_monster(b)
     await db.execute("DELETE FROM battles WHERE user_id=?", (user_id,))
     if escaped:
         await db.commit()
@@ -3113,11 +3104,7 @@ async def miniapp_state(user: dict):
     battle_row = await cur.fetchone()
     battle = None
     if battle_row:
-        active_monster = dict(MONSTER_BY_LEVEL[battle_row["monster_level"]])
-        if battle_row["is_evolved"]:
-            active_monster = scale_evolved_monster(active_monster)
-        if battle_row["is_elite"]:
-            active_monster = scale_elite_monster(active_monster)
+        active_monster = build_battle_monster(battle_row)
         battle = {
             "elite": bool(battle_row["is_elite"]),
             "evolved": bool(battle_row["is_evolved"]),
@@ -3561,11 +3548,7 @@ async def api_action(request: web.Request):
         if not battle:
             return web.json_response({"error": "There is no active battle."}, status=409)
         p = await get_player(user_id, user.get("username"))
-        monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
-        if battle["is_evolved"]:
-            monster = scale_evolved_monster(monster)
-        if battle["is_elite"]:
-            monster = scale_elite_monster(monster)
+        monster = build_battle_monster(battle)
         class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
         if action == "flee":
             message = await finish_battle(user_id, False, escaped=True)
