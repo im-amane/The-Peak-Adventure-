@@ -35,7 +35,7 @@
       });
     };
 
-    if (pointBlocked(goal)) return [];
+    if (pointBlocked(start) || pointBlocked(goal)) return [];
     if (startKey === goalKey) return [{ x: goal.x, y: goal.y }];
 
     const blocked = (x, y) => {
