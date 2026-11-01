@@ -52,7 +52,7 @@ On Windows, activate with `.venv\\Scripts\\activate`.
 
 ## Cloudflare edge gateway
 
-The repository includes a Cloudflare Worker gateway in `cloudflare/worker.mjs`. It forwards only the game's known routes to the Python/Aiohttp origin, preserves Telegram Mini App authentication headers, rejects unsupported methods and oversized bodies, disables caching for authenticated API responses, and enables Worker observability. The Worker does not replace the Python game server or its SQLite database.
+The repository includes a Cloudflare Worker in `cloudflare/worker.mjs`. Cloudflare serves the Mini App's `webapp/` assets globally, while the Worker forwards only the game's known API routes to the Python/Aiohttp origin. It preserves Telegram Mini App authentication headers, rejects unsupported methods and oversized bodies, strips cookies and arbitrary authorization headers, disables caching for authenticated API responses, and enables Worker observability. The Worker does not replace the Python game server or its SQLite database.
 
 1. Install Wrangler: `npm install --save-dev wrangler`.
 2. Authenticate: `npx wrangler login`.
