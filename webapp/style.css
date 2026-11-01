@@ -190,3 +190,9 @@ button:disabled{cursor:not-allowed}
 .sprint-control{min-width:76px;min-height:48px;padding:8px 10px;background:#354b3d;border-color:#85a77b;color:#efffe8;font-size:12px;touch-action:none;user-select:none;-webkit-user-select:none}
 .sprint-control[aria-pressed="true"]{background:#78602b;border-color:#e6bd69;box-shadow:0 0 0 2px #e6bd6944}
 @media(max-width:520px){.mobile-controls{flex-wrap:wrap}.sprint-control{min-width:100%;min-height:42px}.dpad{flex:1}}
+
+/* Accessible hero HUD meters */
+.hp-track{height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:5px 0 9px}
+.hp-track>div{height:100%;width:0;background:linear-gradient(90deg,#b94d58,#e78b72);border-radius:inherit;transition:width .22s ease}
+.xp-track{margin-top:8px}
+@media(prefers-reduced-motion:reduce){.hp-track>div,.stamina-track>div,.mana-track>div,.xp-track>div{transition:none}}
