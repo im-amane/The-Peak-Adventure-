@@ -118,3 +118,16 @@ def class_evades(class_speed: int, roll: int) -> bool:
     if not 0 <= class_speed <= 100 or not 1 <= roll <= 100:
         raise ValueError("speed must be 0..100 and roll must be 1..100")
     return roll <= class_speed
+
+ 
+def nearby_monster_levels(level: int, boss_defeated: bool = False) -> tuple[int, ...]:
+    """Return the encounter levels available around a player's current level."""
+    if type(level) is not int or not 1 <= level <= MAX_LEVEL:
+        raise ValueError("level must be an integer from 1 to 100")
+    if level in BOSS_LEVELS and not boss_defeated:
+        return (level,)
+    candidates = sorted({
+        max(1, min(MAX_LEVEL, level + offset))
+        for offset in (-1, 0, 1)
+    } - BOSS_LEVELS)
+    return tuple(candidates or [max(1, level - 1)])
