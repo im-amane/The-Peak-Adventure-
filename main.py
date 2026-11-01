@@ -1902,6 +1902,36 @@ async def heal(message: Message):
             await message.answer("🪙 You need 30 coins to heal.")
 
 
+
+@dp.message(Command("travel"))
+async def travel_command(message: Message):
+    player = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) == 1:
+        worlds = await get_world_choices(db, message.from_user.id, player["level"])
+        lines = ["🌀 <b>Fast Travel</b>"]
+        for world in worlds:
+            marker = "📍" if world["current"] else ("🔓" if world["unlocked"] else "🔒")
+            lines.append(marker + " " + str(world["id"]) + ". " + world["name"] + " · Lv." + str(world["min_level"]))
+        lines.append("Use /travel world_number to move to an unlocked region.")
+        await message.answer("\n".join(lines))
+        return
+    target = args[1].strip()
+    if target.isdigit():
+        world_id = int(target)
+    else:
+        matches = [index + 1 for index, name in enumerate(WORLD_NAMES) if name.casefold() == target.casefold()]
+        if not matches:
+            await message.answer("World not found. Use /travel to view the map.")
+            return
+        world_id = matches[0]
+    try:
+        world = await travel_to_world(db, message.from_user.id, player["level"], world_id)
+        await message.answer("🌀 Fast travel complete. You are now in <b>" + escape(world["name"]) + "</b>.")
+    except WorldError as exc:
+        await message.answer(escape(str(exc)))
+
+
 @dp.message(Command("map"))
 async def map_cmd(message: Message):
     p = await get_player(message.from_user.id)
