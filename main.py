@@ -508,6 +508,20 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         (new_xp, new_level, reward_coins, new_max, p["hp"] + 25, new_max, user_id))
     if m["boss"]:
         await db.execute("INSERT OR IGNORE INTO boss_defeats(user_id, monster_level) VALUES (?, ?)", (user_id, m["level"]))
+    cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
+    membership = await cur.fetchone()
+    if membership:
+        cur = await db.execute("SELECT guild_level, guild_xp FROM guilds WHERE guild_id=?", (membership["guild_id"],))
+        guild = await cur.fetchone()
+        if guild:
+            guild_level, guild_xp = guild["guild_level"], guild["guild_xp"] + reward_xp
+            while guild_level < 100 and guild_xp >= guild_level * 500:
+                guild_xp -= guild_level * 500
+                guild_level += 1
+            await db.execute(
+                "UPDATE guilds SET guild_level=?, guild_xp=? WHERE guild_id=?",
+                (guild_level, guild_xp, membership["guild_id"]),
+            )
     await db.commit()
     await refresh_quest_progress(user_id)
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
