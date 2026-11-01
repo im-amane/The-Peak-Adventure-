@@ -69,7 +69,12 @@ async def dashboard_stats(db: aiosqlite.Connection) -> dict:
         "security_events_24h":"SELECT COUNT(*) AS n FROM security_events WHERE created_at >= datetime('now','-24 hours')",
     }
     result={}
+    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='security_events'")
+    has_security_table=await cur.fetchone() is not None
     for key,query in queries.items():
+        if key=="security_events_24h" and not has_security_table:
+            result[key]=0
+            continue
         cur=await db.execute(query)
         result[key]=(await cur.fetchone())["n"]
     return result
