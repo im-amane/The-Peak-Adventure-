@@ -75,6 +75,9 @@ async def delete_player_account(db,user_id):
     await db.execute("DELETE FROM guild_raid_cooldowns WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM friend_requests WHERE user_low=? OR user_high=?",(user_id,user_id))
     await db.execute("DELETE FROM party_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
+    await db.execute("DELETE FROM party_battle_contributions WHERE user_id=?",(user_id,))
+    await db.execute("DELETE FROM party_battle_cooldowns WHERE user_id=?",(user_id,))
+    await db.execute("DELETE FROM party_battle_rewards WHERE user_id=?",(user_id,))
     cur=await db.execute("SELECT party_id FROM party_members WHERE user_id=?",(user_id,))
     party=await cur.fetchone()
     if party:
@@ -85,7 +88,12 @@ async def delete_player_account(db,user_id):
             cur=await db.execute("SELECT user_id FROM party_members WHERE party_id=? AND user_id!=? ORDER BY joined_at,user_id LIMIT 1",(party_id,user_id))
             successor=await cur.fetchone()
             if successor: await db.execute("UPDATE parties SET leader_id=? WHERE party_id=?",(successor["user_id"],party_id))
-            else: await db.execute("DELETE FROM parties WHERE party_id=?",(party_id,))
+            else:
+                await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)",(party_id,))
+                await db.execute("DELETE FROM party_battle_cooldowns WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)",(party_id,))
+                await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)",(party_id,))
+                await db.execute("DELETE FROM party_battles WHERE party_id=?",(party_id,))
+                await db.execute("DELETE FROM parties WHERE party_id=?",(party_id,))
         await db.execute("DELETE FROM party_members WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_players WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_admins WHERE user_id=?",(user_id,))
