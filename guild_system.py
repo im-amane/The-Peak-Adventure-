@@ -308,3 +308,19 @@ async def get_guild_war(db,war_id):
 async def guild_raid_status(db,guild_id):
     cur=await db.execute("SELECT * FROM guild_raids WHERE guild_id=? ORDER BY raid_id DESC LIMIT 1",(guild_id,))
     return await cur.fetchone()
+
+
+async def list_pending_guild_invites(db,user_id):
+    if not valid_id(user_id):
+        raise GuildFeatureError("Invalid player account.")
+    cur=await db.execute(
+        """SELECT i.invite_id,i.guild_id,g.name AS guild_name,i.inviter_id,
+                  p.username AS inviter_name,p.level AS inviter_level
+           FROM guild_invites i
+           JOIN guilds g ON g.guild_id=i.guild_id
+           JOIN players p ON p.user_id=i.inviter_id
+           WHERE i.target_id=? AND i.status='pending'
+           ORDER BY i.invite_id DESC LIMIT 20""",
+        (user_id,),
+    )
+    return await cur.fetchall()
