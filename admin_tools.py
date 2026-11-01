@@ -108,6 +108,11 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
     }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
+        if key=="security_events":
+            cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='security_events'")
+            if not await cur.fetchone():
+                result["data"][key]=[]
+                continue
         cur=await db.execute(query,params)
         rows=await cur.fetchall()
         result["data"][key]=[dict(row) for row in rows]
