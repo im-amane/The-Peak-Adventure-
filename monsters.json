@@ -965,7 +965,7 @@
     "advantage": "Icebound Stag gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Icebound Stag is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The snow begins falling upward, drawing every footprint toward the highest peak.",
+    "story": "[6/10 · Frostfang Peaks] ICEBOUND STAG guides the refugees from the Ember Abyss through a blizzard that falls upward. Its antlers hold tiny blue flames, each one a memory rescued from the fifth seal before the furnace went dark.",
     "trait_effect": "regenerate"
   },
   {
@@ -984,7 +984,7 @@
     "advantage": "Snow Wraith gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Snow Wraith is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] A frostling keeps a tiny frozen flower alive inside its chest.",
+    "story": "[6/10 · Frostfang Peaks] SNOW WRAITH carries a frozen flower inside its chest, the last bloom from the kingdom buried beneath these peaks. It offers the flower to you when it recognizes the warmth left by the fifth seal, then warns that the sixth seal is freezing from the inside.",
     "trait_effect": "fury"
   },
   {
@@ -1003,7 +1003,7 @@
     "advantage": "Glacier Troll gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Glacier Troll is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The icebound stag leads lost travelers to shelter, even after the blizzard blinds it.",
+    "story": "[6/10 · Frostfang Peaks] GLACIER TROLL blocks a narrow pass with a wall of ice, not to trap travelers but to shield them from the white storm beyond. Scratched into the wall are the names of the guardians who helped forge the first five seals.",
     "trait_effect": "swift"
   },
   {
@@ -1022,7 +1022,7 @@
     "advantage": "Rimefang gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Rimefang is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] A snow wraith preserves the last winter song of a kingdom erased by the thaw.",
+    "story": "[6/10 · Frostfang Peaks] RIMEFANG sings the winter song of a kingdom erased by the thaw. The melody reveals that the sixth seal was made to preserve a memory, not a monster: the moment the world's wounded guardian first chose mercy over destruction.",
     "trait_effect": "armored"
   },
   {
@@ -1041,7 +1041,7 @@
     "advantage": "Whiteout Harpy gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Whiteout Harpy is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The glacier troll carries a cracked mirror that shows the world before the corruption.",
+    "story": "[6/10 · Frostfang Peaks] WHITEOUT HARPY guards a nest whose eggs will hatch only when the sky is healed. It shows you a vision of the first blue spark crossing the heavens, pursued by a shadow that looks like your own silhouette.",
     "trait_effect": "drain"
   },
   {
@@ -1060,7 +1060,7 @@
     "advantage": "Frost Revenant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Frost Revenant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The whiteout harpy guards a nest of eggs that will hatch only when the sky is healed.",
+    "story": "[6/10 · Frostfang Peaks] FROST REVENANT remembers the face of the smith who sealed the mountain gates. The smith was the child from the Hollow Kingdom, grown old and afraid that opening the sixth seal would awaken the grief beneath the ice.",
     "trait_effect": "poison"
   },
   {
@@ -1079,7 +1079,7 @@
     "advantage": "Permafrost Giant gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Permafrost Giant is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The frost revenant remembers the face of the one who sealed the mountain gates.",
+    "story": "[6/10 · Frostfang Peaks] PERMAFROST GIANT holds the mountain gate shut with chains frozen into its own body. It asks you to free it only after you have learned why the first five guardians chose to protect the same hidden heart.",
     "trait_effect": "shield"
   },
   {
@@ -1098,7 +1098,7 @@
     "advantage": "Winter'S Maw gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Winter'S Maw is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The permafrost giant has been holding back an avalanche with its own frozen body.",
+    "story": "[6/10 · Frostfang Peaks] WINTER'S MAW carries an avalanche on its back, keeping the snow from burying the last village. Beneath its frozen armor you hear the sixth seal beating in time with your own heart, and understand that the seal is reacting to you.",
     "trait_effect": "reflect"
   },
   {
@@ -1117,7 +1117,7 @@
     "advantage": "Astral Wyrm gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Astral Wyrm is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] Winter's Maw asks you to end its endless watch; it has guarded the sixth seal for too long.",
+    "story": "[6/10 · Frostfang Peaks] ASTRAL WYRM guards the stairway to the frozen observatory, where every star reflects a memory from the worlds you have crossed. It reveals that the sixth seal can open only when its guardian is remembered by name, not defeated in anger.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1136,7 +1136,7 @@
     "advantage": "Celestial Dragon God gains an edge in Frostfang Peaks terrain and against unprepared foes.",
     "disadvantage": "Celestial Dragon God is vulnerable to disciplined counters and Water-aligned attacks.",
     "weakness": "Water",
-    "story": "[6/10 · Frostfang Peaks] The sixth seal opens. Under the ice, a heartbeat answers yours in perfect rhythm.",
+    "story": "[6/10 · Frostfang Peaks] Celestial Dragon God descends above the frozen observatory, carrying the sixth seal as a crown of living ice. When you defeat it, the crown melts into six streams of light and restores the memories of the mountain guardians. A voice beneath the ice speaks the name of the world's wounded protector, then warns that the seventh seal is hidden where the dead stars fall.",
     "trait_effect": "berserk"
   },
   {
