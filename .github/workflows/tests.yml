@@ -16,4 +16,5 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: python -m compileall -q .
+      - run: python -c "import main"
       - run: python -m unittest discover -s tests -v
