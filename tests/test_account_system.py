@@ -85,6 +85,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(AccountError): await get_settings(self.db,True)
  async def test_delete_account_removes_security_events(self):
   await self.db.execute("INSERT INTO security_events VALUES(1,1,'invalid_battle_action',2,'bad action',CURRENT_TIMESTAMP)")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM security_events WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["n"],0)
@@ -92,6 +93,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("""CREATE TRIGGER block_player_delete BEFORE DELETE ON players
    WHEN OLD.user_id=1 BEGIN SELECT RAISE(ABORT,'blocked'); END""")
   with self.assertRaises(Exception):
+   await self.db.commit()  # Commit fixture writes before the deletion transaction.
    await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
   self.assertEqual((await cur.fetchone())["leader_id"],1)
@@ -100,12 +102,14 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
   self.assertIsNotNone(await cur.fetchone())
  async def test_delete_account_transfers_guild_leadership(self):
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
   self.assertEqual((await cur.fetchone())["leader_id"],2)
   cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["role"],"leader")
  async def test_delete_account_removes_social_and_economy_data(self):
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM players")
   self.assertEqual((await cur.fetchone())["n"],1)
@@ -117,20 +121,24 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
  async def test_delete_party_leader_transfers_leadership(self):
   await self.db.execute("INSERT INTO parties VALUES(7,1)")
   await self.db.execute("INSERT INTO party_members VALUES(1,7,CURRENT_TIMESTAMP),(2,7,CURRENT_TIMESTAMP)")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM parties WHERE party_id=7")
   self.assertEqual((await cur.fetchone())["leader_id"],2)
  async def test_delete_missing_account_rejected(self):
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   with self.assertRaises(AccountError): await delete_player_account(self.db,999)
  async def test_delete_account_transfers_group_owner(self):
   await self.db.execute("INSERT INTO group_profiles VALUES(-100,1)")
   await self.db.execute("INSERT INTO group_admins VALUES(-100,1,'owner'),(-100,2,'admin')")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT owner_id FROM group_profiles WHERE chat_id=-100")
   self.assertEqual((await cur.fetchone())["owner_id"],2)
  async def test_delete_account_removes_orphaned_group(self):
   await self.db.execute("INSERT INTO group_profiles VALUES(-101,1)")
   await self.db.execute("INSERT INTO group_admins VALUES(-101,1,'owner')")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT 1 FROM group_profiles WHERE chat_id=-101")
   self.assertIsNone(await cur.fetchone())
@@ -141,6 +149,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("CREATE TABLE auction_stash(stash_id INTEGER PRIMARY KEY,user_id INTEGER)")
   await self.db.execute("UPDATE players SET coins=100 WHERE user_id=2")
   await self.db.execute("INSERT INTO auction_listings VALUES(1,1,75,2,'active')")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT coins FROM players WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["coins"],175)
@@ -151,6 +160,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("CREATE TABLE auction_listings(listing_id INTEGER PRIMARY KEY,seller_id INTEGER,current_bid INTEGER,highest_bidder INTEGER,status TEXT)")
   await self.db.execute("CREATE TABLE auction_stash(stash_id INTEGER PRIMARY KEY,user_id INTEGER)")
   await self.db.execute("INSERT INTO auction_listings VALUES(1,2,75,1,'active')")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT current_bid,highest_bidder,status FROM auction_listings WHERE listing_id=1")
   row=await cur.fetchone()
@@ -164,6 +174,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO player_daily_missions VALUES(1,'daily_hunter')")
   await self.db.execute("INSERT INTO player_monster_mastery VALUES(1,5)")
   await self.db.execute("INSERT INTO roaming_event_participants VALUES(10,1)")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   for table in ("player_daily_missions","player_monster_mastery","roaming_event_participants"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
@@ -171,6 +182,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
  async def test_delete_account_removes_guild_chat_history(self):
   await self.db.execute("CREATE TABLE guild_chat_messages(message_id INTEGER PRIMARY KEY,guild_id INTEGER,user_id INTEGER,message TEXT)")
   await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
+  await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM guild_chat_messages WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["n"],0)
