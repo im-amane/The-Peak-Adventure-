@@ -60,6 +60,49 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
         self.assertEqual((await cur.fetchone())["status"], "open")
 
+    async def test_trade_can_only_be_cancelled_by_a_participant(self):
+        initiator_id = 987654914
+        partner_id = 987654915
+        outsider_id = 987654916
+        for user_id, username in (
+            (initiator_id, "TradeInitiator"),
+            (partner_id, "TradePartner"),
+            (outsider_id, "TradeOutsider"),
+        ):
+            await main.get_player(user_id, username)
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(?,?,?,'pending')",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": outsider_id, "first_name": "TradeOutsider"}):
+            denied = await main.api_social(FakeRequest({"action": "trade_cancel", "trade_id": trade_id}))
+        self.assertEqual(denied.status, 409)
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
+            cancelled = await main.api_social(FakeRequest({"action": "trade_cancel", "trade_id": trade_id}))
+        self.assertEqual(cancelled.status, 200)
+        self.assertEqual(json.loads(cancelled.text)["result"]["status"], "cancelled")
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "cancelled")
+
+    async def test_trade_cannot_be_cancelled_twice(self):
+        initiator_id = 987654917
+        partner_id = 987654918
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(?,?,?,'cancelled')",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
+            response = await main.api_social(FakeRequest({"action": "trade_cancel", "trade_id": trade_id}))
+        self.assertEqual(response.status, 409)
+
     async def test_trade_response_rejects_invalid_payload(self):
         partner_id = 987654913
         await main.get_player(partner_id, "TradePartner")
