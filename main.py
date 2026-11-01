@@ -3378,6 +3378,10 @@ async def miniapp_state(user: dict):
             "my_potions":row["initiator_potions"] if row["initiator_id"] == user_id else row["partner_potions"],
             "their_coins":row["partner_coins"] if row["initiator_id"] == user_id else row["initiator_coins"],
             "their_potions":row["partner_potions"] if row["initiator_id"] == user_id else row["initiator_potions"],
+            "my_weapon":row["initiator_weapon"] if row["initiator_id"] == user_id else row["partner_weapon"],
+            "my_armor":row["initiator_armor"] if row["initiator_id"] == user_id else row["partner_armor"],
+            "their_weapon":row["partner_weapon"] if row["initiator_id"] == user_id else row["initiator_weapon"],
+            "their_armor":row["partner_armor"] if row["initiator_id"] == user_id else row["initiator_armor"],
             "my_confirmed":bool(row["initiator_confirmed"] if row["initiator_id"] == user_id else row["partner_confirmed"]),
             "their_confirmed":bool(row["partner_confirmed"] if row["initiator_id"] == user_id else row["initiator_confirmed"]),
         }
