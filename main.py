@@ -46,6 +46,7 @@ from roaming_event_system import RoamingEventError, attack_roaming_event, claim_
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
+from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -167,7 +168,7 @@ async def init_db():
     CREATE TABLE IF NOT EXISTS battles (
       user_id INTEGER PRIMARY KEY, monster_level INTEGER NOT NULL,
       monster_hp INTEGER NOT NULL, message_id INTEGER,
-      turn_count INTEGER NOT NULL DEFAULT 0, is_elite INTEGER NOT NULL DEFAULT 0
+      turn_count INTEGER NOT NULL DEFAULT 0, is_elite INTEGER NOT NULL DEFAULT 0, is_evolved INTEGER NOT NULL DEFAULT 0
     );
     CREATE TABLE IF NOT EXISTS daily_claims (
       user_id INTEGER PRIMARY KEY, claimed_at INTEGER NOT NULL
@@ -223,6 +224,7 @@ async def init_db():
     migrations = [
         "ALTER TABLE battles ADD COLUMN turn_count INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE battles ADD COLUMN is_elite INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE battles ADD COLUMN is_evolved INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE daily_claims ADD COLUMN claimed_at INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE players ADD COLUMN hero_class TEXT NOT NULL DEFAULT 'Knight'",
         "ALTER TABLE players ADD COLUMN class_selected INTEGER NOT NULL DEFAULT 0",
@@ -265,6 +267,7 @@ async def init_db():
     await init_weekly_tables(db)
     await init_daily_mission_tables(db)
     await init_roaming_event_tables(db)
+    await init_evolution_tables(db)
     await init_moderation_tables(db)
     await init_mana_tables(db)
 
@@ -362,11 +365,13 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
     if not battle:
         return
     m = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
+    if battle["is_evolved"]:
+        m = scale_evolved_monster(m)
     if battle["is_elite"]:
         m = scale_elite_monster(m)
     text = (f"{intro}\n\n" if intro else "") + (
         f"⚔️ <b>ENCOUNTER: {m['name']}</b>\n"
-        f"🏷️ Monster level: {m['level']} {'👑 BOSS' if m['boss'] else ('💀 ELITE' if battle['is_elite'] else '')}\n"
+        f"🏷️ Monster level: {m['level']} {'👑 BOSS' if m['boss'] else ('💀 ELITE' if battle['is_elite'] else ('✨ EVOLVED' if battle['is_evolved'] else ''))}\n"
         f"❤️ Enemy HP: <b>{max(0, battle['monster_hp'])}/{m['hp']}</b>\n"
         f"🧙 Your HP: <b>{p['hp']}/{p['max_hp']}</b>\n\n"
         f"<i>{m['story']}</i>\n"
@@ -411,11 +416,15 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         boss_defeated = await cur.fetchone() is not None
     monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
     m = MONSTER_BY_LEVEL[monster_level]
+    mastery = await get_evolution_state(db, user_id, monster_level)
+    evolved = is_evolved_spawn(mastery["evolved"] and not m["boss"], random.randint(1, 100))
     elite = is_elite_spawn(m["boss"], random.randint(1, 100))
-    battle_monster = scale_elite_monster(m) if elite else m
+    battle_monster = scale_evolved_monster(m) if evolved else m
+    if elite:
+        battle_monster = scale_elite_monster(battle_monster)
     await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
-    await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite) VALUES (?, ?, ?, ?)",
-                     (user_id, monster_level, battle_monster["hp"], int(elite)))
+    await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                     (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
     await db.execute(
         "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
         (user_id, monster_level),
@@ -604,6 +613,8 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     if not b:
         return None
     m = dict(MONSTER_BY_LEVEL[b["monster_level"]])
+    if b["is_evolved"]:
+        m = scale_evolved_monster(m)
     if b["is_elite"]:
         m = scale_elite_monster(m)
     await db.execute("DELETE FROM battles WHERE user_id=?", (user_id,))
@@ -617,9 +628,9 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     p = await get_player(user_id)
     reward_xp = 35 + m["level"] * 18 + (m["level"] * 30 if m["boss"] else 0)
     reward_coins = 15 + m["level"] * 7 + (m["level"] * 25 if m["boss"] else 0)
-    if b["is_elite"]:
-        reward_xp = int(reward_xp * 1.5)
-        reward_coins = int(reward_coins * 1.5)
+    if b["is_elite"] or b["is_evolved"]:
+        reward_xp = int(reward_xp * (1.5 if b["is_elite"] else 1.0) * (1.5 if b["is_evolved"] else 1.0))
+        reward_coins = int(reward_coins * (1.5 if b["is_elite"] else 1.0) * (1.5 if b["is_evolved"] else 1.0))
     new_xp, new_level = p["xp"] + reward_xp, p["level"]
     while new_level < 100 and new_xp >= xp_needed(new_level):
         new_xp -= xp_needed(new_level)
@@ -648,6 +659,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
                 "UPDATE guilds SET guild_level=?, guild_xp=? WHERE guild_id=?",
                 (guild_level, guild_xp, membership["guild_id"]),
             )
+    evolution = await record_monster_defeat(db, user_id, b["monster_level"])
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
     await record_weekly_progress(db, user_id, "wins")
@@ -659,7 +671,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     await refresh_quest_progress(user_id)
     level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
     boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
-    return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}"
+    return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}"
 
 
 @dp.message(F.web_app_data)
@@ -3087,10 +3099,13 @@ async def miniapp_state(user: dict):
     battle = None
     if battle_row:
         active_monster = dict(MONSTER_BY_LEVEL[battle_row["monster_level"]])
+        if battle_row["is_evolved"]:
+            active_monster = scale_evolved_monster(active_monster)
         if battle_row["is_elite"]:
             active_monster = scale_elite_monster(active_monster)
         battle = {
             "elite": bool(battle_row["is_elite"]),
+            "evolved": bool(battle_row["is_evolved"]),
             "level": active_monster["level"],
             "name": active_monster["name"],
             "hp": battle_row["monster_hp"],
@@ -3220,8 +3235,12 @@ async def api_explore(request: web.Request):
                 return web.json_response({"error": "That monster is not available at your current level."}, status=409)
             monster_level = requested_monster_level if requested_monster_level is not None else random.choice(available_monster_levels)
             monster = MONSTER_BY_LEVEL[monster_level]
+            mastery = await get_evolution_state(db, user_id, monster_level)
+            evolved = is_evolved_spawn(mastery["evolved"] and not monster["boss"], random.randint(1, 100))
             elite = is_elite_spawn(monster["boss"], random.randint(1, 100))
-            battle_monster = scale_elite_monster(monster) if elite else monster
+            battle_monster = scale_evolved_monster(monster) if evolved else monster
+            if elite:
+                battle_monster = scale_elite_monster(battle_monster)
             # The Mini App must pay the same exploration cost as Telegram /explore.
             # Existing battles are checked above, so refreshing the active battle is free.
             try:
@@ -3234,8 +3253,8 @@ async def api_explore(request: web.Request):
                 )
             await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
             await db.execute(
-                "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite) VALUES (?, ?, ?, ?)",
-                (user_id, monster_level, battle_monster["hp"], int(elite)),
+                "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
             )
             await db.execute(
                 "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
@@ -3370,6 +3389,8 @@ async def api_action(request: web.Request):
             return web.json_response({"error": "There is no active battle."}, status=409)
         p = await get_player(user_id, user.get("username"))
         monster = dict(MONSTER_BY_LEVEL[battle["monster_level"]])
+        if battle["is_evolved"]:
+            monster = scale_evolved_monster(monster)
         if battle["is_elite"]:
             monster = scale_elite_monster(monster)
         class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
