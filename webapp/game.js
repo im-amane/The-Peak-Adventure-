@@ -548,9 +548,24 @@
     else if (appearance.hair === "long") { g.fillEllipse(0,-23,22,12); g.fillRoundedRect(-11,-20,5,17,3); g.fillRoundedRect(6,-20,5,17,3); }
     else if (appearance.hair === "braided") { g.fillEllipse(0,-23,22,12); g.fillCircle(-12,-15,4); g.fillCircle(12,-15,4); }
     else g.fillEllipse(0,-23,22,12);
-    g.fillStyle(0x273a52,1); g.fillRoundedRect(-12,0,24,18,5);
-    g.lineStyle(3,0xc9d4dc,1); g.beginPath(); g.moveTo(13,-3); g.lineTo(26,-25); g.strokePath();
-    g.lineStyle(4,0x9b7044,1); g.beginPath(); g.moveTo(10,1); g.lineTo(18,-10); g.strokePath();
+    const armor={traveler:0x273a52,knight:0x71849c,mage:0x4c3d70,ranger:0x31543f}[appearance.outfit]||0x273a52;
+    g.fillStyle(armor,1); g.fillRoundedRect(-12,0,24,18,5);
+    g.lineStyle(3,0xc9d4dc,1);
+    if(heroClass==="Mage"){
+      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(17,8);g.lineTo(21,-29);g.strokePath();
+      g.fillStyle(0x8edbff,1);g.fillCircle(21,-32,5);g.lineStyle(2,0xdaf6ff,0.9);g.strokeCircle(21,-32,7);
+    }else if(heroClass==="Archer"){
+      g.lineStyle(3,0x9b7044,1);g.beginPath();g.arc(20,-15,13,-Math.PI/2,Math.PI/2,false);g.strokePath();
+      g.lineStyle(1,0xe8dfc8,1);g.beginPath();g.moveTo(20,-28);g.lineTo(20,-2);g.strokePath();
+      g.lineStyle(2,0xc9d4dc,1);g.beginPath();g.moveTo(15,-15);g.lineTo(30,-15);g.strokePath();
+    }else if(heroClass==="Berserker"){
+      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(17,7);g.lineTo(23,-21);g.strokePath();
+      g.fillStyle(0xb7c2cc,1);g.fillTriangle(20,-22,34,-29,31,-11);g.lineStyle(2,0x52606c,1);g.strokeTriangle(20,-22,34,-29,31,-11);
+    }else{
+      g.lineStyle(3,0xc9d4dc,1);g.beginPath();g.moveTo(13,-3);g.lineTo(26,-25);g.strokePath();
+      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(10,1);g.lineTo(18,-10);g.strokePath();
+      g.fillStyle(0xdce6ef,1);g.fillTriangle(26,-25,30,-34,23,-28);
+    }
     g.fillStyle(0x171b25,1); g.fillCircle(-4,-16,1.5); g.fillCircle(4,-16,1.5);
     c.add(g); c.setDepth(10); return c;
   }
@@ -719,6 +734,18 @@
       if(this.cursors.up.isDown||this.keys.W.isDown||pressedDirections.has("up"))dy=-1;
       if(this.cursors.down.isDown||this.keys.S.isDown||pressedDirections.has("down"))dy=1;
       if(dx&&dy){dx*=0.707;dy*=0.707;}
+      const moving=dx!==0||dy!==0;
+      if(moving){
+        if(!this.heroWalkTween){
+          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+        }
+        this.hero.setRotation(dx*0.045);
+      }else if(this.heroWalkTween){
+        this.heroWalkTween.stop();
+        this.heroWalkTween=null;
+        this.hero.setScale(1);
+        this.hero.setRotation(0);
+      }
       const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.worldWidth-24);
       if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
       const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
