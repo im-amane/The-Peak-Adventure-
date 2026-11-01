@@ -35,8 +35,10 @@
   const worldNames = ["Whispering Meadow","Ashen Desert","Stormglass Highlands","Hollow Kingdom","Ember Abyss","Frostfang Peaks","Primordial Rift","Celestial Ruins","Eternal Hour","Origin Realm"];
   let gameState = null;
   let sceneRef = null;
-  let touchDirection = {x:0,y:0};
+  const pressedDirections = new Set();
   let nearMonster = false;
+  let requestInFlight = false;
+  let phaserGame = null;
 
   function applyState(data, message) {
     const previousRegion = gameState ? gameState.region : null;
@@ -52,6 +54,9 @@
     ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
     const battle = data.battle;
     ui.battlePanel.hidden = !battle;
+    document.querySelectorAll("[data-action]").forEach(button => {
+      button.disabled = !battle || requestInFlight;
+    });
     if (battle) {
       ui.battleName.textContent = battle.name + " · Lv." + battle.level;
       ui.battleHp.textContent = "❤️ " + battle.hp + " / " + battle.max_hp;
@@ -75,12 +80,18 @@
       ui.status.textContent = "Open this game from the Telegram bot's private chat.";
       return null;
     }
-    const response = await fetch("/api/state", {headers: {"X-Telegram-Init-Data": initData}});
+    const response = await fetch("/api/state", {
+      headers: {"X-Telegram-Init-Data": initData},
+      cache: "no-store"
+    });
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      ui.status.textContent = "Telegram session could not be verified. Reopen the Mini App from the bot.";
+      ui.status.textContent = data.error || "Telegram session could not be verified. Reopen the Mini App from the bot.";
       return null;
     }
-    const data = await response.json();
+    if (!data || typeof data !== "object" || !data.monster || !Number.isFinite(data.level)) {
+      throw new Error("The game server returned an invalid player state.");
+    }
     applyState(data);
     return data;
   }
@@ -89,35 +100,48 @@
     const response = await fetch(path, {
       method: "POST",
       headers: {"Content-Type": "application/json", "X-Telegram-Init-Data": initData},
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(body || {}),
+      cache: "no-store"
     });
-    const data = await response.json();
+    const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || "The game request failed.");
+    if (!data || typeof data !== "object" || !data.state) {
+      throw new Error("The game server returned an invalid response.");
+    }
     return data;
   }
 
   async function startEncounter() {
     if (!gameState.class_selected) { ui.status.textContent = "Choose your class in the Telegram chat first."; return; }
     if (gameState.battle_active) { ui.status.textContent = "You already have an active battle."; return; }
+    if (requestInFlight) return;
+    requestInFlight = true;
     ui.encounter.disabled = true;
     try {
       const result = await postApi("/api/explore", {});
       applyState(result.state, result.message);
     } catch (error) {
       ui.status.textContent = error.message;
-      ui.encounter.disabled = false;
+      await loadState().catch(() => null);
+    } finally {
+      requestInFlight = false;
+      if (gameState) applyState(gameState);
     }
   }
 
   async function performBattleAction(action) {
+    if (requestInFlight || !gameState || !gameState.battle_active) return;
+    requestInFlight = true;
     document.querySelectorAll("[data-action]").forEach(button => button.disabled = true);
     try {
       const result = await postApi("/api/action", {action});
       applyState(result.state, result.message);
     } catch (error) {
       ui.battleMessage.textContent = error.message;
+      await loadState().catch(() => null);
     } finally {
-      document.querySelectorAll("[data-action]").forEach(button => button.disabled = false);
+      requestInFlight = false;
+      if (gameState) applyState(gameState);
     }
   }
 
@@ -191,6 +215,12 @@
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class);
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
       this.monster=makeMonster(this,w*0.77,h*0.68,gameState.monster.level,monsterColor);
+      this.heroIdle = this.tweens.add({
+        targets:this.hero, y:this.hero.y-3, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
+      });
+      this.monsterIdle = this.tweens.add({
+        targets:this.monster, y:this.monster.y-5, duration:850, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
+      });
       this.add.text(w*0.77,h*0.68-54,gameState.monster.name,{fontFamily:"Georgia",fontSize:"13px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
       this.add.text(w*0.5,h*0.12,worldNames[idx],{fontFamily:"Georgia",fontSize:"19px",color:"#fff4d6",stroke:"#17232a",strokeThickness:4}).setOrigin(0.5);
       this.cursors=this.input.keyboard.createCursorKeys();
@@ -206,10 +236,10 @@
       if(gameState && gameState.battle_active){ui.encounter.disabled=true;return;}
       const speed=0.18*delta;
       let dx=0,dy=0;
-      if(this.cursors.left.isDown||this.keys.A.isDown||touchDirection.x<0)dx=-1;
-      if(this.cursors.right.isDown||this.keys.D.isDown||touchDirection.x>0)dx=1;
-      if(this.cursors.up.isDown||this.keys.W.isDown||touchDirection.y<0)dy=-1;
-      if(this.cursors.down.isDown||this.keys.S.isDown||touchDirection.y>0)dy=1;
+      if(this.cursors.left.isDown||this.keys.A.isDown||pressedDirections.has("left"))dx=-1;
+      if(this.cursors.right.isDown||this.keys.D.isDown||pressedDirections.has("right"))dx=1;
+      if(this.cursors.up.isDown||this.keys.W.isDown||pressedDirections.has("up"))dy=-1;
+      if(this.cursors.down.isDown||this.keys.S.isDown||pressedDirections.has("down"))dy=1;
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       this.hero.x=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.scale.width-24);
       this.hero.y=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
@@ -224,19 +254,37 @@
   function bootGame(){
     if(!gameState)return;
     const config={type:Phaser.AUTO,parent:"game",width:900,height:500,backgroundColor:"#344b3e",scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[AdventureScene]};
-    new Phaser.Game(config);
+    if (phaserGame) phaserGame.destroy(true);
+    phaserGame = new Phaser.Game(config);
   }
   document.getElementById("encounter").addEventListener("click",()=>{if(sceneRef)sceneRef.challenge();});
   document.querySelectorAll("[data-action]").forEach(button=>button.addEventListener("click",()=>performBattleAction(button.dataset.action)));
   document.querySelectorAll("[data-dir]").forEach(button=>{
     const dir=button.dataset.dir;
     const vector={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]}[dir];
-    const start=event=>{event.preventDefault();touchDirection={x:vector[0],y:vector[1]};};
-    const stop=event=>{event.preventDefault();touchDirection={x:0,y:0};};
+    const start=event=>{
+      event.preventDefault();
+      pressedDirections.add(dir);
+      if (button.setPointerCapture && event.pointerId !== undefined) {
+        try { button.setPointerCapture(event.pointerId); } catch (_) {}
+      }
+    };
+    const stop=event=>{event.preventDefault();pressedDirections.delete(dir);};
     button.addEventListener("pointerdown",start);
     button.addEventListener("pointerup",stop);
-    button.addEventListener("pointerleave",stop);
     button.addEventListener("pointercancel",stop);
+    button.addEventListener("lostpointercapture",stop);
+    button.addEventListener("contextmenu",event=>event.preventDefault());
   });
-  loadState().then(bootGame).catch(()=>{ui.status.textContent="Could not load the game. Reopen it from Telegram.";});
+  loadState().then(data=>{
+    if (data && window.Phaser) bootGame();
+    else if (data && !window.Phaser) ui.status.textContent="The 2D engine could not load. Check your connection and reopen the Mini App.";
+  }).catch(error=>{
+    ui.status.textContent=error.message || "Could not load the game. Reopen it from Telegram.";
+  });
+  document.addEventListener("visibilitychange",()=>{
+    if (!document.hidden && initData && !requestInFlight) {
+      loadState().catch(()=>{});
+    }
+  });
 })();
