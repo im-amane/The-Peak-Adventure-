@@ -129,7 +129,7 @@ The-Peak-Adventure/
 - [x] Boss HP phase thresholds at 60% and 25%
 - [x] Boss phase damage scaling
 - [~] Monster discovery/bestiary basics
-- [ ] 100 individually authored and lore-consistent stories
+- [x] 100 individually authored and lore-consistent stories
 - [ ] Monster evolution and variants
 - [ ] Elite and roaming events
 
@@ -246,6 +246,16 @@ The-Peak-Adventure/
 - [x] Render/Docker deployment configuration
 - [ ] Production hosting and HTTPS launch
 - [ ] Persistent production database verification
+
+## Audited implementation progress
+
+- Total tracked implementation tasks: 169
+- Fully implemented tasks: 89
+- Partially implemented tasks: 8
+- Pending tasks: 72
+- Fully implemented coverage: 52% (89 / 169; partial tasks are not counted as complete)
+
+This is repository checklist coverage, not a claim that the game is production-ready or live-tested.
 
 ## Completion policy
 1. Implement the backend and data model.
