@@ -525,3 +525,15 @@ test("movement clamps long frame deltas after tab suspension", () => {
   assert.match(game, /const baseSpeed=0\.18\*frameDelta/);
   assert.doesNotMatch(game, /const baseSpeed=0\.18\*delta/);
 });
+
+
+test("hero HUD meters expose bounded accessible progress values", () => {
+  const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
+  const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  for (const id of ["hp-track", "stamina-track", "mana-track", "xp-track"]) {
+    assert.match(html, new RegExp('id="' + id + '"[^>]*role="progressbar"'));
+  }
+  assert.match(game, /function updateHudMeter\(track, fill, current, maximum\)/);
+  assert.match(game, /Math\.max\(0, Math\.min\(safeMaximum, current\)\)/);
+  assert.match(game, /track\.setAttribute\("aria-valuetext"/);
+});
