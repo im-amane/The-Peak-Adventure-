@@ -121,6 +121,17 @@ class GameRulesTests(unittest.TestCase):
         self.assertIn("Origin Realm", ninth_world[-1]["story"])
         self.assertTrue(ninth_world[-1]["boss"])
 
+    def test_tenth_world_stories_name_their_monster_and_complete_the_origin_arc(self):
+        tenth_world = self.monsters[90:100]
+        for monster in tenth_world:
+            self.assertIn(monster["name"].casefold(), monster["story"].casefold())
+            self.assertIn("Origin Realm", monster["story"])
+        self.assertIn("creator", tenth_world[0]["story"])
+        self.assertIn("ten worlds", tenth_world[7]["story"])
+        self.assertIn("THE ALPHA GOD", tenth_world[-1]["story"])
+        self.assertIn("final battle", tenth_world[-1]["story"])
+        self.assertTrue(tenth_world[-1]["boss"])
+
     def test_all_ten_combat_traits_are_used(self):
         expected = {"regenerate", "fury", "swift", "armored", "drain", "poison", "shield", "reflect", "lifesteal", "berserk"}
         self.assertEqual({monster["trait_effect"] for monster in self.monsters}, expected)
