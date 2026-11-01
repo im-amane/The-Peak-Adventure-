@@ -52,6 +52,7 @@ async def init_guild_features(db):
       target_guild INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending'
       CHECK(status IN ('pending','active','completed','declined')),
       winner_guild INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      challenger_score INTEGER NOT NULL DEFAULT 0,target_score INTEGER NOT NULL DEFAULT 0,
       CHECK(challenger_guild!=target_guild)
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_war_pair
@@ -209,6 +210,72 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
         await db.execute("UPDATE guilds SET guild_xp=guild_xp+100 WHERE guild_id=?",(guild_id,))
         await db.commit()
     return {"boss_name":raid["boss_name"],"hp":hp,"max_hp":raid["max_hp"],"damage":dealt,"status":status}
+
+
+async def declare_guild_war(db, guild_id, leader_id, target_guild_id):
+    if not all(valid_id(x) for x in (guild_id,leader_id,target_guild_id)) or guild_id==target_guild_id:
+        raise GuildFeatureError("Invalid guild war challenge.")
+    if await guild_role(db,guild_id,leader_id)!="leader":
+        raise GuildFeatureError("Only guild leaders can declare a war.")
+    cur=await db.execute("SELECT 1 FROM guilds WHERE guild_id=?",(target_guild_id,))
+    if not await cur.fetchone(): raise GuildFeatureError("Target guild not found.")
+    cur=await db.execute("""SELECT 1 FROM guild_wars WHERE status IN ('pending','active')
+      AND ((challenger_guild=? AND target_guild=?) OR (challenger_guild=? AND target_guild=?))""",
+      (guild_id,target_guild_id,target_guild_id,guild_id))
+    if await cur.fetchone(): raise GuildFeatureError("A war between these guilds is already pending or active.")
+    cur=await db.execute("INSERT INTO guild_wars(challenger_guild,target_guild) VALUES(?,?)",(guild_id,target_guild_id))
+    await db.commit()
+    return int(cur.lastrowid)
+
+
+async def respond_guild_war(db, war_id, leader_id, accept):
+    if not valid_id(war_id) or not valid_id(leader_id): raise GuildFeatureError("Invalid guild war response.")
+    cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=? AND status='pending'",(war_id,))
+    war=await cur.fetchone()
+    if not war: raise GuildFeatureError("This guild war challenge is no longer pending.")
+    if await guild_role(db,war["target_guild"],leader_id)!="leader":
+        raise GuildFeatureError("Only the challenged guild leader can respond.")
+    status="active" if accept else "declined"
+    await db.execute("UPDATE guild_wars SET status=? WHERE war_id=? AND status='pending'",(status,war_id))
+    await db.commit()
+    return status
+
+
+async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
+    if not all(valid_id(x) for x in (challenger_id,opponent_id,winner_id)) or winner_id not in {challenger_id,opponent_id}:
+        return None
+    cur=await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?",(challenger_id,))
+    first=await cur.fetchone()
+    cur=await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?",(opponent_id,))
+    second=await cur.fetchone()
+    if not first or not second or first["guild_id"]==second["guild_id"]: return None
+    cur=await db.execute("""SELECT * FROM guild_wars WHERE status='active' AND
+      ((challenger_guild=? AND target_guild=?) OR (challenger_guild=? AND target_guild=?))
+      ORDER BY war_id DESC LIMIT 1""",
+      (first["guild_id"],second["guild_id"],second["guild_id"],first["guild_id"]))
+    war=await cur.fetchone()
+    if not war: return None
+    winner_member=first if winner_id==challenger_id else second
+    winner_guild=winner_member["guild_id"]
+    if winner_guild==war["challenger_guild"]:
+        await db.execute("UPDATE guild_wars SET challenger_score=challenger_score+1 WHERE war_id=?",(war["war_id"],))
+    else:
+        await db.execute("UPDATE guild_wars SET target_score=target_score+1 WHERE war_id=?",(war["war_id"],))
+    cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
+    updated=await cur.fetchone()
+    completed=max(updated["challenger_score"],updated["target_score"])>=3
+    if completed:
+        winner=updated["challenger_guild"] if updated["challenger_score"]>updated["target_score"] else updated["target_guild"]
+        await db.execute("UPDATE guild_wars SET status='completed',winner_guild=? WHERE war_id=?",(winner,war["war_id"]))
+        await db.execute("UPDATE guilds SET guild_xp=guild_xp+150 WHERE guild_id=?",(winner,))
+    await db.commit()
+    cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
+    return await cur.fetchone()
+
+
+async def get_guild_war(db,war_id):
+    cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war_id,))
+    return await cur.fetchone()
 
 async def guild_raid_status(db,guild_id):
     cur=await db.execute("SELECT * FROM guild_raids WHERE guild_id=? ORDER BY raid_id DESC LIMIT 1",(guild_id,))
