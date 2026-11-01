@@ -67,6 +67,16 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(PremiumError):
             await consume_xp_boost(self.db, True)
 
+    async def test_shop_purchase_preserves_outer_transaction(self):
+        await self.db.commit()
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await buy_premium_item(self.db, 101, "potion_bundle")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await get_premium_balance(self.db, 101), 0)
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+
     async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
         await self.db.commit()
@@ -81,6 +91,17 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(PremiumError, "Player account not found"):
             await credit_premium_purchase(self.db, 202, "spark", package["stars"], "charge-unregistered")
         self.assertEqual(await get_premium_balance(self.db, 202), 0)
+
+    async def test_payment_credit_preserves_outer_transaction(self):
+        await self.db.commit()
+        await self.db.execute("UPDATE players SET potions=potions WHERE user_id=101")
+        package = get_premium_packages()["spark"]
+        await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-nested")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await get_premium_balance(self.db, 101), 0)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
+        self.assertEqual((await cur.fetchone())["total"], 0)
 
     async def test_charge_id_cannot_be_replayed_for_another_account(self):
         package = get_premium_packages()["spark"]
