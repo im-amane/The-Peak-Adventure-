@@ -118,7 +118,7 @@
       this.physics=null;
     }
     challenge(){
-      if(!gameState.class_selected){ui.status.textContent="Choose your class in the Telegram chat first.";return;}
+      if(!gameState.class_selected){ui.status.textContent="Choose your class in the Telegram chat first.";return;} if(gameState.battle_active){ui.status.textContent="You already have an active battle in the chat.";return;}
       if(tg){tg.sendData(JSON.stringify({action:"explore"}));ui.status.textContent="Returning to the chat to start your battle...";}
       else{ui.status.textContent="Telegram Mini App session required to start a battle.";}
     }
@@ -135,7 +135,7 @@
       this.hero.y=Phaser.Math.Clamp(this.hero.y+dy*speed,this.scale.height*0.46,this.scale.height-24);
       const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,this.monster.x,this.monster.y);
       nearMonster=distance<88;
-      ui.encounter.disabled=!nearMonster||!gameState.class_selected;
+      ui.encounter.disabled=!nearMonster||!gameState.class_selected||gameState.battle_active;
       ui.encounter.textContent=nearMonster?"⚔️ Challenge Monster":"⚔️ Find the monster";
       if(nearMonster)ui.status.textContent="The creature has noticed you. Prepare for battle.";
     }
