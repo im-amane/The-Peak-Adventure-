@@ -34,6 +34,7 @@ from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, avail
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
+from auction_system import AuctionError, cancel_listing, create_listing, init_auction_tables, list_active_auctions, place_bid
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -218,6 +219,7 @@ async def init_db():
     await init_crafting_tables(db)
     await init_presence_tables(db)
     await init_story_tables(db)
+    await init_auction_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -1988,6 +1990,55 @@ async def show_classes(message: Message):
         "Berserker: HP +25, ATK +22, DEF -3\n\n"
         "Class choice is permanent in this version."
     )
+
+
+
+@dp.message(Command("auction"))
+async def auction_command(message: Message):
+    args = (message.text or "").split()
+    action = args[1].lower() if len(args) > 1 else "list"
+    user_id = message.from_user.id
+    try:
+        if action == "sell":
+            if len(args) not in {4, 5} or args[2].lower() not in {"weapon", "armor"} or not args[3].isdigit():
+                await message.answer("Usage: /auction sell weapon|armor starting_bid [hours]")
+                return
+            hours = int(args[4]) if len(args) == 5 and args[4].isdigit() else (24 if len(args) == 4 else 0)
+            listing_id = await create_listing(db, user_id, args[2].lower(), int(args[3]), hours)
+            await message.answer(f"🔨 Auction #{listing_id} created. Your item is held safely until it sells, expires or is cancelled.")
+            return
+        if action == "cancel":
+            if len(args) != 3 or not args[2].isdigit():
+                await message.answer("Usage: /auction cancel listing_id")
+                return
+            await cancel_listing(db, user_id, int(args[2]))
+            await message.answer("Auction cancelled. Your item has been returned.")
+            return
+        rows = await list_active_auctions(db)
+        if not rows:
+            await message.answer("🔨 No active auctions. List an equipped weapon or armor with /auction sell.")
+            return
+        lines = ["🔨 <b>Peak Auction House</b>"]
+        for row in rows:
+            bid = row["current_bid"] or row["start_price"]
+            lines.append(f"\n<b>#{row['listing_id']} · {escape(row['item_name'])}</b> ({row['slot']}, +{row['item_stat']})\nCurrent minimum: {bid} coins · Ends: {datetime.fromtimestamp(row['ends_at'], timezone.utc).strftime('%d %b %H:%M UTC')}")
+        lines.append("\nBid with /bid listing_id amount. Seller cannot bid; bids are escrowed and outbid players are refunded.")
+        await message.answer("\n".join(lines))
+    except (AuctionError, ValueError) as exc:
+        await message.answer(escape(str(exc)))
+
+
+@dp.message(Command("bid"))
+async def auction_bid_command(message: Message):
+    args = (message.text or "").split()
+    if len(args) != 3 or not args[1].isdigit() or not args[2].isdigit():
+        await message.answer("Usage: /bid listing_id amount")
+        return
+    try:
+        _, amount = await place_bid(db, message.from_user.id, int(args[1]), int(args[2]))
+        await message.answer(f"🔨 Bid of {amount} coins placed. Your coins are held in escrow until you are outbid or the auction settles.")
+    except AuctionError as exc:
+        await message.answer(escape(str(exc)))
 
 
 @dp.message(Command("shop"))
