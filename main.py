@@ -235,7 +235,14 @@ def xp_needed(level: int) -> int:
 
 
 async def player_text(p):
+    cur = await db.execute(
+        "SELECT g.name, g.guild_level FROM guild_members gm JOIN guilds g ON g.guild_id=gm.guild_id WHERE gm.user_id=?",
+        (p["user_id"],),
+    )
+    guild = await cur.fetchone()
+    guild_line = f"🏰 Guild: <b>{escape(guild['name'])}</b> · Lv.{guild['guild_level']}\n" if guild else "🏰 Guild: None\n"
     return (f"👤 <b>{escape(p['username'] or 'Adventurer')}</b>\n"
+            f"{guild_line}"
             f"🧙 Class: <b>{p['hero_class']}</b>\n"
             f"⚔️ Weapon: <b>{p['weapon']}</b> (+{p['weapon_attack']} ATK)\n"
             f"🛡️ Armor: <b>{p['armor']}</b> (+{p['armor_defense']} DEF)\n"
@@ -663,7 +670,7 @@ async def guild_command(message: Message):
         if membership["role"] == "leader":
             cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
             if (await cur.fetchone())["total"] > 1:
-                await message.answer("Guild leaders cannot leave while members remain. Use /guild disband or transfer leadership.")
+                await message.answer("Guild leaders cannot leave while members remain. Use /guild disband; leadership transfer is not available yet.")
                 return
             await db.execute("DELETE FROM guilds WHERE guild_id=?", (membership["guild_id"],))
         await db.execute("DELETE FROM guild_members WHERE user_id=?", (user_id,))
