@@ -95,3 +95,21 @@ test("does not forward browser cookies or arbitrary authorization headers", asyn
     globalThis.fetch = originalFetch;
   }
 });
+
+test("serves the Mini App shell through the Cloudflare static assets binding", async () => {
+  let requestedPath;
+  const response = await worker.fetch(
+    new Request("https://edge.example/"),
+    {
+      ASSETS: {
+        fetch: async (request) => {
+          requestedPath = new URL(request.url).pathname;
+          return new Response("<main>Peak Adventure</main>", { status: 200 });
+        },
+      },
+    },
+  );
+  assert.equal(response.status, 200);
+  assert.equal(requestedPath, "/");
+  assert.match(await response.text(), /Peak Adventure/);
+});
