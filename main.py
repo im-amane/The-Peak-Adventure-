@@ -70,7 +70,17 @@ logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(
 log = logging.getLogger("peak-adventure")
 dp = Dispatcher()
 db: aiosqlite.Connection | None = None
+db_lock = asyncio.Lock()
 player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+class DatabaseLockMiddleware:
+    async def __call__(self, handler, event, data):
+        async with db_lock:
+            return await handler(event, data)
+
+
+dp.update.outer_middleware(DatabaseLockMiddleware())
 
 
 async def init_db():
@@ -878,7 +888,8 @@ async def api_state(request: web.Request):
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=401)
-    return web.json_response(await miniapp_state(user))
+    async with db_lock:
+        return web.json_response(await miniapp_state(user))
 
 
 async def api_explore(request: web.Request):
@@ -887,7 +898,8 @@ async def api_explore(request: web.Request):
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=401)
     user_id = user["id"]
-    async with player_locks[user_id]:
+    async with db_lock:
+      async with player_locks[user_id]:
         p = await get_player(user_id, user.get("username") or user.get("first_name"))
         if not p["class_selected"]:
             return web.json_response({"error": "Choose a hero class in the Telegram chat first."}, status=409)
@@ -932,7 +944,8 @@ async def api_action(request: web.Request):
     if action not in {"attack", "skill", "potion", "flee"}:
         return web.json_response({"error": "Unknown battle action."}, status=400)
     user_id = user["id"]
-    async with player_locks[user_id]:
+    async with db_lock:
+      async with player_locks[user_id]:
         cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
         battle = await cur.fetchone()
         if not battle:
@@ -1065,6 +1078,8 @@ async def start_web_server():
 async def main():
     if not TOKEN:
         raise RuntimeError("BOT_TOKEN is missing. Add it to your .env file.")
+    if WEBAPP_URL and not WEBAPP_URL.startswith("https://"):
+        raise RuntimeError("WEBAPP_URL must use public HTTPS for Telegram Mini Apps.")
     await init_db()
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     runner = await start_web_server()
