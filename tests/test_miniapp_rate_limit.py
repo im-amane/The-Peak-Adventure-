@@ -56,14 +56,14 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_repeated_blocked_requests_only_write_one_security_event_per_window(self):
         main.db = object()
-        with patch("main.validate_init_data", return_value={"id": 987654321}), \\
-             patch("main.get_active_ban", new=AsyncMock(return_value=None)), \\
-             patch("main.record_security_event", new=AsyncMock()) as record_event:
-            async def handler(_request):
-                return web.Response(status=200)
+        with patch("main.validate_init_data", return_value={"id": 987654321}):
+            with patch("main.get_active_ban", new=AsyncMock(return_value=None)):
+                with patch("main.record_security_event", new=AsyncMock()) as record_event:
+                    async def handler(_request):
+                        return web.Response(status=200)
 
-            for _ in range(9):
-                await main.miniapp_rate_limit(FakeRequest("/api/premium-shop"), handler)
+                    for _ in range(9):
+                        await main.miniapp_rate_limit(FakeRequest("/api/premium-shop"), handler)
 
         self.assertEqual(record_event.await_count, 1)
 
