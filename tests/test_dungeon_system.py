@@ -25,6 +25,12 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
  async def test_cannot_enter_second_active_dungeon(self):
   await enter_dungeon(self.db,1,1,1)
   with self.assertRaises(DungeonError):await enter_dungeon(self.db,1,11,2)
+ async def test_completed_run_must_be_claimed_before_reentering(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  for _ in range(3):
+   state=await get_dungeon_state(self.db,1)
+   await advance_dungeon(self.db,1,state["target_level"])
+  with self.assertRaises(DungeonError): await enter_dungeon(self.db,1,1,1)
  async def test_room_only_advances_at_target_level(self):
   state=await enter_dungeon(self.db,1,1,1)
   self.assertIsNone(await advance_dungeon(self.db,1,state["target_level"]-1))
