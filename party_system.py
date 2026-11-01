@@ -187,26 +187,66 @@ async def start_party_battle(db, party_id, user_id, monster_level, monster_name,
         await db.rollback()
         raise
 
-async def attack_party_battle(db,party_id,user_id,damage):
-    if not isinstance(damage,int) or isinstance(damage,bool) or not 1<=damage<=10000:
+async def attack_party_battle(db, party_id, user_id, damage):
+    if not _valid_id(party_id) or not _valid_id(user_id):
+        raise PartyError("Invalid party or player account.")
+    if not isinstance(damage, int) or isinstance(damage, bool) or not 1 <= damage <= 10000:
         raise PartyError("Invalid co-op attack damage.")
-    cur=await db.execute("SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",(party_id,user_id))
-    if not await cur.fetchone(): raise PartyError("Only party members can attack this monster.")
-    cur=await db.execute("SELECT * FROM party_battles WHERE party_id=? AND status='active' ORDER BY battle_id DESC LIMIT 1",(party_id,))
-    battle=await cur.fetchone()
-    if not battle: raise PartyError("There is no active co-op battle.")
-    cur=await db.execute("SELECT 1 FROM party_battle_cooldowns WHERE battle_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)",(battle["battle_id"],user_id))
-    if await cur.fetchone(): raise PartyError("Co-op attack cooldown: wait 5 seconds.")
-    hp=max(0,battle["hp"]-damage); dealt=battle["hp"]-hp; status="won" if hp==0 else "active"
-    await db.execute("UPDATE party_battles SET hp=?,status=? WHERE battle_id=? AND status='active'",(hp,status,battle["battle_id"]))
-    await db.execute("INSERT INTO party_battle_cooldowns(battle_id,user_id,last_attack_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(battle_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP",(battle["battle_id"],user_id))
-    await db.execute("""INSERT INTO party_battle_contributions(battle_id,user_id,damage) VALUES(?,?,?)
-      ON CONFLICT(battle_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(battle["battle_id"],user_id,dealt))
-    await db.commit()
-    cur=await db.execute("SELECT user_id FROM party_members WHERE party_id=? ORDER BY joined_at",(party_id,))
-    members=[row["user_id"] for row in await cur.fetchall()]
-    return {"battle_id":battle["battle_id"],"monster_name":battle["monster_name"],"hp":hp,"max_hp":battle["max_hp"],"damage":dealt,"status":status,"members":members}
-
+    try:
+        await db.execute("BEGIN IMMEDIATE")
+        cur = await db.execute(
+            "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
+            (party_id, user_id),
+        )
+        if not await cur.fetchone():
+            raise PartyError("Only party members can attack this monster.")
+        cur = await db.execute(
+            "SELECT * FROM party_battles WHERE party_id=? AND status='active' ORDER BY battle_id DESC LIMIT 1",
+            (party_id,),
+        )
+        battle = await cur.fetchone()
+        if not battle:
+            raise PartyError("There is no active co-op battle.")
+        cur = await db.execute(
+            """SELECT 1 FROM party_battle_cooldowns
+               WHERE battle_id=? AND user_id=?
+               AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)""",
+            (battle["battle_id"], user_id),
+        )
+        if await cur.fetchone():
+            raise PartyError("Co-op attack cooldown: wait 5 seconds.")
+        hp = max(0, battle["hp"] - damage)
+        dealt = battle["hp"] - hp
+        status = "won" if hp == 0 else "active"
+        await db.execute(
+            "UPDATE party_battles SET hp=?,status=? WHERE battle_id=? AND status='active'",
+            (hp, status, battle["battle_id"]),
+        )
+        await db.execute(
+            """INSERT INTO party_battle_cooldowns(battle_id,user_id,last_attack_at)
+               VALUES(?,?,CURRENT_TIMESTAMP)
+               ON CONFLICT(battle_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP""",
+            (battle["battle_id"], user_id),
+        )
+        await db.execute(
+            """INSERT INTO party_battle_contributions(battle_id,user_id,damage) VALUES(?,?,?)
+               ON CONFLICT(battle_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",
+            (battle["battle_id"], user_id, dealt),
+        )
+        cur = await db.execute(
+            "SELECT user_id FROM party_members WHERE party_id=? ORDER BY joined_at",
+            (party_id,),
+        )
+        members = [row["user_id"] for row in await cur.fetchall()]
+        await db.commit()
+        return {
+            "battle_id": battle["battle_id"], "monster_name": battle["monster_name"],
+            "hp": hp, "max_hp": battle["max_hp"], "damage": dealt,
+            "status": status, "members": members,
+        }
+    except Exception:
+        await db.rollback()
+        raise
 
 async def get_party_battle(db,party_id):
     cur=await db.execute("SELECT * FROM party_battles WHERE party_id=? ORDER BY battle_id DESC LIMIT 1",(party_id,))
