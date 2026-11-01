@@ -56,11 +56,11 @@
         },
         {
           "name": "Inline callback battle controls",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Bot error handling and operational logging",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Admin command panel",
