@@ -8,6 +8,8 @@
     heroClass: document.getElementById("hero-class"),
     level: document.getElementById("level"),
     hp: document.getElementById("hp"),
+    stamina: document.getElementById("stamina"),
+    staminaFill: document.getElementById("stamina-fill"),
     xp: document.getElementById("xp-fill"),
     region: document.getElementById("region"),
     monster: document.getElementById("monster-label"),
@@ -81,6 +83,10 @@
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
     ui.level.textContent = "Lv. " + data.level;
     ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
+    if (data.stamina && ui.stamina) {
+      ui.stamina.textContent = data.stamina.stamina + " / " + data.stamina.max_stamina;
+      if (ui.staminaFill) ui.staminaFill.style.width = (data.stamina.stamina / data.stamina.max_stamina * 100) + "%";
+    }
     ui.coins.textContent = data.coins;
     const onlineCount = document.getElementById("online-count");
     if (onlineCount) onlineCount.textContent = "🌐 " + (data.online_count || 0) + " online";
