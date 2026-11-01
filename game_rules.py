@@ -106,8 +106,8 @@ def calculate_enemy_damage(
         damage = int(damage * 1.25)
     if special:
         damage = int(damage * 1.5)
-    if boss_phase not in {1, 2, 3}:
-        raise ValueError("boss_phase must be 1, 2, or 3")
+    if type(boss_phase) is not int or boss_phase not in {1, 2, 3}:
+        raise ValueError("boss_phase must be an integer: 1, 2, or 3")
     damage = int(damage * {1: 1.0, 2: 1.2, 3: 1.5}[boss_phase])
     return damage
 
@@ -176,7 +176,7 @@ def choose_monster_tactic(
         raise ValueError("monster_max_hp must be a positive integer")
     if type(monster_hp) is not int or not 0 <= monster_hp <= monster_max_hp:
         raise ValueError("monster_hp must be between zero and monster_max_hp")
-    if boss_phase not in {1, 2, 3} or (boss_phase > 1 and not is_boss):
+    if type(boss_phase) is not int or boss_phase not in {1, 2, 3} or (boss_phase > 1 and not is_boss):
         raise ValueError("invalid boss phase")
 
     health_ratio = monster_hp / monster_max_hp
