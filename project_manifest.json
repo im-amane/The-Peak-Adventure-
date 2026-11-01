@@ -669,15 +669,15 @@
         },
         {
           "name": "Branching NPC dialogue",
-          "status": "pending"
+          "status": "complete"
         },
         {
           "name": "Cinematic story chapters",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "World and group quest chains",
-          "status": "pending"
+          "status": "partial"
         },
         {
           "name": "100-monster story editorial rewrite",
@@ -794,16 +794,16 @@
   ],
   "progress_summary": {
     "total_items": 171,
-    "complete_items": 127,
-    "partial_items": 19,
-    "pending_items": 25,
+    "complete_items": 128,
+    "partial_items": 21,
+    "pending_items": 22,
     "fully_implemented_percent": 74,
     "calculation": "complete_items / total_items; partial items excluded"
   },
   "progress": {
-    "complete": 127,
-    "partial": 19,
-    "pending": 25,
+    "complete": 128,
+    "partial": 21,
+    "pending": 22,
     "total": 171,
     "percentage": 74
   }
