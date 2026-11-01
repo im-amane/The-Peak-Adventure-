@@ -909,6 +909,7 @@
       this.keys=this.input.keyboard.addKeys("W,A,S,D,E");
       this.input.keyboard.addCapture(["UP","DOWN","LEFT","RIGHT","W","A","S","D"]);
       this.input.on("pointerdown",pointer=>{
+        if(gameState&&gameState.battle_active||requestInFlight)return;
         if(nearMonster){this.challenge();return;}
         if(nearNpc){this.talkToNpc();return;}
         const point=this.cameras.main.getWorldPoint(pointer.x,pointer.y);
