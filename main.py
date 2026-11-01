@@ -2854,9 +2854,10 @@ async def premium_buy_callback(callback: CallbackQuery):
         return
     async with db_lock:
         cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (callback.from_user.id,))
-        if not await cur.fetchone():
-            await callback.answer("Start the bot with /start before buying Peak Gems.", show_alert=True)
-            return
+        registered = await cur.fetchone() is not None
+    if not registered:
+        await callback.answer("Start the bot with /start before buying Peak Gems.", show_alert=True)
+        return
     try:
         payload = make_invoice_payload(package_id, callback.from_user.id)
         await callback.bot.send_invoice(
