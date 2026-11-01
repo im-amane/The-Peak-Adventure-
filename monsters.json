@@ -205,7 +205,7 @@
     "advantage": "Dust Scorpion gains an edge in Ashen Desert terrain and against unprepared foes.",
     "disadvantage": "Dust Scorpion is vulnerable to disciplined counters and Storm-aligned attacks.",
     "weakness": "Storm",
-    "story": "[2/10 · Ashen Desert] DUST SCORPION dragged a silver canteen across the dunes, leaving a trail toward the riverbed that vanished the night the first seal awakened. Its pincers were stained blue from trying to dig the water back out.",
+    "story": "[2/10 · Ashen Desert] DUST SCORPION dragged a silver canteen across the dunes, leaving a trail toward the buried river that vanished the night the first seal awakened. Its pincers were stained blue from trying to dig the water back out.",
     "trait_effect": "regenerate"
   },
   {
@@ -851,7 +851,7 @@
     "advantage": "Lava Warden gains an edge in Ember Abyss terrain and against unprepared foes.",
     "disadvantage": "Lava Warden is vulnerable to disciplined counters and Astral-aligned attacks.",
     "weakness": "Astral",
-    "story": "[5/10 · Ember Abyss] LAVA WARDEN has guarded the furnace gate for centuries, holding shut a sleeping fire that once protected the world from the cold beyond it. It warns that the seal is weakening because the guardian inside has begun to dream again.",
+    "story": "[5/10 · Ember Abyss] LAVA WARDEN has guarded the furnace gate for centuries, holding shut a sleeping fire that once protected the world from the cold beyond it. It warns that the fifth seal is weakening because the guardian inside has begun to dream again.",
     "trait_effect": "drain"
   },
   {
@@ -1193,7 +1193,7 @@
     "advantage": "Null Siren gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Null Siren is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] NULL SIREN sings beneath a meteor shower, catching falling memories in the notes of its song. One memory shows the world's protector asking the child from the Hollow Kingdom to hide the seventh seal beyond the reach of time.",
+    "story": "[7/10 · Starfall Expanse] NULL SIREN sings beneath a meteor shower, catching falling memories in the notes of its song. One memory reveals the sixth seal breaking, then shows the world's protector asking the child from the Hollow Kingdom to hide the seventh seal beyond the reach of time.",
     "trait_effect": "swift"
   },
   {
