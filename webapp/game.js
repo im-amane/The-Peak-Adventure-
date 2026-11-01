@@ -19,7 +19,11 @@
     battleHp: document.getElementById("battle-hp"),
     battleHpFill: document.getElementById("battle-hp-fill"),
     battleMessage: document.getElementById("battle-message"),
-    potionCount: document.getElementById("potion-count")
+    potionCount: document.getElementById("potion-count"),
+    appearanceStatus: document.getElementById("appearance-status"),
+    questList: document.getElementById("quest-list"),
+    socialOverview: document.getElementById("social-overview"),
+    dungeonStatus: document.getElementById("dungeon-status")
   };
   const worldPalettes = [
     {sky:0x8fae91,ground:0x5d8059,accent:0xd6c98b},
@@ -78,6 +82,27 @@
     ui.level.textContent = "Lv. " + data.level;
     ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
     ui.coins.textContent = data.coins;
+    const inventory = {
+      "inventory-coins": data.coins,
+      "inventory-potions": data.potions,
+      "inventory-weapon": data.weapon,
+      "inventory-attack": "+" + data.weapon_attack + " ATK",
+      "inventory-armor": data.armor,
+      "inventory-defense": "+" + data.armor_defense + " DEF"
+    };
+    Object.entries(inventory).forEach(([id,value]) => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = value;
+    });
+    if (data.appearance) {
+      ["race","skin","hair","outfit"].forEach(key => {
+        const field = document.getElementById("appearance-" + key);
+        if (field) field.value = data.appearance[key];
+      });
+    }
+    renderQuests(data.quests || []);
+    renderSocial(data.social || {});
+    renderDungeon(data.dungeon || null);
     ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
     ui.region.textContent = data.region;
     ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
