@@ -9,6 +9,7 @@ const ROUTES = new Map([
   ["/api/action", new Set(["POST"])],
   ["/api/appearance", new Set(["POST"])],
   ["/api/quest/claim", new Set(["POST"])],
+  ["/api/settings", new Set(["GET", "POST"])],
 ]);
 
 const MAX_BODY_BYTES = 32 * 1024;
