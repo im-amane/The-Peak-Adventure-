@@ -77,6 +77,7 @@ Run locally:
 
 ```bash
 python -m compileall -q .
+python -c "import main"
 python -m unittest discover -s tests -v
 ```
 
