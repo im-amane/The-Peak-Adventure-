@@ -131,3 +131,12 @@ button:disabled{cursor:not-allowed}
 .dungeon-action.secondary{border-color:var(--line);background:var(--panel)}
 .dungeon-action:disabled{opacity:.55;cursor:wait}
 @media(max-width:480px){.dungeon-choice{align-items:flex-start;flex-direction:column}.dungeon-action{width:100%}}
+
+
+.daily-mission-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 8px}
+.daily-mission-heading h3{margin:0;font-size:16px}
+.daily-mission-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.daily-mission-card{display:grid;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px;background:rgba(10,17,28,.45)}
+.daily-mission-card h4,.daily-mission-card p{margin:0}
+.daily-mission-card h4{font-size:14px}
+.daily-mission-card .dungeon-action{justify-self:start}
