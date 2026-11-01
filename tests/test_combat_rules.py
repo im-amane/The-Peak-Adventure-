@@ -46,7 +46,7 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                 )
                 await main.db.execute(
                     """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
-                       VALUES(?,1,10000,0,0,0)""",
+                       VALUES(?,1,100,0,0,0)""",
                     (user_id,),
                 )
                 await main.db.commit()
@@ -65,7 +65,7 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                 )
                 battle = await cursor.fetchone()
                 self.assertEqual(battle["turn_count"], 1)
-                self.assertLess(battle["monster_hp"], 10000)
+                self.assertLess(battle["monster_hp"], 100)
                 call.answer.assert_awaited_once()
                 call.message.edit_text.assert_awaited_once()
             finally:
