@@ -146,6 +146,17 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((row["current_bid"],row["highest_bidder"],row["status"]),(0,None,"active"))
 
 
+ async def test_delete_account_removes_optional_gameplay_progress(self):
+  await self.db.execute("CREATE TABLE player_daily_missions(user_id INTEGER,mission_id TEXT)")
+  await self.db.execute("CREATE TABLE player_monster_mastery(user_id INTEGER,monster_level INTEGER)")
+  await self.db.execute("CREATE TABLE roaming_event_participants(event_id INTEGER,user_id INTEGER)")
+  await self.db.execute("INSERT INTO player_daily_missions VALUES(1,'daily_hunter')")
+  await self.db.execute("INSERT INTO player_monster_mastery VALUES(1,5)")
+  await self.db.execute("INSERT INTO roaming_event_participants VALUES(10,1)")
+  await delete_player_account(self.db,1)
+  for table in ("player_daily_missions","player_monster_mastery","roaming_event_participants"):
+   cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
+   self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_account_removes_guild_chat_history(self):
   await self.db.execute("CREATE TABLE guild_chat_messages(message_id INTEGER PRIMARY KEY,guild_id INTEGER,user_id INTEGER,message TEXT)")
   await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
