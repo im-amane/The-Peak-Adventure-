@@ -1,7 +1,6 @@
+const STATIC_PATHS = new Set(["/", "/style.css", "/game.js"]);
+
 const ROUTES = new Map([
-  ["/", new Set(["GET"])],
-  ["/style.css", new Set(["GET"])],
-  ["/game.js", new Set(["GET"])],
   ["/healthz", new Set(["GET"])],
   ["/api/state", new Set(["GET"])],
   ["/api/explore", new Set(["POST"])],
@@ -36,6 +35,10 @@ function resolveOrigin(value) {
 export default {
   async fetch(request, env) {
     const incoming = new URL(request.url);
+    if (STATIC_PATHS.has(incoming.pathname) && request.method === "GET") {
+      if (!env.ASSETS) return json({ error: "Static assets are not configured" }, 503);
+      return env.ASSETS.fetch(request);
+    }
     const allowedMethods = ROUTES.get(incoming.pathname);
     if (!allowedMethods) return json({ error: "Not found" }, 404);
     if (!allowedMethods.has(request.method)) {
