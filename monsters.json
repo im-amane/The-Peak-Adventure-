@@ -1155,7 +1155,7 @@
     "advantage": "Rift Stalker gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Stalker is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The Primordial Rift does not lead to another place; it leads to the moment before places existed.",
+    "story": "[7/10 · Starfall Expanse] COMET JACKAL races across a plain where dead stars strike the earth. It carries a fragment of the sixth seal in its jaws, protecting the light from a darkness that follows every falling star.",
     "trait_effect": "regenerate"
   },
   {
@@ -1174,7 +1174,7 @@
     "advantage": "Abyssal Hound gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Hound is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] A voidling follows you without a shadow, repeating the words you have not yet spoken.",
+    "story": "[7/10 · Starfall Expanse] NEBULA STALKER hunts among the impact craters, but every footprint it leaves becomes a constellation. It shows you a star map marking the first six guardians and a seventh point that pulses like a wound.",
     "trait_effect": "fury"
   },
   {
@@ -1193,7 +1193,7 @@
     "advantage": "Null Siren gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Null Siren is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The rift stalker appears only in reflections, always standing closer than before.",
+    "story": "[7/10 · Starfall Expanse] ASTRAL MANTIS stands motionless beneath a meteor shower, catching falling memories between its blades. One memory shows the world's protector asking the child from the Hollow Kingdom to hide the seventh seal beyond the reach of time.",
     "trait_effect": "swift"
   },
   {
@@ -1212,7 +1212,7 @@
     "advantage": "Starved Horror gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Starved Horror is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The abyssal hound guards a path made from abandoned possibilities.",
+    "story": "[7/10 · Starfall Expanse] VOID KITE circles a shattered observatory and steals only the shadows of those who enter. Inside, you discover that the dead stars are not stones: they are fragments of the sky sacrificed to keep the seventh seal hidden.",
     "trait_effect": "armored"
   },
   {
@@ -1231,7 +1231,7 @@
     "advantage": "Eclipse Knight gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Eclipse Knight is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The null siren sings of a world where none of the monsters were ever born.",
+    "story": "[7/10 · Starfall Expanse] METEOR GOLEM rises from a crater containing a familiar blue spark. It remembers being built by the first guardians, and its stone heart opens to reveal a message: the seventh seal can be found only by following a star that refuses to fall.",
     "trait_effect": "drain"
   },
   {
@@ -1250,7 +1250,7 @@
     "advantage": "Void Devourer gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Void Devourer is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The starved horror wears the faces of creatures you saved, asking why you left them behind.",
+    "story": "[7/10 · Starfall Expanse] STAR EATER devours constellations to stop the sky from revealing the hidden seal. It attacks because the guardian beneath the world once commanded it to erase every path that might lead you there.",
     "trait_effect": "poison"
   },
   {
@@ -1269,7 +1269,7 @@
     "advantage": "Rift Colossus gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Colossus is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The eclipse knight challenges you to prove that strength can protect rather than consume.",
+    "story": "[7/10 · Starfall Expanse] ORBITAL WRAITH drifts through the ruins wearing the face of the child who carried the first spark. It tells you the guardian has begun to remember every life lost while the seals held, and that memory is turning its sorrow into a storm.",
     "trait_effect": "shield"
   },
   {
@@ -1288,7 +1288,7 @@
     "advantage": "Abyss Monarch gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyss Monarch is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The void devourer swallows the light of the seventh seal and discovers it cannot digest hope.",
+    "story": "[7/10 · Starfall Expanse] GRAVITY TITAN anchors the broken observatory to the ground, preventing the entire expanse from falling into the void. It gives you the coordinates of the seventh seal, but warns that opening it will make every world feel the guardian's grief.",
     "trait_effect": "reflect"
   },
   {
@@ -1307,7 +1307,7 @@
     "advantage": "Abyssal Deity gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Deity is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The abyss monarch reveals that the corruption is a wound, not a weapon.",
+    "story": "[7/10 · Starfall Expanse] ASTRAL DEVOURER guards the star that refuses to fall. When it is defeated, the star descends gently into your hands and reveals the seventh seal beneath its light, along with a memory of the guardian choosing to love a world that feared it.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1326,7 +1326,7 @@
     "advantage": "God Of Destruction gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "God Of Destruction is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Primordial Rift] The seventh seal opens. For the first time, the darkness sounds afraid.",
+    "story": "[7/10 · Starfall Expanse] Nova Emperor descends from the fallen star, the seventh seal burning across its chest. When you defeat it, the seal opens and the dead stars return to the sky. The guardian's grief reaches every world, but within it you hear a child's laughter and learn that the eighth seal lies beyond the Veil of Echoes.",
     "trait_effect": "berserk"
   },
   {
