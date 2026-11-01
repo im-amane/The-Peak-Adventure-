@@ -179,7 +179,7 @@ The-Peak-Adventure/
 - [x] Guild rankings
 - [x] Guild roles and permissions
 - [x] Guild invitations
-- [~] Guild announcements (stored and delivered by private message; in-guild chat channel pending)
+- [x] Guild member chat history and private-message delivery, plus officer announcements
 - [x] Guild missions and rewards
 - [x] Guild wars (leader challenges; best-of-five score from PvP duels)
 - [x] Guild boss raids
