@@ -1,6 +1,6 @@
 # The Peak Adventure 🎮
 
-A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. This project replaces the original music-bot starter code.
+A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is maintained in this dedicated repository, separate from the original music-bot repository.
 
 ## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
