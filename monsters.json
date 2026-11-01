@@ -1155,7 +1155,7 @@
     "advantage": "Rift Stalker gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Stalker is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] COMET JACKAL races across a plain where dead stars strike the earth. It carries a fragment of the sixth seal in its jaws, protecting the light from a darkness that follows every falling star.",
+    "story": "[7/10 · Starfall Expanse] RIFT STALKER slips between the impact craters, leaving footprints that become constellations. It shows you a star map marking the first six guardians and a seventh point pulsing like a wound.",
     "trait_effect": "regenerate"
   },
   {
@@ -1174,7 +1174,7 @@
     "advantage": "Abyssal Hound gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Hound is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] NEBULA STALKER hunts among the impact craters, but every footprint it leaves becomes a constellation. It shows you a star map marking the first six guardians and a seventh point that pulses like a wound.",
+    "story": "[7/10 · Starfall Expanse] ABYSSAL HOUND hunts the echoes around the shattered observatory, carrying a fragment of the sixth seal in its jaws. It refuses to surrender the shard until you promise to protect the lost memories sleeping inside it.",
     "trait_effect": "fury"
   },
   {
@@ -1193,7 +1193,7 @@
     "advantage": "Null Siren gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Null Siren is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] ASTRAL MANTIS stands motionless beneath a meteor shower, catching falling memories between its blades. One memory shows the world's protector asking the child from the Hollow Kingdom to hide the seventh seal beyond the reach of time.",
+    "story": "[7/10 · Starfall Expanse] NULL SIREN sings beneath a meteor shower, catching falling memories in the notes of its song. One memory shows the world's protector asking the child from the Hollow Kingdom to hide the seventh seal beyond the reach of time.",
     "trait_effect": "swift"
   },
   {
@@ -1212,7 +1212,7 @@
     "advantage": "Starved Horror gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Starved Horror is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] VOID KITE circles a shattered observatory and steals only the shadows of those who enter. Inside, you discover that the dead stars are not stones: they are fragments of the sky sacrificed to keep the seventh seal hidden.",
+    "story": "[7/10 · Starfall Expanse] STARVED HORROR circles the shattered observatory and steals only the shadows of those who enter. Inside, you discover that the dead stars are fragments of the sky sacrificed to keep the seventh seal hidden.",
     "trait_effect": "armored"
   },
   {
@@ -1231,7 +1231,7 @@
     "advantage": "Eclipse Knight gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Eclipse Knight is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] METEOR GOLEM rises from a crater containing a familiar blue spark. It remembers being built by the first guardians, and its stone heart opens to reveal a message: the seventh seal can be found only by following a star that refuses to fall.",
+    "story": "[7/10 · Starfall Expanse] ECLIPSE KNIGHT rises from a crater containing a familiar blue spark. It remembers being built by the first guardians, and its stone heart opens to reveal a message: the seventh seal can be found only by following a star that refuses to fall.",
     "trait_effect": "drain"
   },
   {
@@ -1250,7 +1250,7 @@
     "advantage": "Void Devourer gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Void Devourer is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] STAR EATER devours constellations to stop the sky from revealing the hidden seal. It attacks because the guardian beneath the world once commanded it to erase every path that might lead you there.",
+    "story": "[7/10 · Starfall Expanse] VOID DEVOURER consumes constellations to stop the sky from revealing the hidden seal. It attacks because the guardian beneath the world once commanded it to erase every path that might lead you there.",
     "trait_effect": "poison"
   },
   {
@@ -1269,7 +1269,7 @@
     "advantage": "Rift Colossus gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Rift Colossus is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] ORBITAL WRAITH drifts through the ruins wearing the face of the child who carried the first spark. It tells you the guardian has begun to remember every life lost while the seals held, and that memory is turning its sorrow into a storm.",
+    "story": "[7/10 · Starfall Expanse] RIFT COLOSSUS drifts through the ruins with the face of the child who carried the first spark reflected in its armor. It tells you the guardian has begun to remember every life lost while the seals held, and that memory is turning its sorrow into a storm.",
     "trait_effect": "shield"
   },
   {
@@ -1288,7 +1288,7 @@
     "advantage": "Abyss Monarch gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyss Monarch is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] GRAVITY TITAN anchors the broken observatory to the ground, preventing the entire expanse from falling into the void. It gives you the coordinates of the seventh seal, but warns that opening it will make every world feel the guardian's grief.",
+    "story": "[7/10 · Starfall Expanse] ABYSS MONARCH anchors the broken observatory to the ground, preventing the entire expanse from falling into the void. It gives you the coordinates of the seventh seal, but warns that opening it will make every world feel the guardian's grief.",
     "trait_effect": "reflect"
   },
   {
@@ -1307,7 +1307,7 @@
     "advantage": "Abyssal Deity gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "Abyssal Deity is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] ASTRAL DEVOURER guards the star that refuses to fall. When it is defeated, the star descends gently into your hands and reveals the seventh seal beneath its light, along with a memory of the guardian choosing to love a world that feared it.",
+    "story": "[7/10 · Starfall Expanse] ABYSSAL DEITY guards the star that refuses to fall. When it is defeated, the star descends gently into your hands and reveals the seventh seal beneath its light, along with a memory of the guardian choosing to love a world that feared it.",
     "trait_effect": "lifesteal"
   },
   {
@@ -1326,7 +1326,7 @@
     "advantage": "God Of Destruction gains an edge in Primordial Rift terrain and against unprepared foes.",
     "disadvantage": "God Of Destruction is vulnerable to disciplined counters and Fire-aligned attacks.",
     "weakness": "Fire",
-    "story": "[7/10 · Starfall Expanse] Nova Emperor descends from the fallen star, the seventh seal burning across its chest. When you defeat it, the seal opens and the dead stars return to the sky. The guardian's grief reaches every world, but within it you hear a child's laughter and learn that the eighth seal lies beyond the Veil of Echoes.",
+    "story": "[7/10 · Starfall Expanse] God of Destruction descends from the fallen star, the seventh seal burning across its chest. When you defeat it, the seal opens and the dead stars return to the sky. The guardian's grief reaches every world, but within it you hear a child's laughter and learn that the eighth seal lies beyond the Veil of Echoes.",
     "trait_effect": "berserk"
   },
   {
