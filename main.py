@@ -2784,14 +2784,45 @@ async def claimquest(message: Message):
 
 @dp.message(Command("premium"))
 async def premium_command(message: Message):
-    balance = await get_premium_balance(db, message.from_user.id)
     if message.chat.type != "private":
-        await message.answer("Open a private chat with the bot to view your premium wallet.")
+        await message.answer("Open a private chat with the bot to manage your premium wallet.")
+        return
+    args = (message.text or "").split(maxsplit=2)
+    action = args[1].lower() if len(args) > 1 else "balance"
+    user_id = message.from_user.id
+    async with db_lock:
+        balance = await get_premium_balance(db, user_id)
+    if action == "shop":
+        from premium_system import PREMIUM_SHOP_ITEMS
+        lines = ["🛍️ <b>Peak Gems Shop</b>", f"Wallet: {balance} gems"]
+        for item_id, item in PREMIUM_SHOP_ITEMS.items():
+            lines.append(f"<code>{item_id}</code> · {item['title']} · {item['cost']} gems\\n{item['description']}")
+        lines.append("Buy with /premium buy ITEM_ID.")
+        await message.answer("\\n\\n".join(lines))
+        return
+    if action == "buy":
+        if len(args) < 3:
+            await message.answer("Usage: /premium buy stamina_crystal|potion_bundle|xp_charm")
+            return
+        try:
+            async with db_lock:
+                async with player_locks[user_id]:
+                    purchase = await buy_premium_item(db, user_id, args[2].strip().lower())
+                    balance = await get_premium_balance(db, user_id)
+            await message.answer(
+                f"✅ Purchased <b>{escape(purchase['title'])}</b> for {purchase['cost']} gems. "
+                f"Remaining balance: {balance} gems."
+            )
+        except PremiumError as exc:
+            await message.answer(escape(str(exc)))
+        return
+    if action not in {"balance", "buy"}:
+        await message.answer("Use /premium, /premium balance, /premium shop or /premium buy ITEM_ID.")
         return
     if not PREMIUM_PAYMENTS_ENABLED:
         await message.answer(
             f"💎 <b>Peak Gems</b>\\nWallet: {balance} gems\\n"
-            "Stars purchases are currently disabled by the bot owner."
+            "Stars purchases are disabled by the bot owner. Use /premium shop to spend existing gems."
         )
         return
     packages = get_premium_packages()
