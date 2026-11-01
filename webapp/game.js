@@ -10,6 +10,8 @@
     hp: document.getElementById("hp"),
     stamina: document.getElementById("stamina"),
     staminaFill: document.getElementById("stamina-fill"),
+    mana: document.getElementById("mana"),
+    manaFill: document.getElementById("mana-fill"),
     xp: document.getElementById("xp-fill"),
     region: document.getElementById("region"),
     monster: document.getElementById("monster-label"),
@@ -83,6 +85,10 @@
     ui.heroClass.textContent = data.class_selected ? data.hero_class + " · " + data.weapon : "Choose a class in chat";
     ui.level.textContent = "Lv. " + data.level;
     ui.hp.textContent = "❤️ " + data.hp + " / " + data.max_hp;
+    if (data.mana && ui.mana) {
+      ui.mana.textContent = data.mana.mana + " / " + data.mana.max_mana;
+      if (ui.manaFill) ui.manaFill.style.width = (data.mana.mana / data.mana.max_mana * 100) + "%";
+    }
     if (data.stamina && ui.stamina) {
       ui.stamina.textContent = data.stamina.stamina + " / " + data.stamina.max_stamina;
       if (ui.staminaFill) ui.staminaFill.style.width = (data.stamina.stamina / data.stamina.max_stamina * 100) + "%";
@@ -127,9 +133,9 @@
     document.querySelectorAll("[data-action]").forEach(button => {
       const action = button.dataset.action;
       button.disabled = !battle || requestInFlight
-        || (action === "skill" && data.skill_cd > 0)
+        || (action === "skill" && (data.skill_cd > 0 || !data.mana || data.mana.mana < 30))
         || (action === "potion" && (data.potions <= 0 || data.hp >= data.max_hp));
-      if (action === "skill") button.textContent = data.skill_cd > 0 ? "⏳ Skill (" + data.skill_cd + ")" : "✨ Skill";
+      if (action === "skill") button.textContent = data.skill_cd > 0 ? "⏳ Skill (" + data.skill_cd + ")" : (!data.mana || data.mana.mana < 30 ? "🔮 Need 30 Mana" : "✨ Skill");
       if (action === "potion") button.textContent = "🧪 Potion (" + data.potions + ")";
     });
     if (battle) {
