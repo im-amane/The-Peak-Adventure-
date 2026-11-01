@@ -66,6 +66,8 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                 battle = await cursor.fetchone()
                 self.assertEqual(battle["turn_count"], 1)
                 self.assertLess(battle["monster_hp"], 77)
+                player = await main.get_player(user_id)
+                self.assertLess(player["hp"], 500)
                 call.answer.assert_awaited_once()
                 call.message.edit_text.assert_awaited_once()
             finally:
