@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "./worker.mjs";
+import { readFileSync } from "node:fs";
 
 test("rejects paths outside the game API allowlist", async () => {
   const response = await worker.fetch(
@@ -334,5 +335,25 @@ test("social management API is POST-only and forwards signed requests", async ()
     assert.equal(new TextDecoder().decode(forwardedBody), body);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+
+test("serves current Mini App source files from the embedded fallback assets", async () => {
+  const assets = [
+    { route: "/", file: "../webapp/index.html", type: "text/html; charset=utf-8" },
+    { route: "/style.css", file: "../webapp/style.css", type: "text/css; charset=utf-8" },
+    { route: "/game.js", file: "../webapp/game.js", type: "application/javascript; charset=utf-8" },
+  ];
+
+  for (const asset of assets) {
+    const expected = readFileSync(new URL(asset.file, import.meta.url), "utf8");
+    const response = await worker.fetch(
+      new Request("https://edge.example" + asset.route),
+      {},
+    );
+    assert.equal(response.status, 200, asset.route);
+    assert.equal(response.headers.get("content-type"), asset.type, asset.route);
+    assert.equal(await response.text(), expected, asset.route);
   }
 });
