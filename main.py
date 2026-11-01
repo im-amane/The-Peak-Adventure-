@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, resolve_enemy_turn, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, resolve_enemy_turn, resolve_player_attack, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
@@ -3150,38 +3150,41 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await db.execute("UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?", (heal_amount, user_id))
         damage = 0
         action_line = f"🧪 You recover {heal_amount} HP."
-    elif action == "skill":
-        if p["skill_cd"] > 0:
-            await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
-            return
-        try:
-            await consume_mana(db, user_id, SKILL_MANA_COST)
-        except ManaError as exc:
-            await call.message.answer("🔮 " + escape(str(exc)))
-            return
-        damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
-        await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-        action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
     else:
-        damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
-        action_line = f"⚔️ You strike for {damage} damage."
-    if action != "potion":
-        elemental_multiplier = 1.0
-        if class_stats["element"] == m["weakness"]:
-            elemental_multiplier = 1.5
-            action_line += f" ✨ Super effective! {class_stats['element']} exploits its weakness."
-        elif class_stats["element"] == m["element"]:
-            elemental_multiplier = 0.8
-            action_line += f" 🧱 {m['element']} resists your matching element."
-        damage = max(1, int(damage * elemental_multiplier))
-        if m["trait_effect"] == "armored":
-            damage = max(1, int(damage * 0.85))
-            action_line += " 🛡️ Its armor absorbs part of the hit."
-        if m["trait_effect"] == "shield" and (b["turn_count"] + 1) % 3 == 1:
-            damage = max(1, int(damage * 0.7))
-            action_line += " 🔰 Its shield blocks part of this strike."
-    else:
-        damage = 0
+        if action == "skill":
+            if p["skill_cd"] > 0:
+                await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
+                return
+            try:
+                await consume_mana(db, user_id, SKILL_MANA_COST)
+            except ManaError as exc:
+                await call.message.answer("🔮 " + escape(str(exc)))
+                return
+            await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+        damage, damage_effects = resolve_player_attack(
+            action,
+            player_level=p["level"],
+            class_attack=class_stats["attack"],
+            weapon_attack=p["weapon_attack"],
+            monster_defense=m["defense"],
+            class_element=class_stats["element"],
+            monster_element=m["element"],
+            monster_weakness=m["weakness"],
+            trait_effect=m["trait_effect"],
+            next_turn=b["turn_count"] + 1,
+            random_bonus=random.randint(5, 18) if action == "attack" else 0,
+        )
+        if action == "skill":
+            action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
+        else:
+            action_line = f"⚔️ You strike for {damage} damage."
+        for effect in damage_effects:
+            action_line += {
+                "weakness": f" ✨ Super effective! {class_stats['element']} exploits its weakness.",
+                "resisted": f" 🧱 {m['element']} resists your matching element.",
+                "armored": " 🛡️ Its armor absorbs part of the hit.",
+                "shield": " 🔰 Its shield blocks part of this strike.",
+            }[effect]
     new_enemy_hp = max(0, b["monster_hp"] - damage)
     turn_count = b["turn_count"] + 1
     if new_enemy_hp > 0 and m["trait_effect"] == "regenerate":
@@ -4180,40 +4183,39 @@ async def api_action(request: web.Request):
             )
             damage = 0
             action_line = f"You recover {heal_amount} HP."
-        elif action == "skill":
-            if p["skill_cd"] > 0:
-                return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
-            try:
-                await consume_mana(db, user_id, SKILL_MANA_COST)
-            except ManaError as exc:
-                return web.json_response({"error": str(exc)}, status=409)
-            damage = max(
-                25,
-                (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
-                - monster["defense"] // 2,
-            ) * 2
-            await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-            action_line = f"{class_stats['skill']} deals {damage} damage."
         else:
-            damage = max(
-                8,
-                p["level"] * 10 + class_stats["attack"] + p["weapon_attack"]
-                + random.randint(5, 18) - monster["defense"] // 3,
+            if action == "skill":
+                if p["skill_cd"] > 0:
+                    return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+                try:
+                    await consume_mana(db, user_id, SKILL_MANA_COST)
+                except ManaError as exc:
+                    return web.json_response({"error": str(exc)}, status=409)
+                await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+            damage, damage_effects = resolve_player_attack(
+                action,
+                player_level=p["level"],
+                class_attack=class_stats["attack"],
+                weapon_attack=p["weapon_attack"],
+                monster_defense=monster["defense"],
+                class_element=class_stats["element"],
+                monster_element=monster["element"],
+                monster_weakness=monster["weakness"],
+                trait_effect=monster["trait_effect"],
+                next_turn=battle["turn_count"] + 1,
+                random_bonus=random.randint(5, 18) if action == "attack" else 0,
             )
-            action_line = f"You strike for {damage} damage."
-        if action != "potion":
-            if class_stats["element"] == monster["weakness"]:
-                damage = int(damage * 1.5)
-                action_line += f" Super effective: {class_stats['element']} hits its weakness."
-            elif class_stats["element"] == monster["element"]:
-                damage = int(damage * 0.8)
-                action_line += f" {monster['element']} resists your matching element."
-            if monster["trait_effect"] == "armored":
-                damage = int(damage * 0.85)
-                action_line += " Its armor absorbs part of the hit."
-            if monster["trait_effect"] == "shield" and (battle["turn_count"] + 1) % 3 == 1:
-                damage = max(1, int(damage * 0.7))
-                action_line += " Its shield blocks part of this strike."
+            if action == "skill":
+                action_line = f"{class_stats['skill']} deals {damage} damage."
+            else:
+                action_line = f"You strike for {damage} damage."
+            for effect in damage_effects:
+                action_line += {
+                    "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
+                    "resisted": f" {monster['element']} resists your matching element.",
+                    "armored": " Its armor absorbs part of the hit.",
+                    "shield": " Its shield blocks part of this strike.",
+                }[effect]
         new_enemy_hp = max(0, battle["monster_hp"] - damage)
         turn_count = battle["turn_count"] + 1
         if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
