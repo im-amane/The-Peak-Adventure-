@@ -39,6 +39,7 @@ from rate_limit import SlidingWindowRateLimiter
 from db_backup import create_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
+from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -242,6 +243,7 @@ async def init_db():
     await init_auction_tables(db)
     await init_stamina_tables(db)
     await init_report_tables(db)
+    await init_weekly_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -616,6 +618,9 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
             )
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
+    await record_weekly_progress(db, user_id, "wins")
+    if m["boss"]:
+        await record_weekly_progress(db, user_id, "bosses")
     await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
     await db.commit()
     await refresh_quest_progress(user_id)
@@ -1915,6 +1920,27 @@ async def account_deletion_callback(call: CallbackQuery):
         await call.message.edit_text(escape(str(exc)))
 
 
+@dp.message(Command("weekly"))
+async def weekly_command(message: Message):
+    args=(message.text or "").split(maxsplit=2)
+    user_id=message.from_user.id
+    if len(args)>=3 and args[1].lower()=="claim":
+        try:
+            reward=await claim_weekly_reward(db,user_id,args[2].strip().lower())
+            await message.answer(f"🎁 <b>{escape(reward['title'])}</b> reward claimed: +{reward['coins']} coins and +{reward['potions']} potions.")
+        except WeeklyQuestError as exc:
+            await message.answer(escape(str(exc)))
+        return
+    rows=await get_weekly_quests(db,user_id)
+    lines=["📅 <b>Weekly Objectives</b> · Reset every Monday (UTC)"]
+    for quest in rows:
+        marker="✅" if quest["claimed"] else ("🎁" if quest["completed"] else "🔹")
+        lines.append(f"{marker} <b>{escape(quest['title'])}</b> · {quest['progress']}/{quest['target']}\\n{escape(quest['description'])}\\nReward: {quest['coins']} coins · {quest['potions']} potions")
+        if quest["completed"] and not quest["claimed"]:
+            lines.append(f"Claim: /weekly claim {quest['id']}")
+    await message.answer("\\n\\n".join(lines))
+
+
 @dp.message(Command("report"))
 async def report_player(message: Message):
     args = (message.text or "").split(maxsplit=2)
@@ -2229,6 +2255,7 @@ async def craft_command(message: Message):
         return
     try:
         recipe = await craft_item(db, message.from_user.id, player["level"], args[1].strip().lower())
+        await record_weekly_progress(db, message.from_user.id, "crafts")
         stat = "+" + str(recipe["attack"]) + " ATK" if recipe["slot"] == "weapon" else "+" + str(recipe["defense"]) + " DEF"
         await message.answer("⚒️ Crafted <b>" + recipe["name"] + "</b> and equipped it. " + stat)
     except CraftingError as exc:
@@ -2359,6 +2386,7 @@ async def discover_command(message: Message):
     world_id = await get_current_world(db, message.from_user.id, player["level"])
     try:
         reward = await discover_world_landmark(db, message.from_user.id, player["level"], world_id)
+        await record_weekly_progress(db, message.from_user.id, "landmarks")
         await message.answer("✨ <b>Landmark discovered!</b>\n" + escape(reward["landmark"]) + "\n🪙 +" + str(reward["coins"]) + " coins · 🧪 +" + str(reward["potions"]) + " potions.")
     except WorldError as exc:
         await message.answer(escape(str(exc)))
@@ -2874,6 +2902,7 @@ async def miniapp_state(user: dict):
         "dungeon": dungeon_state,
         "materials": material_state,
         "story": story_state,
+        "weekly_quests": await get_weekly_quests(db, user_id),
         "online_count": await count_online_players(db),
         "settings": await get_settings(db, user_id),
         "class_skill": class_stats["skill"],
