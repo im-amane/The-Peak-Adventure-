@@ -97,7 +97,7 @@ The-Peak-Adventure/
 - [x] Boss three-phase combat
 - [x] Class passives and dodge rules
 - [x] Elemental, weapon and armor combat modifiers
-- [ ] Monster AI with tactical decision-making
+- [x] Monster AI with tactical decision-making
 - [ ] Advanced physics and pathfinding
 - [ ] Particle and spell effects
 - [ ] Sound and music engine
