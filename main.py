@@ -38,6 +38,7 @@ from auction_system import AuctionError, cancel_listing, create_listing, equip_s
 from rate_limit import SlidingWindowRateLimiter
 from db_backup import create_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
+from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -240,6 +241,7 @@ async def init_db():
     await init_story_tables(db)
     await init_auction_tables(db)
     await init_stamina_tables(db)
+    await init_report_tables(db)
 
 
 async def get_player(user_id: int, username: str | None = None):
@@ -1913,6 +1915,19 @@ async def account_deletion_callback(call: CallbackQuery):
         await call.message.edit_text(escape(str(exc)))
 
 
+@dp.message(Command("report"))
+async def report_player(message: Message):
+    args = (message.text or "").split(maxsplit=2)
+    if len(args) < 3 or not args[1].isdigit():
+        await message.answer("Usage: /report player_id reason (10–500 characters)")
+        return
+    try:
+        report_id = await submit_player_report(db, message.from_user.id, int(args[1]), args[2])
+        await message.answer(f"✅ Report #{report_id} submitted. An administrator will review it.")
+    except ReportError as exc:
+        await message.answer(escape(str(exc)))
+
+
 @dp.message(Command("admin"))
 async def admin_command(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -1927,8 +1942,29 @@ async def admin_command(message: Message):
             f"Players: {stats['players']}\nActive monster battles: {stats['active_battles']}\n"
             f"Guilds: {stats['guilds']}\nRegistered groups: {stats['registered_groups']}\n"
             f"Active PvP duels: {stats['active_duels']}\n\n"
-            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE."
+            "Commands: /admin player ID, /admin coins ID +/-AMOUNT, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE."
         )
+        return
+    if action=="reports":
+        reports=await list_open_reports(db,25)
+        lines=["🚩 <b>Open Player Reports</b>"]
+        for row in reports:
+            lines.append(f"#{row['report_id']} · reporter <code>{row['reporter_id']}</code> → target <code>{row['target_id']}</code>\\n{escape(row['reason'])}")
+        lines.append("Resolve with /admin resolve REPORT_ID reviewed|dismissed [note].")
+        await message.answer("\\n\\n".join(lines) if reports else "No open player reports.")
+        return
+    if action=="resolve":
+        if len(args)<3:
+            await message.answer("Usage: /admin resolve REPORT_ID reviewed|dismissed [note]"); return
+        parts=args[2].split(maxsplit=2)
+        if len(parts)<2 or not parts[0].isdigit():
+            await message.answer("Usage: /admin resolve REPORT_ID reviewed|dismissed [note]"); return
+        try:
+            await resolve_player_report(db,int(parts[0]),message.from_user.id,parts[1].lower(),parts[2] if len(parts)>2 else "")
+            await record_admin_action(db,message.from_user.id,"report_"+parts[1].lower(),int(parts[0]),parts[2] if len(parts)>2 else "")
+            await message.answer("✅ Report resolved.")
+        except ReportError as exc:
+            await message.answer(escape(str(exc)))
         return
     if action=="logs":
         logs=await recent_admin_actions(db,20)
@@ -1978,7 +2014,7 @@ async def admin_command(message: Message):
         await record_admin_action(db,message.from_user.id,"broadcast",None,"sent="+str(sent)+", failed="+str(failed))
         await message.answer(f"📢 Broadcast finished. Sent: {sent}. Failed: {failed}.")
         return
-    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin announce MESSAGE.")
+    await message.answer("Admin commands: /admin stats, /admin player ID, /admin coins ID +/-AMOUNT, /admin reports, /admin resolve ID reviewed|dismissed, /admin announce MESSAGE.")
 
 
 @dp.message(Command("export"))
