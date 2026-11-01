@@ -28,6 +28,22 @@ class SlidingWindowRateLimiterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             limiter.allow("player:1", 0, now=0)
 
+
+    def test_active_key_count_stays_within_capacity(self):
+        limiter = SlidingWindowRateLimiter(window_seconds=60, max_keys=2)
+        limiter.allow("player:1", 1, now=1)
+        limiter.allow("player:2", 1, now=2)
+        limiter.allow("player:3", 1, now=3)
+        self.assertLessEqual(len(limiter._events), 2)
+        self.assertNotIn("player:1", limiter._events)
+
+    def test_retry_after_tracks_oldest_request_expiry(self):
+        limiter = SlidingWindowRateLimiter(window_seconds=10)
+        limiter.allow("player:1", 1, now=5)
+        allowed, retry = limiter.allow("player:1", 1, now=8)
+        self.assertFalse(allowed)
+        self.assertEqual(retry, 8)
+
     def test_stale_keys_are_pruned_when_capacity_is_exceeded(self):
         limiter = SlidingWindowRateLimiter(window_seconds=5, max_keys=1)
         limiter.allow("old", 1, now=1)
