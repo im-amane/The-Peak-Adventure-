@@ -106,6 +106,12 @@
     renderSocial(data.social || {});
     renderDungeon(data.dungeon || null);
     renderMaterials(data.materials || {});
+    if (data.settings) {
+      const notifications = document.getElementById("setting-notifications");
+      const privacy = document.getElementById("setting-privacy");
+      if (notifications) notifications.value = data.settings.notifications_enabled ? "1" : "0";
+      if (privacy) privacy.value = data.settings.profile_visibility;
+    }
     ui.xp.style.width = Math.max(0, Math.min(100, data.xp / data.xp_required * 100)) + "%";
     ui.region.textContent = data.region;
     ui.monster.textContent = "Lv. " + data.monster.level + " · " + data.monster.name;
@@ -525,6 +531,27 @@
     event.currentTarget.setAttribute("aria-pressed", String(soundEnabled));
     event.currentTarget.textContent = soundEnabled ? "🔊 Sound" : "🔇 Muted";
     if (soundEnabled) playSound("potion");
+  });
+
+
+  document.getElementById("save-settings").addEventListener("click", async () => {
+    if (requestInFlight || !gameState) return;
+    const button=document.getElementById("save-settings");
+    requestInFlight=true;button.disabled=true;
+    ui.settingsStatus.textContent="Saving settings...";
+    try {
+      const payload={
+        notifications_enabled:document.getElementById("setting-notifications").value==="1",
+        profile_visibility:document.getElementById("setting-privacy").value
+      };
+      const result=await postApi("/api/settings",payload);
+      applyState(result.state,result.message);
+      ui.settingsStatus.textContent="Privacy and notification settings saved.";
+    } catch(error) {
+      ui.settingsStatus.textContent=error.message;
+    } finally {
+      requestInFlight=false;button.disabled=false;
+    }
   });
 
   document.getElementById("save-appearance").addEventListener("click", async () => {
