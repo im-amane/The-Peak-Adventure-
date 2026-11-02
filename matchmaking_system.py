@@ -135,6 +135,18 @@ async def init_matchmaking_tables(db: Any) -> None:
           user_id BIGINT PRIMARY KEY REFERENCES players(user_id),
           last_joined_at BIGINT NOT NULL
         )""",
+        """CREATE TABLE IF NOT EXISTS matchmaking_battles(
+          match_id BIGINT PRIMARY KEY REFERENCES matchmaking_matches(match_id),
+          player_one_hp INTEGER NOT NULL,
+          player_one_max_hp INTEGER NOT NULL,
+          player_two_hp INTEGER NOT NULL,
+          player_two_max_hp INTEGER NOT NULL,
+          turn_user_id BIGINT,
+          turn_count INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','finished')),
+          winner_id BIGINT,
+          updated_at BIGINT NOT NULL
+        )""",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_search ON matchmaking_queue(mode,status,queued_at)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_rating ON matchmaking_queue(mode,status,rating,player_level)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_matches_players ON matchmaking_matches(player_one_id,player_two_id,status)",
@@ -327,6 +339,23 @@ async def join_matchmaking(
                  queued_at=excluded.queued_at,updated_at=excluded.updated_at,
                  match_id=excluded.match_id""",
             (user_id, mode, level, rating, stamp, stamp, match_id),
+        )
+        player_cursor = await db.execute(
+            "SELECT user_id,max_hp FROM players WHERE user_id IN (?,?)",
+            (opponent["user_id"], user_id),
+        )
+        hp_by_user = {row["user_id"]: max(1, int(row["max_hp"] or 1)) for row in await player_cursor.fetchall()}
+        if opponent["user_id"] not in hp_by_user or user_id not in hp_by_user:
+            raise MatchmakingError("A matched player's combat stats could not be loaded.")
+        await db.execute(
+            """INSERT INTO matchmaking_battles(
+                 match_id,player_one_hp,player_one_max_hp,player_two_hp,player_two_max_hp,
+                 turn_user_id,updated_at
+               ) VALUES(?,?,?,?,?,?,?)""",
+            (
+                match_id, hp_by_user[opponent["user_id"]], hp_by_user[opponent["user_id"]],
+                hp_by_user[user_id], hp_by_user[user_id], opponent["user_id"], stamp,
+            ),
         )
     else:
         match_id = None
