@@ -33,6 +33,12 @@ from guild_system import (
     init_guild_features, record_guild_war_duel, respond_guild_invite,
     respond_guild_war, send_guild_message, start_guild_raid,
 )
+from group_system import (
+    GroupError, attack_group_raid, claim_group_mission_reward,
+    get_group_profile, init_group_tables, is_group_banned, list_group_players,
+    record_group_activity, record_group_player, register_group, set_group_admin,
+    set_group_ban, start_group_raid,
+)
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
@@ -1585,3 +1591,106 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await attack_guild_raid(self.db, guild_id, self.member_id, 10)
         with self.assertRaisesRegex(GuildFeatureError, "cooldown"):
             await attack_guild_raid(self.db, guild_id, self.member_id, 10)
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class GroupPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    chat_id = -10_000_000_000_001
+    owner_id = 5_000_000_000_000_101
+    admin_id = 5_000_000_000_000_102
+    target_id = 5_000_000_000_000_103
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in (
+            "group_bans", "group_raid_cooldowns", "group_raid_contributions",
+            "group_raids", "group_missions", "group_players", "group_admins",
+            "group_profiles", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY,coins BIGINT NOT NULL DEFAULT 0)"
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id,coins) VALUES(?,0),(?,0),(?,0)",
+            (self.owner_id, self.admin_id, self.target_id),
+        )
+        await self.db.commit()
+        await init_group_tables(self.db)
+        await register_group(self.db, self.chat_id, "Peak Raiders", self.owner_id)
+        await set_group_admin(self.db, self.chat_id, self.admin_id, "admin")
+        await record_group_player(self.db, self.chat_id, self.owner_id, "Ash", 10)
+        await record_group_player(self.db, self.chat_id, self.admin_id, "Mira", 20)
+
+    async def asyncTearDown(self):
+        for table in (
+            "group_bans", "group_raid_cooldowns", "group_raid_contributions",
+            "group_raids", "group_missions", "group_players", "group_admins",
+            "group_profiles", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_group_profiles_roster_missions_and_rewards_support_bigint_ids(self):
+        profile = await get_group_profile(self.db, self.chat_id)
+        self.assertEqual(profile["owner_id"], self.owner_id)
+        roster = await list_group_players(self.db, self.chat_id)
+        self.assertEqual(roster[0]["user_id"], self.admin_id)
+
+        first = await record_group_activity(self.db, self.chat_id, "battle", 10)
+        second = await record_group_activity(self.db, self.chat_id, "battle", 10)
+        self.assertTrue(next(row for row in first if row["id"] == "battles")["completed"])
+        self.assertEqual(
+            next(row for row in second if row["id"] == "battles")["progress"], 5
+        )
+        self.assertEqual(
+            await claim_group_mission_reward(
+                self.db, self.chat_id, self.admin_id, "battles"
+            ),
+            (120, 40),
+        )
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.admin_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 120)
+
+    async def test_group_raid_generated_id_cooldown_and_contribution_upsert(self):
+        raid_id = await start_group_raid(
+            self.db, self.chat_id, self.admin_id, 10, "Root Warden", 1000
+        )
+        self.assertIsInstance(raid_id, int)
+        await attack_group_raid(self.db, self.chat_id, self.owner_id, 10)
+        with self.assertRaisesRegex(GroupError, "cooldown"):
+            await attack_group_raid(self.db, self.chat_id, self.owner_id, 10)
+
+        await self.db.execute(
+            "UPDATE group_raid_cooldowns SET last_attack_at=CURRENT_TIMESTAMP-INTERVAL '10 seconds' WHERE raid_id=? AND user_id=?",
+            (raid_id, self.owner_id),
+        )
+        await self.db.commit()
+        await attack_group_raid(self.db, self.chat_id, self.owner_id, 15)
+        cursor = await self.db.execute(
+            "SELECT damage FROM group_raid_contributions WHERE raid_id=? AND user_id=?",
+            (raid_id, self.owner_id),
+        )
+        self.assertEqual((await cursor.fetchone())["damage"], 25)
+
+    async def test_group_ban_upsert_and_unban(self):
+        await set_group_ban(
+            self.db, self.chat_id, self.admin_id, self.target_id, True, "spam"
+        )
+        await set_group_ban(
+            self.db, self.chat_id, self.admin_id, self.target_id, True, "repeat spam"
+        )
+        self.assertTrue(await is_group_banned(self.db, self.chat_id, self.target_id))
+        cursor = await self.db.execute(
+            "SELECT actor_id,reason FROM group_bans WHERE chat_id=? AND user_id=?",
+            (self.chat_id, self.target_id),
+        )
+        row = await cursor.fetchone()
+        self.assertEqual((row["actor_id"], row["reason"]), (self.admin_id, "repeat spam"))
+        await set_group_ban(
+            self.db, self.chat_id, self.admin_id, self.target_id, False
+        )
+        self.assertFalse(await is_group_banned(self.db, self.chat_id, self.target_id))
