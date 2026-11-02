@@ -112,6 +112,25 @@ Then perform a full application smoke test against a disposable copy of the migr
 - Before any production cutover, verify PostgreSQL backup retention and complete a restore rehearsal to a separate database.
 - The app still defaults to SQLite; this tool does not change that behavior.
 
+## Heroku PostgreSQL backup plan after an approved cutover
+
+Once a Heroku Postgres database has been provisioned and the runtime cutover is separately approved, configure and verify backups outside the application process:
+
+- Capture a manual logical backup with `heroku pg:backups:capture --app <app>`.
+- Schedule daily logical backups with `heroku pg:backups:schedule DATABASE_URL --at '02:00 UTC' --app <app>`.
+- Inspect backup status and history with the Heroku PGBackups commands before relying on the schedule.
+- Scheduled backup failures do not generate notifications, so verification must be part of operations.
+- Backup schedules are associated with database attachment names and can be lost when the database is swapped or attachments change.
+- Heroku recommends PGBackups for moderately loaded databases up to 20 GB; PGBackups is not supported on Heroku Postgres Advanced.
+- A restore replaces the contents of the target database. Rehearse restores against a separate disposable database, never the active production database.
+
+Heroku's Standard tier and higher include continuous protection for disaster recovery. Logical PGBackups provide portable backups for testing and migration. Essential plans have fewer recovery capabilities, so plan selection must account for the required recovery objective. No plan or add-on is selected by this runbook.
+
+Official references:
+- [Heroku PGBackups](https://devcenter.heroku.com/articles/heroku-postgres-backups)
+- [Heroku Postgres data safety and continuous protection](https://devcenter.heroku.com/articles/heroku-postgres-data-safety-and-continuous-protection)
+- [Heroku Postgres logical backups](https://devcenter.heroku.com/articles/heroku-postgres-logical-backups)
+
 ## Current limitations
 
 - No production or user database has been migrated.
