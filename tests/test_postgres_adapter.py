@@ -1723,6 +1723,28 @@ class GroupPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["damage"], 25)
 
+    async def test_concurrent_group_raid_starts_create_only_one_active_raid(self):
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                start_group_raid(
+                    self.db, self.chat_id, self.admin_id, 10, "Root Warden", 1000
+                ),
+                start_group_raid(
+                    other_db, self.chat_id, self.owner_id, 10, "Ashen Warden", 1200
+                ),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(result, int) for result in results), 1)
+            self.assertEqual(sum(isinstance(result, GroupError) for result in results), 1)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM group_raids WHERE chat_id=? AND status='active'",
+                (self.chat_id,),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 1)
+        finally:
+            await other_db.close()
+
     async def test_group_ban_upsert_and_unban(self):
         await set_group_ban(
             self.db, self.chat_id, self.admin_id, self.target_id, True, "spam"
