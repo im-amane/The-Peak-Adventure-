@@ -57,6 +57,9 @@ from premium_system import (
     PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase,
     get_premium_balance, get_premium_packages, init_premium_tables,
 )
+from character_system import (
+    get_appearance, init_character_tables, save_appearance,
+)
 
 
 
@@ -2349,5 +2352,74 @@ class PremiumPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.db.execute(
             "SELECT 1 FROM information_schema.tables "
             "WHERE table_schema=current_schema() AND table_name='premium_shop_purchases'"
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class CharacterAppearancePostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 5_000_000_000_000_601
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS character_appearance CASCADE")
+        await self.db.commit()
+        await init_character_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS character_appearance CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_appearance_persists_with_bigint_telegram_user_id(self):
+        defaults = await get_appearance(self.db, self.user_id)
+        self.assertEqual(defaults["race"], "Human")
+        saved = await save_appearance(
+            self.db,
+            self.user_id,
+            {"race": "Elf", "skin": "deep", "hair": "braided",
+             "outfit": "ranger", "face": "scarred", "body": "broad"},
+        )
+        self.assertEqual(await get_appearance(self.db, self.user_id), saved)
+        cursor = await self.db.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='character_appearance' "
+            "AND column_name='user_id'"
+        )
+        self.assertEqual((await cursor.fetchone())["data_type"], "bigint")
+
+    async def test_legacy_postgres_appearance_schema_is_migrated(self):
+        await self.db.execute("DROP TABLE character_appearance")
+        await self.db.execute(
+            """CREATE TABLE character_appearance(
+                 user_id INTEGER PRIMARY KEY,
+                 race TEXT NOT NULL DEFAULT 'Human',
+                 skin TEXT NOT NULL DEFAULT 'warm',
+                 hair TEXT NOT NULL DEFAULT 'short',
+                 outfit TEXT NOT NULL DEFAULT 'traveler',
+                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+               )"""
+        )
+        await self.db.execute(
+            "INSERT INTO character_appearance(user_id) VALUES(?)", (self.user_id,)
+        )
+        await self.db.commit()
+        await init_character_tables(self.db)
+        appearance = await get_appearance(self.db, self.user_id)
+        self.assertEqual((appearance["face"], appearance["body"]), ("soft", "balanced"))
+        cursor = await self.db.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='character_appearance' "
+            "AND column_name='user_id'"
+        )
+        self.assertEqual((await cursor.fetchone())["data_type"], "bigint")
+
+    async def test_save_appearance_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN")
+        await save_appearance(self.db, self.user_id, {"race": "Orc"})
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM character_appearance WHERE user_id=?", (self.user_id,)
         )
         self.assertIsNone(await cursor.fetchone())
