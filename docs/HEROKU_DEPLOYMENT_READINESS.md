@@ -10,7 +10,7 @@ Heroku is the selected hosting target for The Peak Adventure. This document reco
 - `main.py` reads the platform-provided `PORT` value for its aiohttp server.
 - The same process currently starts Telegram long polling and the HTTP server.
 - SQLite through `aiosqlite` remains the default when `DATABASE_URL` is unset. Setting `DATABASE_URL` explicitly selects the Psycopg 3 PostgreSQL adapter; connection or schema initialization failures stop startup rather than silently falling back to a new SQLite file.
-- PostgreSQL runtime selection is now wired, but it is not production-verified. The existing adapter and service-level tests do not replace full schema, transaction, concurrency and migration validation on a representative database.
+- PostgreSQL runtime selection is wired and opt-in, but it is not production-verified. The existing adapter and service-level tests do not replace full schema, transaction, concurrency and migration validation on a representative database. PostgreSQL player-scoped actions use session-level advisory locks across processes; broader group/guild/party and multi-account mutation paths still need a complete coordination audit.
 - With SQLite selected, the automated backup loop creates snapshots under the configured local directory. With PostgreSQL selected, that path is disabled and the monitor reports the missing durable PostgreSQL backup provider.
 - The Cloudflare Worker is the Mini App edge gateway; its `BACKEND_ORIGIN` must point to the HTTPS Python backend.
 - The Mini App requires a public HTTPS `WEBAPP_URL` registered with BotFather.
@@ -41,12 +41,12 @@ The SQLite backup utility takes an online consistent snapshot, runs an integrity
 
 ### 3. Bot polling and web process model
 
-The current `web` process runs both Telegram polling and the aiohttp server. Do not scale this combined process to multiple dynos: each instance would start another polling loop, while the current in-process locks do not coordinate between dynos.
+The current `web` process runs both Telegram polling and the aiohttp server. Do not scale this combined process to multiple dynos: each instance would start another polling loop. PostgreSQL player-scoped actions now use session-level advisory locks that coordinate across processes, but this does not prove that every group, guild, party or multi-account workflow is safe across dynos; SQLite player locks remain process-local.
 
 Before horizontal scaling:
 - Separate Telegram polling into a dedicated worker process type.
 - Keep the HTTP API in the web process.
-- Use PostgreSQL transactions and database-level coordination for shared state.
+- Use PostgreSQL transactions and database-level coordination for shared state, and extend/verify locking and idempotency for group, guild, party and multi-account mutations.
 - Validate graceful shutdown, restart behavior and duplicate-update handling.
 
 A single combined dyno may be used only for a controlled, explicitly approved test after PostgreSQL and backup prerequisites are met. It is not a production scaling design.
@@ -87,7 +87,7 @@ Required before a public launch:
 |---|---|---|
 | Python HTTP API | Heroku web dyno | Existing combined bot/API process; not deployed |
 | Telegram bot polling | Dedicated Heroku worker after process split | Currently combined with web process |
-| Player persistence | Heroku Postgres | Not implemented |
+| Player persistence | Heroku Postgres | Opt-in PostgreSQL runtime adapter implemented; production database not configured or verified |
 | Durable backups | Database-native or external object storage | Current backups are local files |
 | Mini App static/API edge | Cloudflare Worker | Existing Worker; backend origin must be verified |
 | Telegram Mini App | HTTPS Worker URL | Requires final backend and BotFather configuration |
