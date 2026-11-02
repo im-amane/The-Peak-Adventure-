@@ -69,6 +69,9 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["winner_id"], 2)
         self.assertEqual((await get_matchmaking_status(self.db, 1, now=1010))["status"], "completed")
+        closed_battle = await get_matchmaking_battle(self.db, 1, second["match_id"])
+        self.assertEqual(closed_battle["status"], "finished")
+        self.assertEqual(closed_battle["winner_id"], 2)
 
     async def test_matchmaking_match_creates_live_battle_and_turns_are_server_authoritative(self):
         await join_matchmaking(self.db, 1, "casual", now=1000)
