@@ -104,6 +104,10 @@ async def init_guild_features(db):
           CHECK(challenger_guild!=target_guild)
         )""",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_war_pair ON guild_wars(challenger_guild,target_guild) WHERE status IN ('pending','active')",
+        """CREATE TABLE IF NOT EXISTS guild_war_duel_events(
+          duel_id INTEGER PRIMARY KEY,war_id INTEGER NOT NULL,winner_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
     )
     for statement in statements:
         await db.execute(statement)
@@ -334,8 +338,11 @@ async def respond_guild_war(db, war_id, leader_id, accept):
 
 
 @_transactional
-async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
+@_transactional
+async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id, duel_id=None):
     if not all(valid_id(x) for x in (challenger_id,opponent_id,winner_id)) or winner_id not in {challenger_id,opponent_id}:
+        return None
+    if duel_id is not None and not valid_id(duel_id):
         return None
     cur=await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?",(challenger_id,))
     first=await cur.fetchone()
@@ -348,6 +355,13 @@ async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
       (first["guild_id"],second["guild_id"],second["guild_id"],first["guild_id"]))
     war=await cur.fetchone()
     if not war: return None
+    if duel_id is not None:
+        cur=await db.execute(
+            "INSERT OR IGNORE INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(?,?,?)",
+            (duel_id,war["war_id"],winner_id),
+        )
+        if cur.rowcount != 1:
+            return None
     winner_member=first if winner_id==challenger_id else second
     winner_guild=winner_member["guild_id"]
     if winner_guild==war["challenger_guild"]:
@@ -366,7 +380,6 @@ async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
         await db.execute("UPDATE guilds SET guild_xp=guild_xp+150 WHERE guild_id=?",(winner,))
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
     return await cur.fetchone()
-
 
 async def get_guild_war(db,war_id):
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war_id,))
