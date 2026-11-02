@@ -41,7 +41,7 @@ def _inspect_sqlite_schema(source: sqlite3.Connection) -> dict[str, list[dict[st
             {
                 "name": column["name"],
                 "declared_type": column["type"] or "",
-                "not_null": bool(column["notnull"]),
+                "not_null": bool(column["notnull"]) or bool(column["pk"]),
                 "primary_key_position": int(column["pk"]),
             }
             for column in columns
@@ -69,6 +69,221 @@ async def _inspect_postgres_schema(target: PostgresConnection) -> dict[str, list
             }
         )
     return schema
+
+
+def _sqlite_type_affinity(declared_type: str, column_name: str) -> str:
+    value = (declared_type or "").upper()
+    name = column_name.lower()
+    if "BOOL" in value:
+        return "boolean"
+    if any(token in value for token in ("DATE", "TIME")):
+        return "datetime"
+    if "INT" in value:
+        return "integer"
+    if any(token in value for token in ("CHAR", "CLOB", "TEXT")):
+        if name.endswith(("_at", "_time", "_date")) or name in {"last_seen", "created", "updated"}:
+            return "datetime"
+        return "text"
+    if "BLOB" in value or not value:
+        return "blob"
+    if any(token in value for token in ("REAL", "FLOA", "DOUB")):
+        return "real"
+    return "numeric"
+
+
+def _postgres_type_affinity(data_type: str) -> str:
+    value = (data_type or "").lower()
+    if value in {"smallint", "integer", "bigint"}:
+        return "integer"
+    if value in {"text", "character varying", "character"}:
+        return "text"
+    if value == "bytea":
+        return "blob"
+    if value in {"real", "double precision"}:
+        return "real"
+    if value in {"numeric", "decimal"}:
+        return "numeric"
+    if value == "boolean":
+        return "boolean"
+    if value.startswith("timestamp") or value == "date":
+        return "datetime"
+    return value
+
+
+async def _inspect_schema_constraints(
+    source: sqlite3.Connection,
+    target: PostgresConnection,
+    sqlite_schema: dict[str, list[dict[str, Any]]],
+    postgres_schema: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    """Compare semantic schema guarantees needed for a safe row migration."""
+    shared_tables = set(sqlite_schema) & set(postgres_schema)
+    sqlite_primary_keys: dict[str, tuple[str, ...]] = {}
+    sqlite_foreign_keys = set()
+    sqlite_unique_indexes = set()
+
+    for table in shared_tables:
+        quoted_table = _quote_identifier(table)
+        columns = source.execute(f"PRAGMA table_info({quoted_table})").fetchall()
+        sqlite_primary_keys[table] = tuple(
+            row["name"] for row in sorted(columns, key=lambda item: item["pk"]) if row["pk"]
+        )
+        for fk in source.execute(f"PRAGMA foreign_key_list({quoted_table})").fetchall():
+            referenced_column = fk["to"]
+            if referenced_column is None:
+                parent_columns = source.execute(
+                    f"PRAGMA table_info({_quote_identifier(fk['table'])})"
+                ).fetchall()
+                parent_pk = [
+                    row["name"] for row in sorted(parent_columns, key=lambda item: item["pk"])
+                    if row["pk"]
+                ]
+                if fk["seq"] >= len(parent_pk):
+                    raise ValueError(
+                        f"Unable to resolve referenced primary key for {table}.{fk['from']}"
+                    )
+                referenced_column = parent_pk[fk["seq"]]
+            sqlite_foreign_keys.add((
+                table, fk["from"], fk["table"], referenced_column,
+                fk["on_update"].upper(), fk["on_delete"].upper(),
+            ))
+        for index in source.execute(f"PRAGMA index_list({quoted_table})").fetchall():
+            if not index["unique"] or index["origin"] == "pk":
+                continue
+            index_columns = source.execute(
+                f"PRAGMA index_info({_quote_identifier(index['name'])})"
+            ).fetchall()
+            if not index_columns or not all(column["name"] for column in index_columns):
+                continue
+            signature = tuple(sorted(column["name"] for column in index_columns))
+            if signature == tuple(sorted(sqlite_primary_keys[table])):
+                continue
+            sqlite_unique_indexes.add((table, signature))
+
+    cursor = await target.execute(
+        """SELECT tc.table_name,kcu.column_name,kcu.ordinal_position
+           FROM information_schema.table_constraints tc
+           JOIN information_schema.key_column_usage kcu
+             ON tc.constraint_catalog=kcu.constraint_catalog
+            AND tc.constraint_schema=kcu.constraint_schema
+            AND tc.constraint_name=kcu.constraint_name
+           WHERE tc.constraint_type='PRIMARY KEY'
+             AND tc.constraint_schema=current_schema()
+           ORDER BY tc.table_name,kcu.ordinal_position"""
+    )
+    postgres_primary_keys: dict[str, list[str]] = {}
+    for row in await cursor.fetchall():
+        postgres_primary_keys.setdefault(row["table_name"], []).append(row["column_name"])
+
+    cursor = await target.execute(
+        """SELECT child.relname AS table_name,child_column.attname AS column_name,
+                  parent.relname AS referenced_table,parent_column.attname AS referenced_column,
+                  CASE fk.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+                       WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                       WHEN 'd' THEN 'SET DEFAULT' END AS update_rule,
+                  CASE fk.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+                       WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                       WHEN 'd' THEN 'SET DEFAULT' END AS delete_rule
+           FROM pg_constraint fk
+           JOIN pg_class child ON child.oid=fk.conrelid
+           JOIN pg_namespace child_schema ON child_schema.oid=child.relnamespace
+           JOIN pg_class parent ON parent.oid=fk.confrelid
+           JOIN pg_namespace parent_schema ON parent_schema.oid=parent.relnamespace
+           JOIN LATERAL unnest(fk.conkey,fk.confkey)
+                WITH ORDINALITY AS key(child_attnum,parent_attnum,ordinality) ON TRUE
+           JOIN pg_attribute child_column
+             ON child_column.attrelid=child.oid AND child_column.attnum=key.child_attnum
+           JOIN pg_attribute parent_column
+             ON parent_column.attrelid=parent.oid AND parent_column.attnum=key.parent_attnum
+           WHERE fk.contype='f'
+             AND child_schema.nspname=current_schema()
+             AND parent_schema.nspname=current_schema()"""
+    )
+    postgres_foreign_keys = {
+        (
+            row["table_name"], row["column_name"], row["referenced_table"],
+            row["referenced_column"], row["update_rule"].upper(), row["delete_rule"].upper(),
+        )
+        for row in await cursor.fetchall()
+        if row["table_name"] in shared_tables
+    }
+
+    cursor = await target.execute(
+        """SELECT t.relname AS table_name,
+                  array_agg(a.attname ORDER BY key.ordinality) AS columns
+           FROM pg_index i
+           JOIN pg_class t ON t.oid=i.indrelid
+           JOIN pg_namespace n ON n.oid=t.relnamespace
+           JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum,ordinality)
+             ON key.ordinality <= i.indnkeyatts
+           JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=key.attnum
+           WHERE n.nspname=current_schema() AND i.indisunique
+             AND NOT i.indisprimary AND i.indexprs IS NULL
+           GROUP BY t.relname,i.indexrelid"""
+    )
+    postgres_unique_indexes = {
+        (row["table_name"], tuple(sorted(row["columns"])))
+        for row in await cursor.fetchall()
+        if row["table_name"] in shared_tables
+    }
+
+    differences: list[str] = []
+    for table in sorted(shared_tables):
+        source_columns = {column["name"]: column for column in sqlite_schema[table]}
+        target_columns = {column["name"]: column for column in postgres_schema[table]}
+        for column in sorted(set(source_columns) & set(target_columns)):
+            source_column = source_columns[column]
+            target_column = target_columns[column]
+            source_affinity = _sqlite_type_affinity(
+                source_column["declared_type"], column
+            )
+            target_affinity = _postgres_type_affinity(target_column["data_type"])
+            if source_affinity != target_affinity:
+                differences.append(
+                    f"type mismatch {table}.{column}: SQLite {source_column['declared_type']!r} "
+                    f"({source_affinity}) vs PostgreSQL {target_column['data_type']!r} "
+                    f"({target_affinity})"
+                )
+            source_not_null = (
+                source_column["not_null"] or source_column["primary_key_position"] > 0
+            )
+            target_not_null = target_column["is_nullable"] == "NO"
+            if source_not_null != target_not_null:
+                differences.append(
+                    f"nullability mismatch {table}.{column}: "
+                    f"SQLite not_null={source_not_null} vs PostgreSQL not_null={target_not_null}"
+                )
+
+    postgres_primary_key_tuples = {
+        table: tuple(columns) for table, columns in postgres_primary_keys.items()
+        if table in shared_tables
+    }
+    for table in sorted(shared_tables):
+        source_pk = sqlite_primary_keys.get(table, ())
+        target_pk = postgres_primary_key_tuples.get(table, ())
+        if source_pk != target_pk:
+            differences.append(
+                f"primary-key mismatch {table}: SQLite {source_pk} vs PostgreSQL {target_pk}"
+            )
+
+    sqlite_foreign_keys = {
+        item for item in sqlite_foreign_keys if item[0] in shared_tables
+    }
+    if sqlite_foreign_keys != postgres_foreign_keys:
+        for item in sorted(sqlite_foreign_keys - postgres_foreign_keys):
+            differences.append(f"PostgreSQL missing foreign key {item}")
+        for item in sorted(postgres_foreign_keys - sqlite_foreign_keys):
+            differences.append(f"PostgreSQL has extra foreign key {item}")
+
+    sqlite_unique_indexes = {
+        item for item in sqlite_unique_indexes if item[0] in shared_tables
+    }
+    if sqlite_unique_indexes != postgres_unique_indexes:
+        for item in sorted(sqlite_unique_indexes - postgres_unique_indexes):
+            differences.append(f"PostgreSQL missing unique index {item}")
+        for item in sorted(postgres_unique_indexes - sqlite_unique_indexes):
+            differences.append(f"PostgreSQL has extra unique index {item}")
+    return differences
 
 
 async def _table_row_count(target: PostgresConnection, table: str) -> int:
@@ -144,6 +359,9 @@ async def migrate_sqlite_to_postgres(
         source.execute("BEGIN")
         sqlite_schema = _inspect_sqlite_schema(source)
         postgres_schema = await _inspect_postgres_schema(target)
+        schema_differences = await _inspect_schema_constraints(
+            source, target, sqlite_schema, postgres_schema
+        )
         sqlite_tables = set(sqlite_schema)
         postgres_tables = set(postgres_schema)
 
@@ -183,6 +401,7 @@ async def migrate_sqlite_to_postgres(
 
         compatible = not (
             missing_tables or missing_source_columns or missing_required_target_columns
+            or schema_differences
         )
         report: dict[str, Any] = {
             "compatible": compatible,
@@ -192,6 +411,14 @@ async def migrate_sqlite_to_postgres(
             "postgres_only_tables": sorted(postgres_tables - sqlite_tables),
             "missing_postgres_columns": missing_source_columns,
             "missing_required_sqlite_columns": missing_required_target_columns,
+            "schema_differences": schema_differences,
+            "schema_checks": [
+                "column_type_affinity",
+                "column_nullability",
+                "primary_keys",
+                "foreign_keys_and_actions",
+                "unique_indexes",
+            ],
             "tables": table_reports,
             "total_source_rows": sum(item["source_rows"] for item in table_reports),
             "total_target_rows_before": sum(item["target_rows_before"] for item in table_reports),
