@@ -114,6 +114,9 @@ test("serves the Mini App shell through the Cloudflare static assets binding", a
   assert.equal(response.status, 200);
   assert.equal(requestedPath, "/");
   assert.match(await response.text(), /Peak Adventure/);
+  assert.match(response.headers.get("content-security-policy"), /frame-ancestors https:\/\/web\.telegram\.org/);
+  assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
 });
 
 test("rejects backend URLs that contain paths or query strings", async () => {
