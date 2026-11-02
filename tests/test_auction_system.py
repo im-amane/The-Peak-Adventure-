@@ -1,4 +1,7 @@
+import asyncio
+import tempfile
 import unittest
+from pathlib import Path
 import aiosqlite
 from auction_system import *
 
@@ -122,6 +125,41 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         for timestamp in (True,1.5,"1000",-1):
             with self.subTest(timestamp=timestamp),self.assertRaises(AuctionError):
                 await create_listing(self.db,1,"weapon",100,now=timestamp)
+
+    async def test_concurrent_expiry_settlement_pays_and_delivers_only_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path=str(Path(directory)/"auction-race.db")
+            first=await aiosqlite.connect(path)
+            first.row_factory=aiosqlite.Row
+            await first.executescript("""
+            CREATE TABLE players(user_id INTEGER PRIMARY KEY,coins INTEGER NOT NULL,
+              weapon TEXT NOT NULL,weapon_attack INTEGER NOT NULL,armor TEXT NOT NULL,armor_defense INTEGER NOT NULL);
+            INSERT INTO players VALUES(1,100,'Stormblade',25,'Traveler Clothes',0);
+            INSERT INTO players VALUES(2,1000,'Rusty Sword',0,'Dragon Mail',40);
+            CREATE TABLE battles(user_id INTEGER PRIMARY KEY);
+            """)
+            await init_auction_tables(first)
+            listing=await create_listing(first,1,"weapon",100,1,now=1000)
+            await place_bid(first,2,listing,100,now=1001)
+            second=await aiosqlite.connect(path)
+            second.row_factory=aiosqlite.Row
+            try:
+                await asyncio.gather(
+                    _settle_due(first,4601),
+                    _settle_due(second,4601),
+                )
+                cur=await first.execute("SELECT coins FROM players WHERE user_id=1")
+                self.assertEqual((await cur.fetchone())["coins"],200)
+                cur=await first.execute("SELECT coins,weapon,weapon_attack FROM players WHERE user_id=2")
+                buyer=await cur.fetchone()
+                self.assertEqual((buyer["coins"],buyer["weapon"],buyer["weapon_attack"]),(900,"Stormblade",25))
+                cur=await first.execute("SELECT COUNT(*) AS n FROM auction_stash WHERE user_id=2")
+                self.assertEqual((await cur.fetchone())["n"],1)
+                cur=await first.execute("SELECT status FROM auction_listings WHERE listing_id=?",(listing,))
+                self.assertEqual((await cur.fetchone())["status"],"sold")
+            finally:
+                await second.close()
+                await first.close()
 
     async def test_invalid_listing_duration(self):
         with self.assertRaises(AuctionError): await create_listing(self.db,1,"weapon",100,169,now=1000)
