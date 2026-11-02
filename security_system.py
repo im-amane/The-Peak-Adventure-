@@ -139,11 +139,14 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
     window = (window_minutes,) if _is_postgres(db) else (f"-{window_minutes} minutes",)
     cur = await db.execute(
         f"""SELECT user_id,COUNT(*) AS event_count,MAX(severity) AS max_severity,
-                  SUM(severity) AS risk_score,MAX(created_at) AS last_seen
+                  SUM(severity) AS risk_score,
+                  SUM(CASE WHEN severity >= 4 THEN 1 ELSE 0 END) AS high_severity_count,
+                  COUNT(DISTINCT event_type) AS event_type_count,
+                  MAX(created_at) AS last_seen
            FROM security_events
            WHERE created_at >= {cutoff}
            GROUP BY user_id
-           ORDER BY risk_score DESC,event_count DESC,last_seen DESC
+           ORDER BY risk_score DESC,high_severity_count DESC,event_count DESC,last_seen DESC
            LIMIT ?""",
         (*window, limit),
     )
