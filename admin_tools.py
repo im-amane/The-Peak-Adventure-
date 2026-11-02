@@ -66,10 +66,13 @@ async def record_admin_action(db,actor_id,action,target_id=None,details=""):
         raise AdminError("Invalid administrative target.")
     if not isinstance(details,str):
         raise AdminError("Invalid administrative details.")
-    cur=await db.execute("INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES(?,?,?,?)",
-      (actor_id,action.strip()[:64],target_id," ".join(details.split())[:500]))
+    try:
+        cur=await db.execute("INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES(?,?,?,?)",
+          (actor_id,action.strip()[:64],target_id," ".join(details.split())[:500]))
+    except Exception as exc:
+        raise AdminError("Administrative action could not be recorded; the change was rolled back.") from exc
     if cur.rowcount != 1:
-        raise AdminError("Administrative action could not be recorded.")
+        raise AdminError("Administrative action could not be recorded; the change was rolled back.")
 
 
 @_transactional
