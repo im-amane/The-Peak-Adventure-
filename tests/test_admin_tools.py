@@ -67,7 +67,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   async def mutation():
    await self.db.execute("UPDATE players SET coins=coins+10 WHERE user_id=101")
    return True
-  with self.assertRaisesRegex(sqlite3.IntegrityError,"audit unavailable"):
+  with self.assertRaisesRegex(AdminError,"could not be recorded; the change was rolled back"):
    await perform_audited_action(self.db,999,"test_mutation",101,mutation,"test")
   cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
   self.assertEqual((await cur.fetchone())[0],50)
@@ -96,7 +96,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
  async def test_audit_failure_rolls_back_coin_adjustment(self):
   await self.db.execute("CREATE TRIGGER reject_admin_audit BEFORE INSERT ON admin_audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable'); END")
   await self.db.commit()
-  with self.assertRaisesRegex(sqlite3.IntegrityError,"audit unavailable"):
+  with self.assertRaisesRegex(AdminError,"could not be recorded; the change was rolled back"):
    await adjust_player_coins(self.db,101,25,999)
   self.assertFalse(self.db.in_transaction)
   cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
