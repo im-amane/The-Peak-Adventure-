@@ -18,6 +18,37 @@ from psycopg.rows import dict_row
 _DOLLAR_QUOTE = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
 
 
+def _first_keyword(sql: str) -> str | None:
+    """Read the first SQL keyword after whitespace and leading comments."""
+    index = 0
+    while index < len(sql):
+        if sql[index].isspace():
+            index += 1
+        elif sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            if newline < 0:
+                return None
+            index = newline + 1
+        elif sql.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < len(sql) and depth:
+                if sql.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif sql.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ValueError("Unterminated SQL comment")
+        else:
+            match = re.match(r"[A-Za-z]+", sql[index:])
+            return match.group(0).upper() if match else None
+    return None
+
+
 def qmark_to_pyformat(sql: str) -> str:
     """Convert legacy qmark parameters while preserving quoted text and comments.
 
@@ -130,6 +161,7 @@ class PostgresConnection:
         connection = await psycopg.AsyncConnection.connect(
             conninfo,
             row_factory=dict_row,
+            autocommit=True,
         )
         return cls(connection)
 
@@ -141,6 +173,21 @@ class PostgresConnection:
         statement = qmark_to_pyformat(sql)
         if statement.strip().upper() == "BEGIN IMMEDIATE":
             statement = "BEGIN"
+
+        # SQLite starts implicit transactions for writes, but not for SELECTs.
+        # Psycopg autocommit mode plus this explicit write detection preserves
+        # that observable in_transaction behavior for the supported SQL subset.
+        keyword = _first_keyword(statement)
+        write_keywords = {
+            "INSERT", "UPDATE", "DELETE", "MERGE",
+            "CREATE", "ALTER", "DROP", "TRUNCATE",
+            "GRANT", "REVOKE", "COMMENT",
+        }
+        is_write = keyword in write_keywords
+        if keyword == "WITH":
+            is_write = re.search(r"\\b(INSERT|UPDATE|DELETE|MERGE)\\b", statement, re.IGNORECASE) is not None
+        if is_write and not self.in_transaction:
+            await self._connection.execute("BEGIN")
         return await self._connection.execute(statement, parameters)
 
     async def commit(self) -> None:
