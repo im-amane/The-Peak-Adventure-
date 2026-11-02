@@ -243,3 +243,41 @@ test("keeps obstacles outside the map from corrupting the collision grid", () =>
 
   assert.deepEqual(path, [destination]);
 });
+
+
+test("uses local obstacle candidates without missing edge or long-segment collisions", () => {
+  const obstacles = [
+    { x: 320, y: 192, width: 48, height: 48 },
+    { x: 160, y: 64, width: 24, height: 24 },
+    { x: 480, y: 320, width: 30, height: 30 },
+    { x: 8, y: 320, width: 12, height: 70 },
+    ...Array.from({ length: 180 }, (_, index) => ({
+      x: 1200 + index * 30,
+      y: 900 + index * 17,
+      width: 20,
+      height: 20,
+    })),
+  ];
+  const start = { x: 24, y: 192 };
+  const goal = { x: 616, y: 192 };
+  const path = findPath(start, goal, obstacles, {
+    width: 640,
+    height: 384,
+    minY: 16,
+    cellSize: 32,
+    margin: 4,
+  });
+
+  assert.ok(path.length > 1, "the central obstacle should require a safe detour");
+  assert.deepEqual(path.at(-1), goal);
+  const points = [start, ...path];
+  for (let index = 1; index < points.length; index++) {
+    for (const obstacle of obstacles) {
+      assert.equal(
+        segmentIntersectsExpandedRect(points[index - 1], points[index], obstacle, 4),
+        false,
+        "broadphase candidates must preserve exact collision safety",
+      );
+    }
+  }
+});
