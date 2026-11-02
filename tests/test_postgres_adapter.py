@@ -3282,8 +3282,8 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({result["status"] for result in results}, {"queued", "matched"})
 
         status_one, status_two = await asyncio.gather(
-            get_matchmaking_status(self.db1, self.user_one),
-            get_matchmaking_status(self.db2, self.user_two),
+            get_matchmaking_status(self.db1, self.user_one, now=2_000),
+            get_matchmaking_status(self.db2, self.user_two, now=2_000),
         )
         self.assertEqual(status_one["status"], "matched")
         self.assertEqual(status_two["status"], "matched")
