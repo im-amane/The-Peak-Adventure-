@@ -118,6 +118,18 @@ class QmarkTranslationTests(unittest.TestCase):
 
         self.assertEqual(_prepare_statement("BEGIN IMMEDIATE"), "BEGIN")
 
+    def test_insert_or_ignore_is_normalized_for_postgres(self):
+        from postgres_adapter import _prepare_statement
+
+        self.assertEqual(
+            _prepare_statement("INSERT OR IGNORE INTO players(user_id) VALUES (?)"),
+            "INSERT INTO players(user_id) VALUES (%s) ON CONFLICT DO NOTHING",
+        )
+        self.assertEqual(
+            _prepare_statement("  insert or ignore into discoveries(level) values (?);  "),
+            "  INSERT INTO discoveries(level) values (%s) ON CONFLICT DO NOTHING;",
+        )
+
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
 class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
@@ -158,6 +170,23 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.db.in_transaction)
         await self.db.rollback()
         self.assertFalse(self.db.in_transaction)
+
+    async def test_insert_or_ignore_swallows_unique_conflict(self):
+        await self.db.execute(
+            "INSERT INTO adapter_probe(value) VALUES (?)", ("already-present",)
+        )
+        await self.db.commit()
+        cursor = await self.db.execute(
+            "INSERT OR IGNORE INTO adapter_probe(value) VALUES (?)",
+            ("already-present",),
+        )
+        self.assertEqual(cursor.rowcount, 0)
+        await self.db.commit()
+        check = await self.db.execute(
+            "SELECT COUNT(*) AS count FROM adapter_probe WHERE value=?",
+            ("already-present",),
+        )
+        self.assertEqual((await check.fetchone())["count"], 1)
 
     async def test_qmark_insert_returning_and_dict_rows(self):
         cursor = await self.db.execute(

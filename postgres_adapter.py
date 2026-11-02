@@ -135,9 +135,33 @@ def _is_write_statement(sql: str) -> bool:
     return False
 
 
+def _normalize_sqlite_insert_ignore(sql: str) -> str:
+    """Translate SQLite's INSERT OR IGNORE form to PostgreSQL conflict handling.
+
+    The application uses this legacy form for idempotent player/discovery rows.
+    PostgreSQL's unqualified ON CONFLICT DO NOTHING preserves its ignore-on-any-
+    unique/exclusion-conflict behavior without needing table-specific constraints.
+    """
+    if not re.match(r"^\s*INSERT\s+OR\s+IGNORE\s+INTO\b", sql, re.IGNORECASE):
+        return sql
+    statement = re.sub(
+        r"^(\s*)INSERT\s+OR\s+IGNORE\s+INTO\b",
+        r"\1INSERT INTO",
+        sql,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    stripped = statement.rstrip()
+    has_semicolon = stripped.endswith(";")
+    if has_semicolon:
+        stripped = stripped[:-1].rstrip()
+    return stripped + " ON CONFLICT DO NOTHING" + (";" if has_semicolon else "")
+
+
 def _prepare_statement(sql: str) -> str:
-    """Translate legacy placeholders and the SQLite-only explicit write-begin form."""
+    """Translate legacy SQL syntax and the SQLite-only explicit write-begin form."""
     statement = qmark_to_pyformat(sql)
+    statement = _normalize_sqlite_insert_ignore(statement)
     if re.fullmatch(r"\s*BEGIN\s+IMMEDIATE\s*;?\s*", statement, re.IGNORECASE):
         return "BEGIN"
     return statement
