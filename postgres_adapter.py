@@ -62,6 +62,7 @@ def qmark_to_pyformat(sql: str) -> str:
     index = 0
     length = len(sql)
     quote: str | None = None
+    escape_string = False
     dollar_quote: str | None = None
     block_depth = 0
     line_comment = False
@@ -109,10 +110,11 @@ def qmark_to_pyformat(sql: str) -> str:
                     index += 1
                 else:
                     quote = None
-            elif quote == "'" and char == "\\" and index < length:
-                # Conservatively preserve escaped characters in E-strings.
+            elif quote == "'" and escape_string and char == "\\" and index < length:
                 output.append(sql[index])
                 index += 1
+            else:
+                continue
             continue
 
         if sql.startswith("--", index):
@@ -125,6 +127,12 @@ def qmark_to_pyformat(sql: str) -> str:
             block_depth = 1
         elif sql[index] in {"'", '"'}:
             quote = sql[index]
+            escape_string = (
+                quote == "'"
+                and index > 0
+                and sql[index - 1] in {"E", "e"}
+                and (index < 2 or not (sql[index - 2].isalnum() or sql[index - 2] == "_"))
+            )
             output.append(sql[index])
             index += 1
         elif sql[index] == "$":

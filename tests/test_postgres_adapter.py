@@ -22,6 +22,7 @@ from crafting_system import CraftingError, award_material_drop, craft_item, get_
 from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
+from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -1028,6 +1029,119 @@ class PostgresReportServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_report_schema_initialization_is_idempotent(self):
         await init_report_tables(self.db)
         await init_report_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
+    alice = 9_876_543_210
+    bob = 9_876_543_211
+    charlie = 9_876_543_212
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS friend_requests")
+        await self.db.execute("DROP TABLE IF EXISTS friendships")
+        await self.db.execute("DROP TABLE IF EXISTS player_settings")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY,username TEXT NOT NULL,level INTEGER NOT NULL DEFAULT 1)"
+        )
+        await self.db.execute(
+            "CREATE TABLE player_settings(user_id BIGINT PRIMARY KEY,profile_visibility TEXT NOT NULL DEFAULT 'public')"
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,?),(?,?,?),(?,?,?)",
+            (
+                self.alice, "Alice", 20,
+                self.bob, "Bob", 15,
+                self.charlie, "Charlie", 10,
+            ),
+        )
+        await self.db.execute(
+            "INSERT INTO player_settings(user_id,profile_visibility) VALUES(?,?),(?,?),(?,?)",
+            (
+                self.alice, "public",
+                self.bob, "friends",
+                self.charlie, "private",
+            ),
+        )
+        await self.db.commit()
+        await init_friend_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS friend_requests")
+        await self.db.execute("DROP TABLE IF EXISTS friendships")
+        await self.db.execute("DROP TABLE IF EXISTS player_settings")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_send_accept_list_and_search_friends(self):
+        request_id = await send_friend_request(self.db, self.alice, self.bob)
+        pending = await list_pending_friend_requests(self.db, self.bob)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["request_id"], request_id)
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
+
+        friends = await list_friends(self.db, self.alice)
+        self.assertEqual([item["user_id"] for item in friends], [self.bob])
+        results = await search_players(self.db, self.alice, "bob", limit=10)
+        self.assertEqual([item["user_id"] for item in results], [self.bob])
+        hidden = await search_players(self.db, self.alice, "charlie", limit=10)
+        self.assertEqual(hidden, [])
+
+    async def test_remove_friend_allows_a_new_request(self):
+        request_id = await send_friend_request(self.db, self.alice, self.bob)
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
+        await remove_friend(self.db, self.alice, self.bob)
+        self.assertEqual(await list_friends(self.db, self.alice), [])
+        new_id = await send_friend_request(self.db, self.alice, self.bob)
+        self.assertGreater(new_id, request_id)
+
+    async def test_reverse_pending_request_is_accepted(self):
+        request_id = await send_friend_request(self.db, self.alice, self.bob)
+        with self.assertRaisesRegex(FriendError, "Accept it instead"):
+            await send_friend_request(self.db, self.bob, self.alice)
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
+        self.assertEqual(len(await list_friends(self.db, self.alice)), 1)
+
+    async def test_duplicate_open_request_is_rejected(self):
+        await send_friend_request(self.db, self.alice, self.bob)
+        with self.assertRaises(FriendError):
+            await send_friend_request(self.db, self.alice, self.bob)
+
+    async def test_concurrent_duplicate_requests_are_serialized(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                send_friend_request(self.db, self.alice, self.bob),
+                send_friend_request(second, self.alice, self.bob),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(x, int) for x in results), 1)
+            self.assertEqual(sum(isinstance(x, FriendError) for x in results), 1)
+            self.assertEqual(len(await list_pending_friend_requests(self.db, self.bob)), 1)
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_pending_request_limit_is_enforced(self):
+        for target in range(2000, 2010):
+            await send_friend_request(self.db, self.alice, target)
+        with self.assertRaises(FriendError):
+            await send_friend_request(self.db, self.alice, 2010)
+
+    async def test_friend_request_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await send_friend_request(self.db, self.alice, self.bob)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await list_pending_friend_requests(self.db, self.bob), [])
+
+    async def test_friend_schema_initialization_is_idempotent(self):
+        await init_friend_tables(self.db)
+        await init_friend_tables(self.db)
         await self.db.commit()
 
 
