@@ -13,6 +13,7 @@ from moderation_system import (
 )
 from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
 from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
+from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -236,6 +237,87 @@ class PostgresResourceServiceTests(unittest.IsolatedAsyncioTestCase):
             "SELECT 1 FROM player_stamina WHERE user_id=?", (306,)
         )
         self.assertIsNone(await cursor.fetchone())
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresStoryServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS story_reward_claims")
+        await self.db.execute("DROP TABLE IF EXISTS story_flags")
+        await self.db.execute("DROP TABLE IF EXISTS player_story")
+        await self.db.execute("DROP TABLE IF EXISTS party_members")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY,coins BIGINT NOT NULL DEFAULT 0)"
+        )
+        await self.db.execute("CREATE TABLE party_members(user_id BIGINT,party_id BIGINT)")
+        await self.db.execute("INSERT INTO players(user_id,coins) VALUES(401,0)")
+        await self.db.commit()
+        await init_story_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS story_reward_claims")
+        await self.db.execute("DROP TABLE IF EXISTS story_flags")
+        await self.db.execute("DROP TABLE IF EXISTS player_story")
+        await self.db.execute("DROP TABLE IF EXISTS party_members")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_branch_choice_and_reward_claim_roundtrip(self):
+        await choose_story_path(self.db, 401, 5, 1, "follow_mira")
+        await choose_story_path(self.db, 401, 5, 2, "trust_mira")
+        self.assertEqual((await get_story_flags(self.db, 401))["trust_path"], "mira")
+
+        self.assertEqual(await claim_story_reward(self.db, 401, 1), 80)
+        with self.assertRaises(StoryError):
+            await claim_story_reward(self.db, 401, 1)
+        cursor = await self.db.execute("SELECT coins FROM players WHERE user_id=?", (401,))
+        self.assertEqual((await cursor.fetchone())["coins"], 80)
+
+    async def test_party_story_gate_and_choice(self):
+        for chapter_id in range(1, 8):
+            choice = next(iter(CHAPTERS[chapter_id - 1]["choices"]))
+            await choose_story_path(self.db, 401, 100, chapter_id, choice)
+
+        with self.assertRaises(StoryError):
+            await choose_story_path(self.db, 401, 100, 8, "light_together")
+
+        await self.db.execute("INSERT INTO party_members(user_id,party_id) VALUES(?,?)", (401, 55))
+        result = await choose_story_path(self.db, 401, 100, 8, "light_together")
+        self.assertEqual(result["chapter"]["title"], "The Last Lantern")
+        await self.db.commit()
+
+    async def test_story_choice_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await choose_story_path(self.db, 401, 1, 1, "follow_mira")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM player_story WHERE user_id=? AND chapter_id=?",
+            (401, 1),
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_story_reward_claim_and_coin_credit_roll_back_together(self):
+        await choose_story_path(self.db, 401, 1, 1, "follow_mira")
+        await self.db.execute("BEGIN IMMEDIATE")
+        self.assertEqual(await claim_story_reward(self.db, 401, 1), 80)
+        await self.db.rollback()
+
+        cursor = await self.db.execute(
+            "SELECT 1 FROM story_reward_claims WHERE user_id=? AND chapter_id=?",
+            (401, 1),
+        )
+        self.assertIsNone(await cursor.fetchone())
+        cursor = await self.db.execute("SELECT coins FROM players WHERE user_id=?", (401,))
+        self.assertEqual((await cursor.fetchone())["coins"], 0)
+
+    async def test_story_schema_initialization_is_idempotent(self):
+        await init_story_tables(self.db)
+        await init_story_tables(self.db)
+        await self.db.commit()
 
 
 if __name__ == "__main__":
