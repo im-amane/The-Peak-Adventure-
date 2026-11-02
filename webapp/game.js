@@ -490,7 +490,7 @@
         const turnLine = document.createElement("p");
         turnLine.className = "small";
         turnLine.textContent = battle.status === "finished"
-          ? (battle.winner_id === gameState.user_id ? "You won this match." : (battle.winner_id ? "Your opponent won this match." : "Match closed."))
+          ? (battle.is_winner ? "You won this match." : (battle.winner_id ? "Your opponent won this match." : "Match closed."))
           : (battle.is_my_turn ? "Your turn. Choose an action." : "Waiting for your opponent...");
         panel.appendChild(turnLine);
         if (battle.status === "active") {
