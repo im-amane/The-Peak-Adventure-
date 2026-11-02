@@ -3,11 +3,11 @@ import re
 import unittest
 from pathlib import Path
 
+from scripts.generate_monster_power_chart import render_csv
+
 
 ROOT = Path(__file__).resolve().parents[1]
 MONSTERS = json.loads((ROOT / "monsters.json").read_text(encoding="utf-8"))
-
-from scripts.generate_monster_power_chart import render_csv
 EXPECTED_TRAITS = {
     "regenerate",
     "fury",
