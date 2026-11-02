@@ -54,6 +54,16 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.db.rollback()
         self.assertFalse(self.db.in_transaction)
 
+    async def test_cte_write_also_opens_transaction(self):
+        await self.db.execute(
+            """WITH payload(value) AS (VALUES (?))
+               INSERT INTO adapter_probe(value) SELECT value FROM payload""",
+            ("cte-write",),
+        )
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertFalse(self.db.in_transaction)
+
     async def test_qmark_insert_returning_and_dict_rows(self):
         cursor = await self.db.execute(
             "INSERT INTO adapter_probe(value) VALUES (?) RETURNING id,value",
