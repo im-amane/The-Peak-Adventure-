@@ -134,6 +134,21 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await cur.fetchone())[0],10)
   cur=await self.db.execute("SELECT progress FROM group_missions WHERE chat_id=-1001 AND mission_id='battles'")
   self.assertEqual((await cur.fetchone())[0],1)
+ async def test_group_activity_progress_rolls_back_if_xp_award_fails(self):
+  await self.db.execute("CREATE TRIGGER reject_group_activity_xp BEFORE UPDATE OF group_xp ON group_profiles BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await record_group_activity_reward(self.db,-1001,"battle",20)
+  cur=await self.db.execute("SELECT progress FROM group_missions WHERE chat_id=-1001 AND mission_date=? AND mission_id='battles'",(today(),))
+  self.assertIsNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT group_xp FROM group_profiles WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())[0],0)
+  await self.db.execute("DROP TRIGGER reject_group_activity_xp")
+  await record_group_activity_reward(self.db,-1001,"battle",20)
+  cur=await self.db.execute("SELECT progress FROM group_missions WHERE chat_id=-1001 AND mission_date=? AND mission_id='battles'",(today(),))
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT group_xp FROM group_profiles WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())[0],20)
  async def test_group_mission_coin_reward_rolls_back_claim_and_xp_if_credit_fails(self):
   await record_group_activity(self.db,-1001,"battle",5)
   await self.db.execute("CREATE TRIGGER reject_group_mission_coins BEFORE UPDATE OF coins ON players WHEN OLD.user_id=202 BEGIN SELECT RAISE(ABORT,'coin credit unavailable'); END")
