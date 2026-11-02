@@ -33,7 +33,7 @@ class MonsterCatalogTests(unittest.TestCase):
         self.assertTrue(all(monster["rank"] == "BOSS" for monster in MONSTERS if monster["boss"]))
 
     def test_monster_names_and_abilities_are_unique(self):
-        for field in ("name", "special_move", "unique_power", "story"):
+        for field in ("name", "special_move", "unique_power", "advantage", "disadvantage", "story"):
             values = [monster[field] for monster in MONSTERS]
             self.assertEqual(len(values), len(set(values)), f"{field} must be unique")
 
