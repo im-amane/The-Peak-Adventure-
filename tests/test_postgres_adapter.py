@@ -51,6 +51,10 @@ from party_system import (
     respond_to_party_invite, reward_party_battle, start_party_battle,
 )
 from rate_limit import DatabaseSlidingWindowRateLimiter
+from matchmaking_system import (
+    MatchmakingError, cancel_matchmaking, complete_matchmaking_match,
+    get_matchmaking_status, join_matchmaking,
+)
 import main
 from scripts.migrate_sqlite_to_postgres import migrate_sqlite_to_postgres
 
@@ -3238,3 +3242,71 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
                 self.postgres,
                 apply=True,
             )
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db1 = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_match_" + uuid.uuid4().hex[:12]
+        await self.db1.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db1.commit()
+        await self.db1.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.db1)
+
+        self.db2 = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db2.execute(f'SET search_path TO "{self.schema}"')
+        self.user_one = 9_000_000_101
+        self.user_two = 9_000_000_102
+        await self.db1.executemany(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,10)",
+            ((self.user_one, "QueueOne"), (self.user_two, "QueueTwo")),
+        )
+        await self.db1.commit()
+
+    async def asyncTearDown(self):
+        if self.db1.in_transaction:
+            await self.db1.rollback()
+        if self.db2.in_transaction:
+            await self.db2.rollback()
+        await self.db2.close()
+        await self.db1.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db1.commit()
+        await self.db1.close()
+
+    async def test_concurrent_cross_connection_joins_create_one_match(self):
+        results = await asyncio.gather(
+            join_matchmaking(self.db1, self.user_one, "ranked", now=2_000),
+            join_matchmaking(self.db2, self.user_two, "ranked", now=2_000),
+        )
+        self.assertEqual({result["status"] for result in results}, {"queued", "matched"})
+
+        status_one, status_two = await asyncio.gather(
+            get_matchmaking_status(self.db1, self.user_one),
+            get_matchmaking_status(self.db2, self.user_two),
+        )
+        self.assertEqual(status_one["status"], "matched")
+        self.assertEqual(status_two["status"], "matched")
+        self.assertEqual(status_one["match_id"], status_two["match_id"])
+        self.assertEqual(status_one["opponent_id"], self.user_two)
+        self.assertEqual(status_two["opponent_id"], self.user_one)
+
+        cursor = await self.db1.execute(
+            "SELECT COUNT(*) AS count FROM matchmaking_matches"
+        )
+        self.assertEqual((await cursor.fetchone())["count"], 1)
+        completed = await complete_matchmaking_match(
+            self.db1,
+            status_one["match_id"],
+            winner_id=self.user_one,
+            now=2_010,
+        )
+        self.assertEqual(completed["status"], "completed")
+
+    async def test_postgres_matchmaking_rejects_invalid_mode_and_rate_limits_rejoin(self):
+        with self.assertRaises(MatchmakingError):
+            await join_matchmaking(self.db1, self.user_one, "unrated", now=3_000)
+        await join_matchmaking(self.db1, self.user_one, "casual", now=3_000)
+        self.assertTrue(await cancel_matchmaking(self.db1, self.user_one, now=3_001))
+        with self.assertRaisesRegex(MatchmakingError, "Wait 9 seconds"):
+            await join_matchmaking(self.db1, self.user_one, "casual", now=3_001)
