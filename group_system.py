@@ -220,6 +220,17 @@ async def claim_group_mission(db,chat_id,user_id,mission_id):
     await award_group_xp(db,chat_id,mission["xp"])
     return mission["reward"],mission["xp"]
 
+
+@_transactional
+async def claim_group_mission_reward(db,chat_id,user_id,mission_id):
+    """Claim the group mission and credit its player coin reward atomically."""
+    coins,xp=await claim_group_mission(db,chat_id,user_id,mission_id)
+    cur=await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(coins,user_id))
+    if cur.rowcount != 1:
+        raise GroupError("The player reward could not be credited.")
+    return coins,xp
+
+
 @_transactional
 async def start_group_raid(db,chat_id,user_id,boss_level,boss_name,boss_hp):
     if not valid_chat(chat_id) or not await is_group_admin(db,chat_id,user_id):
