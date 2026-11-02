@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import aiosqlite
+from functools import wraps
 
 
 class FriendError(ValueError):
@@ -11,37 +12,81 @@ class FriendError(ValueError):
 MAX_PENDING_FRIEND_REQUESTS = 10
 
 
+async def _begin_atomic(db, savepoint):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Make friend mutations atomic without committing caller-owned work."""
+    @wraps(function)
+    async def wrapped(db, *args, **kwargs):
+        savepoint = "friend_" + function.__name__
+        nested = await _begin_atomic(db, savepoint)
+        try:
+            result = await function(db, *args, **kwargs)
+            await _commit_atomic(db, nested, savepoint)
+            return result
+        except Exception:
+            await _rollback_atomic(db, savepoint, nested) if False else await _rollback_atomic(db, nested, savepoint)
+            raise
+    return wrapped
+
+
+@_transactional
 async def init_friend_tables(db: aiosqlite.Connection) -> None:
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS friend_requests (
-      request_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_low INTEGER NOT NULL,
-      user_high INTEGER NOT NULL,
-      requester_id INTEGER NOT NULL,
-      target_id INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(status IN ('pending', 'accepted', 'declined', 'removed')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      responded_at TEXT,
-      CHECK(user_low < user_high),
-      CHECK(requester_id != target_id),
-      UNIQUE(request_id)
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_active_pair
-      ON friend_requests(user_low, user_high)
-      WHERE status IN ('pending', 'accepted');
-    CREATE INDEX IF NOT EXISTS idx_friend_target_pending
-      ON friend_requests(target_id, status, request_id);
-    CREATE INDEX IF NOT EXISTS idx_friend_requester_status
-      ON friend_requests(requester_id, status);
-    """)
-    await db.commit()
+    """Create friend storage without committing a caller-owned transaction."""
+    statements = (
+        """CREATE TABLE IF NOT EXISTS friend_requests (
+          request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_low INTEGER NOT NULL,
+          user_high INTEGER NOT NULL,
+          requester_id INTEGER NOT NULL,
+          target_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending', 'accepted', 'declined', 'removed')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          responded_at TEXT,
+          CHECK(user_low < user_high),
+          CHECK(requester_id != target_id),
+          UNIQUE(request_id)
+        )""",
+        """CREATE UNIQUE INDEX IF NOT EXISTS idx_friend_active_pair
+          ON friend_requests(user_low, user_high)
+          WHERE status IN ('pending', 'accepted')""",
+        """CREATE INDEX IF NOT EXISTS idx_friend_target_pending
+          ON friend_requests(target_id, status, request_id)""",
+        """CREATE INDEX IF NOT EXISTS idx_friend_requester_status
+          ON friend_requests(requester_id, status)""",
+    )
+    for statement in statements:
+        await db.execute(statement)
 
 
 def _valid_user_id(user_id: int) -> bool:
     return isinstance(user_id, int) and not isinstance(user_id, bool) and user_id > 0
 
 
+@_transactional
 async def send_friend_request(db: aiosqlite.Connection, requester_id: int, target_id: int) -> int:
     if not _valid_user_id(requester_id) or not _valid_user_id(target_id):
         raise FriendError("Invalid player account.")
@@ -71,17 +116,16 @@ async def send_friend_request(db: aiosqlite.Connection, requester_id: int, targe
             "INSERT INTO friend_requests(user_low,user_high,requester_id,target_id) VALUES(?,?,?,?)",
             (low, high, requester_id, target_id),
         )
-        await db.commit()
     except aiosqlite.IntegrityError as exc:
-        await db.rollback()
         raise FriendError("A friend request for this player is already active.") from exc
     return int(cur.lastrowid)
 
 
+@_transactional
 async def respond_to_friend_request(
     db: aiosqlite.Connection, request_id: int, target_id: int, accept: bool
 ) -> None:
-    if not _valid_user_id(request_id) or not _valid_user_id(target_id):
+    if not _valid_user_id(request_id) or not _valid_user_id(target_id) or type(accept) is not bool:
         raise FriendError("Invalid friend request.")
     cur = await db.execute(
         "SELECT target_id,status FROM friend_requests WHERE request_id=?",
@@ -93,12 +137,13 @@ async def respond_to_friend_request(
     if request["target_id"] != target_id:
         raise FriendError("Only the invited player can respond to this request.")
     status = "accepted" if accept else "declined"
-    await db.execute(
+    cur = await db.execute(
         "UPDATE friend_requests SET status=?,responded_at=CURRENT_TIMESTAMP "
         "WHERE request_id=? AND status='pending' AND target_id=?",
         (status, request_id, target_id),
     )
-    await db.commit()
+    if cur.rowcount != 1:
+        raise FriendError("That friend request was already handled.")
 
 
 async def list_friends(db: aiosqlite.Connection, user_id: int):
@@ -118,6 +163,7 @@ async def list_friends(db: aiosqlite.Connection, user_id: int):
     return await cur.fetchall()
 
 
+@_transactional
 async def remove_friend(db: aiosqlite.Connection, user_id: int, friend_id: int) -> None:
     if not _valid_user_id(user_id) or not _valid_user_id(friend_id) or user_id == friend_id:
         raise FriendError("Invalid friend account.")
@@ -129,7 +175,7 @@ async def remove_friend(db: aiosqlite.Connection, user_id: int, friend_id: int) 
     )
     if cur.rowcount == 0:
         raise FriendError("That player is not on your friend list.")
-    await db.commit()
+ 
 
 
 async def search_players(db: aiosqlite.Connection, searcher_id: int, query: str, limit: int = 10):
