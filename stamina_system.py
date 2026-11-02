@@ -66,7 +66,7 @@ async def get_stamina(db, user_id, now=None, commit=True):
     nested=await _begin_atomic(db,"get_stamina")
     try:
         await db.execute(
-            "INSERT OR IGNORE INTO player_stamina(user_id,stamina,updated_at) VALUES(?,?,?)",
+            "INSERT INTO player_stamina(user_id,stamina,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO NOTHING",
             (user_id,MAX_STAMINA,now),
         )
         cur=await db.execute("SELECT stamina,updated_at FROM player_stamina WHERE user_id=?",(user_id,))
@@ -124,8 +124,8 @@ async def restore_stamina(db, user_id, amount, now=None, commit=True):
     try:
         await get_stamina(db,user_id,now)
         cur=await db.execute(
-            "UPDATE player_stamina SET stamina=MIN(?,stamina+?),updated_at=? WHERE user_id=?",
-            (MAX_STAMINA,amount,now,user_id),
+            "UPDATE player_stamina SET stamina=CASE WHEN stamina+? > ? THEN ? ELSE stamina+? END,updated_at=? WHERE user_id=?",
+            (amount,MAX_STAMINA,MAX_STAMINA,amount,now,user_id),
         )
         if cur.rowcount!=1:
             raise StaminaError("Stamina could not be restored.")
