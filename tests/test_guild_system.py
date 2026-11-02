@@ -16,6 +16,7 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO players VALUES(?,?,?,?)",(4,"other",4,0))
   await self.db.execute("INSERT INTO guilds VALUES(?,?,?,?,?)",(20,"Other",4,1,0))
   await self.db.execute("INSERT INTO guild_members VALUES(?,?,?,CURRENT_TIMESTAMP)",(4,20,"leader"))
+  await self.db.commit()
   await init_guild_features(self.db)
  async def asyncTearDown(self): await self.db.close()
  async def test_pending_guild_invites_are_listed_for_target_only(self):
