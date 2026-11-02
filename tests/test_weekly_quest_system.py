@@ -14,6 +14,7 @@ class WeeklyQuestTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY,coins INTEGER,potions INTEGER)")
         await self.db.execute("INSERT INTO players VALUES(1,0,0)")
         await init_weekly_tables(self.db)
+        await self.db.commit()
 
     async def asyncTearDown(self):
         await self.db.close()
