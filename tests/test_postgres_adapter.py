@@ -48,6 +48,11 @@ from account_system import (
     AccountError, delete_player_account, get_settings,
     init_account_tables, update_settings,
 )
+from auction_system import (
+    AuctionError, cancel_listing, create_listing, equip_stashed_item,
+    init_auction_tables, list_active_auctions, list_stash, place_bid,
+)
+
 
 
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
@@ -2019,3 +2024,141 @@ class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT 1 FROM players WHERE user_id=?", (self.user_id,)
         )
         self.assertIsNotNone(await cursor.fetchone())
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    seller_id = 5_000_000_000_000_401
+    buyer_id = 5_000_000_000_000_402
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in ("auction_stash", "auction_listings", "battles", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY, coins BIGINT NOT NULL,
+                 weapon TEXT NOT NULL, weapon_attack INTEGER NOT NULL,
+                 armor TEXT NOT NULL, armor_defense INTEGER NOT NULL
+               )"""
+        )
+        await self.db.execute(
+            """INSERT INTO players VALUES
+               (?,?, 'Stormblade',25,'Traveler Clothes',0),
+               (?,?,'Rusty Sword',0,'Dragon Mail',40)""",
+            (self.seller_id, 100, self.buyer_id, 1000),
+        )
+        await self.db.execute("CREATE TABLE battles(user_id BIGINT PRIMARY KEY)")
+        await self.db.commit()
+        await init_auction_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in ("auction_stash", "auction_listings", "battles", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_listing_bidding_expiry_and_stash_use_bigint_ids(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        self.assertIsInstance(listing_id, int)
+        await place_bid(self.db, self.buyer_id, listing_id, 100, now=1001)
+        await list_active_auctions(self.db, now=4601)
+
+        cursor = await self.db.execute(
+            "SELECT coins,weapon,weapon_attack FROM players WHERE user_id=?",
+            (self.seller_id,),
+        )
+        seller = await cursor.fetchone()
+        self.assertEqual((seller["coins"], seller["weapon"], seller["weapon_attack"]), (200, "Rusty Sword", 0))
+        cursor = await self.db.execute(
+            "SELECT coins,weapon,weapon_attack FROM players WHERE user_id=?",
+            (self.buyer_id,),
+        )
+        buyer = await cursor.fetchone()
+        self.assertEqual((buyer["coins"], buyer["weapon"], buyer["weapon_attack"]), (900, "Stormblade", 25))
+
+        stash = await list_stash(self.db, self.buyer_id)
+        self.assertEqual(len(stash), 1)
+        self.assertEqual((stash[0]["item_name"], stash[0]["item_stat"]), ("Rusty Sword", 0))
+        self.assertGreater(stash[0]["stash_id"], 0)
+        equipped = await equip_stashed_item(self.db, self.buyer_id, stash[0]["stash_id"])
+        self.assertEqual(equipped, ("Rusty Sword", "weapon", 0))
+        cursor = await self.db.execute(
+            "SELECT weapon,weapon_attack FROM players WHERE user_id=?",
+            (self.buyer_id,),
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), ("Rusty Sword", 0))
+
+    async def test_buyer_in_active_battle_receives_item_in_stash(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        await place_bid(self.db, self.buyer_id, listing_id, 100, now=1001)
+        await self.db.execute("INSERT INTO battles(user_id) VALUES(?)", (self.buyer_id,))
+        await self.db.commit()
+        await list_active_auctions(self.db, now=4601)
+
+        cursor = await self.db.execute(
+            "SELECT weapon,weapon_attack FROM players WHERE user_id=?",
+            (self.buyer_id,),
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), ("Rusty Sword", 0))
+        stash = await list_stash(self.db, self.buyer_id)
+        self.assertEqual([(row["item_name"], row["item_stat"]) for row in stash], [("Stormblade", 25)])
+
+    async def test_no_bid_expiry_returns_item_without_overwriting_new_gear(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        await self.db.execute(
+            "UPDATE players SET weapon='New Blade',weapon_attack=12 WHERE user_id=?",
+            (self.seller_id,),
+        )
+        await self.db.commit()
+        await list_active_auctions(self.db, now=4601)
+
+        cursor = await self.db.execute(
+            "SELECT weapon,weapon_attack FROM players WHERE user_id=?",
+            (self.seller_id,),
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), ("Stormblade", 25))
+        stash = await list_stash(self.db, self.seller_id)
+        self.assertEqual([(row["item_name"], row["item_stat"]) for row in stash], [("New Blade", 12)])
+
+    async def test_missing_buyer_cannot_trigger_seller_payout(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        await place_bid(self.db, self.buyer_id, listing_id, 100, now=1001)
+        await self.db.execute("DELETE FROM players WHERE user_id=?", (self.buyer_id,))
+        await self.db.commit()
+        await list_active_auctions(self.db, now=4601)
+
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.seller_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 100)
+        cursor = await self.db.execute(
+            "SELECT status FROM auction_listings WHERE listing_id=?", (listing_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["status"], "expired")
+
+    async def test_missing_seller_refunds_existing_buyer(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        await place_bid(self.db, self.buyer_id, listing_id, 100, now=1001)
+        await self.db.execute("DELETE FROM players WHERE user_id=?", (self.seller_id,))
+        await self.db.commit()
+        await list_active_auctions(self.db, now=4601)
+
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.buyer_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 1000)
+        cursor = await self.db.execute(
+            "SELECT status FROM auction_listings WHERE listing_id=?", (listing_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["status"], "expired")
