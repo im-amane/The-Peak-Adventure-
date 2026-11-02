@@ -1,6 +1,11 @@
 import unittest
+import asyncio
+import os
+import tempfile
 
-from rate_limit import SlidingWindowRateLimiter
+import aiosqlite
+
+from rate_limit import DatabaseSlidingWindowRateLimiter, SlidingWindowRateLimiter
 
 
 class SlidingWindowRateLimiterTests(unittest.TestCase):
@@ -63,3 +68,48 @@ class SlidingWindowRateLimiterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DatabaseSlidingWindowRateLimiterTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        handle, self.path = tempfile.mkstemp(suffix=".sqlite3")
+        os.close(handle)
+        self.db = await aiosqlite.connect(self.path)
+        self.db.row_factory = aiosqlite.Row
+        self.limiter = DatabaseSlidingWindowRateLimiter(window_seconds=10)
+        await self.limiter.init(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.close()
+        os.unlink(self.path)
+
+    async def test_database_limiter_enforces_window_and_expiry(self):
+        self.assertEqual(await self.limiter.allow(self.db, "player:1", 2, now=100), (True, 0))
+        self.assertEqual(await self.limiter.allow(self.db, "player:1", 2, now=101), (True, 0))
+        allowed, retry = await self.limiter.allow(self.db, "player:1", 2, now=102)
+        self.assertFalse(allowed)
+        self.assertEqual(retry, 8)
+        self.assertEqual(await self.limiter.allow(self.db, "player:1", 2, now=111), (True, 0))
+
+    async def test_database_limiter_serializes_independent_connections(self):
+        other = await aiosqlite.connect(self.path)
+        other.row_factory = aiosqlite.Row
+        try:
+            results = await asyncio.gather(
+                self.limiter.allow(self.db, "shared-key", 1, now=200),
+                self.limiter.allow(other, "shared-key", 1, now=200),
+            )
+            self.assertEqual(sum(allowed for allowed, _ in results), 1)
+        finally:
+            await other.close()
+
+    async def test_database_limiter_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await self.limiter.allow(self.db, "nested-key", 1, now=300)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT COUNT(*) AS total FROM api_rate_limit_events WHERE rate_key='nested-key'"
+        )
+        self.assertEqual((await cursor.fetchone())["total"], 0)
+
