@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import random
+import time
 from typing import Any
 
 
@@ -131,7 +132,6 @@ async def perform_matchmaking_battle_action(
             raise MatchmakingBattleError("Wait for your opponent's turn.")
 
         first = row["player_one_id"] == user_id
-        own_column = "player_one_hp" if first else "player_two_hp"
         opponent_column = "player_two_hp" if first else "player_one_hp"
         opponent_id = row["player_two_id"] if first else row["player_one_id"]
         winner_id = None
@@ -166,7 +166,7 @@ async def perform_matchmaking_battle_action(
             if new_hp == 0:
                 winner_id = user_id
             await db.execute(
-                f"UPDATE matchmaking_battles SET {opponent_column}=?,turn_count=turn_count+1 WHERE match_id=?",
+                f"UPDATE matchmaking_battles SET {opponent_column}=? WHERE match_id=?",
                 (new_hp, match_id),
             )
 
@@ -179,7 +179,7 @@ async def perform_matchmaking_battle_action(
             await db.execute(
                 """UPDATE matchmaking_matches SET status='completed',completed_at=?,
                    winner_id=? WHERE match_id=? AND status='matched'""",
-                (int(__import__("time").time()), winner_id, match_id),
+                (int(time.time()), winner_id, match_id),
             )
             loser_id = opponent_id if winner_id == user_id else user_id
             await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
@@ -187,12 +187,12 @@ async def perform_matchmaking_battle_action(
             await db.execute(
                 """UPDATE matchmaking_queue SET status='completed',updated_at=?
                    WHERE match_id=? AND status='matched'""",
-                (int(__import__("time").time()), match_id),
+                (int(time.time()), match_id),
             )
         else:
             await db.execute(
-                "UPDATE matchmaking_battles SET turn_user_id=? WHERE match_id=?",
-                (opponent_id, match_id),
+                "UPDATE matchmaking_battles SET turn_user_id=?,turn_count=turn_count+1,updated_at=? WHERE match_id=?",
+                (opponent_id, int(time.time()), match_id),
             )
         await _commit(db, nested, savepoint)
     except Exception:
