@@ -80,7 +80,7 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute("CREATE TRIGGER reject_mastery_update BEFORE UPDATE ON player_monster_mastery BEGIN SELECT RAISE(ABORT, 'blocked'); END")
         await self.db.execute("INSERT INTO player_monster_mastery(user_id,monster_level,defeats) VALUES(404,9,2)")
         await self.db.commit()
-        await self.db.execute("UPDATE player_monster_mastery SET defeats=defeats WHERE user_id=404")
+        await self.db.execute("BEGIN")
         with self.assertRaises(Exception):
             await record_monster_defeat(self.db, 404, 9)
         self.assertTrue(self.db.in_transaction)
