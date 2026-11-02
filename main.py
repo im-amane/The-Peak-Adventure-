@@ -852,6 +852,7 @@ async def create_trade(message: Message):
         await message.answer("Reply to another player's message in a group, then send /trade.")
         return
     initiator_id = message.from_user.id
+    await expire_stale_trades()
     partner_id = message.reply_to_message.from_user.id
     if initiator_id == partner_id or message.reply_to_message.from_user.is_bot:
         await message.answer("Choose another human player.")
@@ -885,6 +886,7 @@ async def create_trade(message: Message):
 
 @dp.callback_query(F.data.startswith("trade_accept:"))
 async def accept_trade(call: CallbackQuery):
+    await expire_stale_trades()
     trade_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
@@ -906,6 +908,7 @@ async def accept_trade(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("trade_decline:"))
 async def decline_trade(call: CallbackQuery):
+    await expire_stale_trades()
     trade_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
@@ -927,6 +930,7 @@ async def set_trade_offer(message: Message):
         await message.answer("Usage: /offer trade_id coins potions [weapon_name|none] [armor_name|none]. Use underscores for spaces.")
         return
     trade_id, coins, potions = map(int, message.command[1:4])
+    await expire_stale_trades()
     weapon_token = message.command[4] if len(message.command) >= 5 else "none"
     armor_token = message.command[5] if len(message.command) >= 6 else "none"
     weapon = None if weapon_token.lower() == "none" else weapon_token.replace("_", " ")
@@ -974,6 +978,7 @@ async def confirm_trade(message: Message):
         await message.answer("Usage: <code>/confirmtrade trade_id</code>.")
         return
     trade_id = int(message.command[1])
+    await expire_stale_trades()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] != "open":
@@ -1037,6 +1042,7 @@ async def cancel_trade(message: Message):
         await message.answer("Usage: <code>/canceltrade trade_id</code>.")
         return
     trade_id = int(message.command[1])
+    await expire_stale_trades()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] not in {"pending", "open"}:
@@ -3862,19 +3868,35 @@ async def api_premium_shop(request: web.Request):
 
 
 async def expire_stale_trades():
-    """Expire abandoned invitations and open offers after 24 hours."""
+    """Expire abandoned trades without committing a transaction owned by the caller."""
     if db is None:
         return 0
-    cur = await db.execute(
-        """UPDATE trades
-           SET status='expired',initiator_confirmed=0,partner_confirmed=0
-           WHERE status IN ('pending','open')
-             AND datetime(created_at) <= datetime('now','-24 hours')"""
-    )
-    expired_count = cur.rowcount
-    if expired_count:
-        await db.commit()
-    return expired_count
+    nested = db.in_transaction
+    savepoint = "expire_stale_trades"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            """UPDATE trades
+               SET status='expired',initiator_confirmed=0,partner_confirmed=0
+               WHERE status IN ('pending','open')
+                 AND datetime(created_at) <= datetime('now','-24 hours')"""
+        )
+        expired_count = cur.rowcount
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+        return expired_count
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
 
 
 async def api_social(request: web.Request):
