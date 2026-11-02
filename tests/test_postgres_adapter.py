@@ -14,6 +14,8 @@ from moderation_system import (
 from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
 from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
+from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
+import asyncio
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -317,6 +319,56 @@ class PostgresStoryServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_story_schema_initialization_is_idempotent(self):
         await init_story_tables(self.db)
         await init_story_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresEvolutionServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS player_monster_mastery")
+        await self.db.commit()
+        await init_evolution_tables(self.db)
+        await self.db.commit()
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS player_monster_mastery")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_mastery_threshold_and_player_isolation(self):
+        for _ in range(EVOLUTION_DEFEATS_REQUIRED):
+            state = await record_monster_defeat(self.db, 701, 7)
+        self.assertEqual(state["defeats"], EVOLUTION_DEFEATS_REQUIRED)
+        self.assertTrue(state["evolved"])
+        other = await get_evolution_state(self.db, 702, 7)
+        self.assertEqual(other["defeats"], 0)
+
+    async def test_mastery_increment_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        state = await record_monster_defeat(self.db, 703, 8)
+        self.assertEqual(state["defeats"], 1)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        state = await get_evolution_state(self.db, 703, 8)
+        self.assertEqual(state["defeats"], 0)
+
+    async def test_concurrent_defeats_from_separate_connections_are_not_lost(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            first_result, second_result = await asyncio.gather(
+                record_monster_defeat(self.db, 704, 9),
+                record_monster_defeat(second, 704, 9),
+            )
+            state = await get_evolution_state(self.db, 704, 9)
+            self.assertEqual(state["defeats"], 2)
+            self.assertEqual(sorted((first_result["defeats"], second_result["defeats"])), [1, 2])
+        finally:
+            await second.close()
+
+    async def test_evolution_schema_initialization_is_idempotent(self):
+        await init_evolution_tables(self.db)
+        await init_evolution_tables(self.db)
         await self.db.commit()
 
 
