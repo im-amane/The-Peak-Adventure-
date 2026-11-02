@@ -1828,6 +1828,11 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await other_db.close()
 
+    async def test_guild_xp_award_accepts_high_level_boosted_combat_rewards(self):
+        guild_id = await create_guild(self.db, self.user_id, "High XP Guard")
+        level, xp = await award_guild_xp(self.db, guild_id, 25_000)
+        self.assertEqual((level, xp), (10, 2_500))
+
     async def test_concurrent_combat_xp_awards_preserve_all_guild_xp(self):
         guild_id = await create_guild(self.db, self.user_id, "Combat XP Guard")
         other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
