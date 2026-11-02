@@ -5089,7 +5089,7 @@ def create_web_app():
     app.router.add_post("/api/explore", api_explore)
     app.router.add_post("/api/action", api_action)
     app.router.add_post("/api/appearance", api_appearance)
-    app.router.add_get("/api/settings", api_settings)
+    app.router.add_get("/api/settings", api_settings, allow_head=False)
     app.router.add_post("/api/settings", api_settings)
     app.router.add_post("/api/story", api_story)
     app.router.add_post("/api/quest/claim", api_quest_claim)
