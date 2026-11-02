@@ -1,5 +1,6 @@
 import unittest
 import aiosqlite
+from datetime import datetime, timezone
 from guild_system import *
 
 class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
@@ -142,10 +143,11 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await record_guild_activity(self.db,10,2,"battle",5)
   await self.db.commit()
   await self.db.execute("BEGIN")
-  await claim_guild_mission(self.db,10,1,"battles","2026-11-02")
+  mission_date=datetime.now(timezone.utc).date().isoformat()
+  await claim_guild_mission(self.db,10,1,"battles",mission_date)
   self.assertTrue(self.db.in_transaction)
   await self.db.rollback()
-  cur=await self.db.execute("SELECT claimed FROM guild_missions WHERE guild_id=10 AND mission_date='2026-11-02' AND mission_id='battles'")
+  cur=await self.db.execute("SELECT claimed FROM guild_missions WHERE guild_id=10 AND mission_date=? AND mission_id='battles'", (mission_date,))
   self.assertEqual((await cur.fetchone())["claimed"],0)
   cur=await self.db.execute("SELECT guild_xp FROM guilds WHERE guild_id=10")
   self.assertEqual((await cur.fetchone())["guild_xp"],0)
