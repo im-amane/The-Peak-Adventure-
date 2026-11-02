@@ -11,6 +11,8 @@ from moderation_system import (
     init_moderation_tables,
     unban_player,
 )
+from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
+from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -174,6 +176,66 @@ class PostgresModerationServiceTests(unittest.IsolatedAsyncioTestCase):
         await init_moderation_tables(self.db)
         await init_moderation_tables(self.db)
         await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresResourceServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS player_mana")
+        await self.db.execute("DROP TABLE IF EXISTS player_stamina")
+        await self.db.commit()
+        await init_mana_tables(self.db)
+        await init_stamina_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS player_mana")
+        await self.db.execute("DROP TABLE IF EXISTS player_stamina")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_mana_consumption_and_passive_regeneration(self):
+        state = await consume_mana(self.db, 301, 40, now=1000)
+        self.assertEqual(state["mana"], 60)
+        state = await get_mana(self.db, 301, now=1000 + 2 * 60)
+        self.assertEqual(state["mana"], 62)
+
+    async def test_stamina_consumption_and_passive_regeneration(self):
+        state = await consume_stamina(self.db, 302, 30, now=1000)
+        self.assertEqual(state["stamina"], 70)
+        state = await get_stamina(self.db, 302, now=1000 + 2 * 300)
+        self.assertEqual(state["stamina"], 72)
+
+    async def test_mana_and_stamina_restore_are_capped(self):
+        await consume_mana(self.db, 303, 10, now=1000)
+        mana = await restore_mana(self.db, 303, 20, now=1000)
+        self.assertEqual(mana["mana"], 100)
+
+        await consume_stamina(self.db, 304, 20, now=1000)
+        stamina = await restore_stamina(self.db, 304, 50, now=1000)
+        self.assertEqual(stamina["stamina"], 100)
+
+    async def test_mana_debit_preserves_caller_owned_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        state = await consume_mana(self.db, 305, 30, now=1000, commit=False)
+        self.assertEqual(state["mana"], 70)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM player_mana WHERE user_id=?", (305,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_stamina_debit_preserves_caller_owned_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        state = await consume_stamina(self.db, 306, 10, now=1000, commit=False)
+        self.assertEqual(state["stamina"], 90)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM player_stamina WHERE user_id=?", (306,)
+        )
+        self.assertIsNone(await cursor.fetchone())
 
 
 if __name__ == "__main__":
