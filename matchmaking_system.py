@@ -200,6 +200,11 @@ async def join_matchmaking(
         raise MatchmakingError("Choose casual or ranked matchmaking.")
     stamp = _now(now)
     await _lock_mode(db, mode)
+    await db.execute(
+        """UPDATE matchmaking_queue SET status='expired',updated_at=?
+           WHERE user_id=? AND status='queued' AND queued_at<=?""",
+        (stamp, user_id, stamp - MAX_QUEUE_WAIT_SECONDS),
+    )
 
     cursor = await db.execute(
         "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
@@ -233,8 +238,8 @@ async def join_matchmaking(
 
     await db.execute(
         """UPDATE matchmaking_queue SET status='expired',updated_at=?
-           WHERE status='queued' AND queued_at<=?""",
-        (stamp, stamp - MAX_QUEUE_WAIT_SECONDS),
+           WHERE mode=? AND status='queued' AND queued_at<=?""",
+        (stamp, mode, stamp - MAX_QUEUE_WAIT_SECONDS),
     )
 
     cursor = await db.execute(
@@ -340,9 +345,18 @@ async def join_matchmaking(
     return await _queue_payload(db, await cursor.fetchone())
 
 
-async def get_matchmaking_status(db: Any, user_id: int) -> dict[str, Any] | None:
+@_transactional
+async def get_matchmaking_status(
+    db: Any, user_id: int, *, now: int | None = None
+) -> dict[str, Any] | None:
     if not _valid_id(user_id):
         raise MatchmakingError("Invalid player account.")
+    stamp = _now(now)
+    await db.execute(
+        """UPDATE matchmaking_queue SET status='expired',updated_at=?
+           WHERE user_id=? AND status='queued' AND queued_at<=?""",
+        (stamp, user_id, stamp - MAX_QUEUE_WAIT_SECONDS),
+    )
     cursor = await db.execute(
         "SELECT user_id,mode,player_level,rating,status,queued_at,updated_at,match_id "
         "FROM matchmaking_queue WHERE user_id=?",
