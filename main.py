@@ -174,6 +174,27 @@ def _stale_trade_expiry_sql(connection) -> str:
                 AND datetime(created_at) <= datetime('now','-24 hours')"""
 
 
+async def _apply_battle_victory_heal(connection, user_id: int) -> None:
+    """Apply the capped victory heal and cooldown decrement with portable SQL."""
+    await connection.execute(
+        """UPDATE players
+           SET hp=CASE WHEN hp+15>max_hp THEN max_hp ELSE hp+15 END,
+               skill_cd=CASE WHEN skill_cd>0 THEN skill_cd-1 ELSE 0 END
+           WHERE user_id=?""",
+        (user_id,),
+    )
+
+
+async def _apply_battle_turn_state(connection, user_id: int, new_hp: int) -> None:
+    """Persist the post-enemy-turn HP and decrement cooldown without scalar MIN/MAX."""
+    await connection.execute(
+        """UPDATE players
+           SET hp=?, skill_cd=CASE WHEN skill_cd>0 THEN skill_cd-1 ELSE 0 END
+           WHERE user_id=?""",
+        (new_hp, user_id),
+    )
+
+
 class DatabaseLockMiddleware:
     async def __call__(self, handler, event, data):
         async with db_lock:
@@ -886,9 +907,10 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         new_xp = 0
     class_hp_bonus = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])["hp"]
     new_max = 120 + (new_level - 1) * 20 + class_hp_bonus
+    new_hp = min(p["hp"] + 25, new_max)
     await db.execute("""UPDATE players SET xp=?, level=?, coins=coins+?, wins=wins+1,
-        max_hp=?, hp=min(?, ?) WHERE user_id=?""",
-        (new_xp, new_level, reward_coins, new_max, p["hp"] + 25, new_max, user_id))
+        max_hp=?, hp=? WHERE user_id=?""",
+        (new_xp, new_level, reward_coins, new_max, new_hp, user_id))
     if m["boss"]:
         await db.execute("INSERT OR IGNORE INTO boss_defeats(user_id, monster_level) VALUES (?, ?)", (user_id, m["level"]))
     cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
@@ -3574,7 +3596,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         new_enemy_hp = min(m["hp"], new_enemy_hp + regen)
     if new_enemy_hp == 0:
         await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
-        await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
+        await _apply_battle_victory_heal(db, user_id)
         result = await finish_battle(user_id, True)
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
@@ -3611,7 +3633,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
     effect_notes = combat_result["effect_notes"]
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
-    await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
+    await _apply_battle_turn_state(db, user_id, new_hp)
     await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
     if new_hp == 0:
         result = await finish_battle(user_id, False)
