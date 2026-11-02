@@ -3098,9 +3098,14 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
                 )
                 index_columns = await index_cursor.fetchall()
                 if index_columns and all(column["name"] for column in index_columns):
-                    sqlite_unique_indexes.add((table, tuple(sorted(
+                    index_signature = tuple(sorted(
                         column["name"] for column in index_columns
-                    ))))
+                    ))
+                    if index_signature == tuple(sorted(sqlite_primary_keys[table])):
+                        # SQLite can retain a redundant UNIQUE index on the exact
+                        # primary-key columns; PostgreSQL relies on the PK index.
+                        continue
+                    sqlite_unique_indexes.add((table, index_signature))
 
         cursor = await self.postgres.execute(
             """SELECT table_name,column_name,data_type,is_nullable
