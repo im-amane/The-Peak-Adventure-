@@ -106,6 +106,8 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertLess(turn["opponent_hp"], 100)
 
     async def test_pvp_skill_consumes_mana_and_obeys_class_cooldown(self):
+        await self.db.execute("UPDATE players SET max_hp=1000 WHERE user_id IN (1,2)")
+        await self.db.commit()
         await join_matchmaking(self.db, 1, "casual", now=1000)
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         match_id = matched["match_id"]
