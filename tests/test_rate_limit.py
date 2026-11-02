@@ -91,6 +91,17 @@ class DatabaseSlidingWindowRateLimiterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(retry, 8)
         self.assertEqual(await self.limiter.allow(self.db, "player:1", 2, now=111), (True, 0))
 
+    async def test_database_limiter_serializes_concurrent_calls_on_same_connection(self):
+        results = await asyncio.gather(*(
+            self.limiter.allow(self.db, "same-connection-burst", 7, now=250)
+            for _ in range(50)
+        ))
+        self.assertEqual(sum(allowed for allowed, _ in results), 7)
+        cursor = await self.db.execute(
+            "SELECT COUNT(*) AS total FROM api_rate_limit_events WHERE rate_key='same-connection-burst'"
+        )
+        self.assertEqual((await cursor.fetchone())["total"], 7)
+
     async def test_database_limiter_serializes_independent_connections(self):
         other = await aiosqlite.connect(self.path)
         other.row_factory = aiosqlite.Row
