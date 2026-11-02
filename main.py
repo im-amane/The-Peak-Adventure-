@@ -2949,7 +2949,7 @@ async def craft_command(message: Message):
         for recipe in recipes:
             status = "🔓" if recipe["unlocked"] else "🔒"
             costs = ", ".join(MATERIALS[key] + " x" + str(value) for key,value in recipe["cost"].items())
-            lines.append(status + " <b>" + recipe["id"] + "</b> · " + recipe["name"] + " · Lv." + str(recipe["level"]) + "\n" + costs)
+            lines.append(status + " [" + recipe["rarity_label"] + "] <b>" + recipe["id"] + "</b> · " + recipe["name"] + " · Lv." + str(recipe["level"]) + "\n" + costs)
         lines.append("Craft with /craft recipe_id. View supplies with /materials.")
         await message.answer("\n".join(lines))
         return
