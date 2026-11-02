@@ -298,7 +298,11 @@
       if (chapter.unlocked || chapter.completed) {
         const scene=document.createElement("p");scene.textContent=chapter.scene;card.appendChild(scene);
       } else {
-        const locked=document.createElement("p");locked.textContent="Reach level "+chapter.level+" and complete the previous chapter.";card.appendChild(locked);
+        const locked=document.createElement("p");
+        locked.textContent=chapter.requires_party
+          ? "Reach level "+chapter.level+", complete the previous chapter, and join a party."
+          : "Reach level "+chapter.level+" and complete the previous chapter.";
+        card.appendChild(locked);
       }
       const choices=document.createElement("div");choices.className="story-choices";
       if (chapter.completed) {
