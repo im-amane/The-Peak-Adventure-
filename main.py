@@ -2021,7 +2021,7 @@ async def duel_action(call: CallbackQuery):
     war_result = None
     if duel["status"] == "finished" and duel["winner_id"]:
         await record_player_guild_activity(duel["winner_id"], "battle")
-        war_result = await record_guild_war_duel(db, duel["challenger_id"], duel["opponent_id"], duel["winner_id"])
+        war_result = await record_guild_war_duel(db, duel["challenger_id"], duel["opponent_id"], duel["winner_id"], duel["duel_id"])
     duel_message = await duel_text(duel)
     if war_result:
         duel_message += "\n\n⚔️ Guild War score: " + str(war_result["challenger_score"]) + " - " + str(war_result["target_score"])
