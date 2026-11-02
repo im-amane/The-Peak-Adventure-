@@ -73,7 +73,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["winner_id"], 2)
         self.assertEqual((await get_matchmaking_status(self.db, 1, now=1010))["status"], "completed")
-        closed_battle = await get_matchmaking_battle(self.db, 1, second["match_id"])
+        closed_battle = await get_matchmaking_battle(self.db, 1, second["match_id"], now=1010)
         self.assertEqual(closed_battle["status"], "finished")
         self.assertEqual(closed_battle["winner_id"], 2)
 
@@ -81,7 +81,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         await join_matchmaking(self.db, 1, "casual", now=1000)
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         match_id = matched["match_id"]
-        battle = await get_matchmaking_battle(self.db, 1, match_id)
+        battle = await get_matchmaking_battle(self.db, 1, match_id, now=1001)
         self.assertEqual(battle["status"], "active")
         self.assertTrue(battle["is_my_turn"])
         self.assertEqual(battle["my_hp"], 100)
@@ -94,11 +94,12 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
             "Berserker": {"attack": 22, "defense": -3},
         }
         with self.assertRaisesRegex(MatchmakingBattleError, "Wait for your opponent"):
-            await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes)
+            await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes, now=1002)
 
         turn = await perform_matchmaking_battle_action(
             self.db, 1, match_id, "attack", classes,
             rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+            now=1002,
         )
         self.assertEqual(turn["status"], "active")
         self.assertEqual(turn["turn_user_id"], 2)
@@ -115,6 +116,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         result = await perform_matchmaking_battle_action(
             self.db, 1, match_id, "skill", classes,
             rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+            now=1002,
         )
         self.assertGreater(result["damage"], 0)
         cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
@@ -122,9 +124,9 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.db.execute("SELECT skill_cd FROM players WHERE user_id=1")
         self.assertEqual((await cursor.fetchone())["skill_cd"], 3)
 
-        await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes)
+        await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes, now=1003)
         with self.assertRaisesRegex(MatchmakingBattleError, "Skill cooling down"):
-            await perform_matchmaking_battle_action(self.db, 1, match_id, "skill", classes)
+            await perform_matchmaking_battle_action(self.db, 1, match_id, "skill", classes, now=1004)
         cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
         self.assertEqual((await cursor.fetchone())["mana"], 75)
 
@@ -148,12 +150,42 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
         self.assertEqual((await cursor.fetchone())["mana"], 10)
 
+    async def test_inactive_turn_expires_and_awards_win_to_waiting_player(self):
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+        before_deadline = await get_matchmaking_battle(self.db, 1, match_id, now=1119)
+        self.assertEqual(before_deadline["status"], "active")
+        self.assertEqual(before_deadline["turn_time_remaining"], 1)
+
+        expired = await get_matchmaking_battle(self.db, 1, match_id, now=1120)
+        self.assertEqual(expired["status"], "finished")
+        self.assertEqual(expired["winner_id"], 2)
+        self.assertFalse(expired["is_winner"])
+        cursor = await self.db.execute(
+            "SELECT pvp_wins,pvp_losses FROM players WHERE user_id=2"
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), (1, 0))
+
+    async def test_action_after_turn_deadline_forfeits_without_applying_damage(self):
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        result = await perform_matchmaking_battle_action(
+            self.db, 1, matched["match_id"], "attack",
+            {"Knight": {"attack": 8, "defense": 12}}, now=1120,
+        )
+        self.assertTrue(result["timed_out"])
+        self.assertEqual(result["last_action"], "timeout")
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["winner_id"], 2)
+        self.assertEqual(result["damage"], 0)
+
     async def test_matchmaking_pvp_surrender_settles_stats_once(self):
         await join_matchmaking(self.db, 1, "casual", now=1000)
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         match_id = matched["match_id"]
         classes = {"Knight": {"attack": 8, "defense": 12}}
-        result = await perform_matchmaking_battle_action(self.db, 1, match_id, "surrender", classes)
+        result = await perform_matchmaking_battle_action(self.db, 1, match_id, "surrender", classes, now=1002)
         self.assertEqual(result["status"], "finished")
         self.assertEqual(result["winner_id"], 2)
         self.assertEqual(result["turn_count"], 1)
