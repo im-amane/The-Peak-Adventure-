@@ -440,33 +440,37 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
         return
     try:
-        await consume_stamina(db, user_id, EXPLORE_COST)
+        await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
         state = await get_stamina(db, user_id)
         await send_target.answer("⚡ " + escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
         return
-    world_id = await get_current_world(db, user_id, p["level"])
-    boss_level = world_id * 10
-    boss_defeated = False
-    if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
-        cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, boss_level))
-        boss_defeated = await cur.fetchone() is not None
-    monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
-    m = MONSTER_BY_LEVEL[monster_level]
-    mastery = await get_evolution_state(db, user_id, monster_level)
-    evolved = is_evolved_spawn(mastery["evolved"] and not m["boss"], random.randint(1, 100))
-    elite = is_elite_spawn(m["boss"], random.randint(1, 100))
-    battle_monster = scale_evolved_monster(m) if evolved else m
-    if elite:
-        battle_monster = scale_elite_monster(battle_monster)
-    await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
-    await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
-                     (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
-    await db.execute(
-        "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
-        (user_id, monster_level),
-    )
-    await db.commit()
+    try:
+        world_id = await get_current_world(db, user_id, p["level"])
+        boss_level = world_id * 10
+        boss_defeated = False
+        if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
+            cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, boss_level))
+            boss_defeated = await cur.fetchone() is not None
+        monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
+        m = MONSTER_BY_LEVEL[monster_level]
+        mastery = await get_evolution_state(db, user_id, monster_level)
+        evolved = is_evolved_spawn(mastery["evolved"] and not m["boss"], random.randint(1, 100))
+        elite = is_elite_spawn(m["boss"], random.randint(1, 100))
+        battle_monster = scale_evolved_monster(m) if evolved else m
+        if elite:
+            battle_monster = scale_elite_monster(battle_monster)
+        await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
+        await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                         (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
+        await db.execute(
+            "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+            (user_id, monster_level),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await send_battle(send_target, user_id, "🌲 <b>You enter the wilds...</b>")
 
 
