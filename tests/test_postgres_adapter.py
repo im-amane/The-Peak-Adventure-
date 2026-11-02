@@ -89,6 +89,35 @@ class QmarkTranslationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unterminated"):
             qmark_to_pyformat("SELECT 'unfinished")
 
+    def test_cte_select_ignores_write_words_in_literals_and_comments(self):
+        from postgres_adapter import _is_write_statement
+
+        sql = """WITH payload AS (
+                     SELECT 'UPDATE players' AS note /* DELETE FROM players */
+                   )
+                   SELECT note FROM payload -- INSERT INTO players
+              """
+        self.assertFalse(_is_write_statement(sql))
+
+    def test_data_modifying_cte_is_classified_as_write(self):
+        from postgres_adapter import _is_write_statement
+
+        sql = """WITH changed AS (
+                     UPDATE players SET coins=coins+1 RETURNING user_id
+                   )
+                   SELECT user_id FROM changed"""
+        self.assertTrue(_is_write_statement(sql))
+
+    def test_select_for_update_is_classified_as_transactional(self):
+        from postgres_adapter import _is_write_statement
+
+        self.assertTrue(_is_write_statement("SELECT * FROM players FOR UPDATE"))
+
+    def test_begin_immediate_is_normalized_for_execute_paths(self):
+        from postgres_adapter import _prepare_statement
+
+        self.assertEqual(_prepare_statement("BEGIN IMMEDIATE"), "BEGIN")
+
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
 class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):

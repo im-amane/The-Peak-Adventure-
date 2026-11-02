@@ -49,6 +49,100 @@ def _first_keyword(sql: str) -> str | None:
     return None
 
 
+_WRITE_KEYWORDS = {
+    "INSERT", "UPDATE", "DELETE", "MERGE",
+    "CREATE", "ALTER", "DROP", "TRUNCATE",
+    "GRANT", "REVOKE", "COMMENT",
+}
+
+
+def _contains_sql_keyword(sql: str, keywords: set[str]) -> bool:
+    """Find SQL keywords without matching text inside literals or comments."""
+    index = 0
+    length = len(sql)
+    while index < length:
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index + 2)
+            if newline < 0:
+                return False
+            index = newline + 1
+        elif sql.startswith("/*", index):
+            depth = 1
+            index += 2
+            while index < length and depth:
+                if sql.startswith("/*", index):
+                    depth += 1
+                    index += 2
+                elif sql.startswith("*/", index):
+                    depth -= 1
+                    index += 2
+                else:
+                    index += 1
+            if depth:
+                raise ValueError("Unterminated SQL comment")
+        elif sql[index] in {"'", '"'}:
+            quote = sql[index]
+            escape_string = (
+                quote == "'"
+                and index > 0
+                and sql[index - 1] in {"E", "e"}
+                and (index < 2 or not (sql[index - 2].isalnum() or sql[index - 2] == "_"))
+            )
+            index += 1
+            while index < length:
+                if quote == "'" and escape_string and sql[index] == "\\":
+                    index += 2
+                elif sql[index] == quote:
+                    if index + 1 < length and sql[index + 1] == quote:
+                        index += 2
+                    else:
+                        index += 1
+                        break
+                else:
+                    index += 1
+        elif sql[index] == "$":
+            match = _DOLLAR_QUOTE.match(sql, index)
+            if match:
+                delimiter = match.group(0)
+                end = sql.find(delimiter, match.end())
+                if end < 0:
+                    raise ValueError("Unterminated SQL dollar-quoted string")
+                index = end + len(delimiter)
+            else:
+                index += 1
+        elif sql[index].isalpha() or sql[index] == "_":
+            end = index + 1
+            while end < length and (sql[end].isalnum() or sql[end] in {"_", "$"}):
+                end += 1
+            if sql[index:end].upper() in keywords:
+                return True
+            index = end
+        else:
+            index += 1
+    return False
+
+
+def _is_write_statement(sql: str) -> bool:
+    """Classify supported writes, including data-modifying CTEs."""
+    keyword = _first_keyword(sql)
+    if keyword in _WRITE_KEYWORDS:
+        return True
+    if keyword == "WITH":
+        return _contains_sql_keyword(sql, {"INSERT", "UPDATE", "DELETE", "MERGE"})
+    if keyword == "SELECT":
+        # SELECT ... FOR UPDATE takes a row lock and must run inside a transaction.
+        return _contains_sql_keyword(sql, {"UPDATE"})
+    return False
+
+
+def _prepare_statement(sql: str) -> str:
+    """Translate legacy placeholders and the SQLite-only explicit write-begin form."""
+    statement = qmark_to_pyformat(sql)
+    if re.fullmatch(r"\s*BEGIN\s+IMMEDIATE\s*;?\s*", statement, re.IGNORECASE):
+        return "BEGIN"
+    return statement
+
+
 def qmark_to_pyformat(sql: str) -> str:
     """Convert legacy qmark parameters while preserving quoted text and comments.
 
@@ -180,22 +274,11 @@ class PostgresConnection:
         return self._connection.info.transaction_status != TransactionStatus.IDLE
 
     async def execute(self, sql: str, parameters: Sequence[Any] | None = None):
-        statement = qmark_to_pyformat(sql)
-        if statement.strip().upper() == "BEGIN IMMEDIATE":
-            statement = "BEGIN"
-
+        statement = _prepare_statement(sql)
         # SQLite starts implicit transactions for writes, but not for SELECTs.
         # Psycopg autocommit mode plus this explicit write detection preserves
         # that observable in_transaction behavior for the supported SQL subset.
-        keyword = _first_keyword(statement)
-        write_keywords = {
-            "INSERT", "UPDATE", "DELETE", "MERGE",
-            "CREATE", "ALTER", "DROP", "TRUNCATE",
-            "GRANT", "REVOKE", "COMMENT",
-        }
-        is_write = keyword in write_keywords
-        if keyword == "WITH":
-            is_write = re.search(r"\b(INSERT|UPDATE|DELETE|MERGE)\b", statement, re.IGNORECASE) is not None
+        is_write = _is_write_statement(statement)
         if is_write and not self.in_transaction:
             await self._connection.execute("BEGIN")
         return await self._connection.execute(statement, parameters)
@@ -203,20 +286,8 @@ class PostgresConnection:
     async def executemany(
         self, sql: str, parameters: Iterable[Sequence[Any]]
     ):
-        statement = qmark_to_pyformat(sql)
-        keyword = _first_keyword(statement)
-        write_keywords = {
-            "INSERT", "UPDATE", "DELETE", "MERGE",
-            "CREATE", "ALTER", "DROP", "TRUNCATE",
-            "GRANT", "REVOKE", "COMMENT",
-        }
-        is_write = keyword in write_keywords
-        if keyword == "WITH":
-            is_write = re.search(
-                r"\b(INSERT|UPDATE|DELETE|MERGE)\b",
-                statement,
-                re.IGNORECASE,
-            ) is not None
+        statement = _prepare_statement(sql)
+        is_write = _is_write_statement(statement)
         if is_write and not self.in_transaction:
             await self._connection.execute("BEGIN")
         cursor = self._connection.cursor()
