@@ -30,7 +30,9 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - Python 3.11+
 - aiogram 3
 - aiohttp
-- aiosqlite / SQLite
+- aiosqlite / SQLite for local development and current prototype persistence
+
+**Heroku deployment is not ready yet:** the current runtime uses SQLite. Heroku dyno filesystems are ephemeral, so production player data must move to a shared persistent database such as Heroku Postgres before deployment.
 - python-dotenv
 - Phaser 3 (loaded by the Mini App)
 
@@ -60,23 +62,29 @@ When changing `webapp/index.html`, `webapp/style.css`, or `webapp/game.js`, run 
 
 1. Install Wrangler: `npm install --save-dev wrangler`.
 2. Authenticate: `npx wrangler login`.
-3. Set the deployed Python service URL as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (enter the HTTPS Render/VPS origin, without a path).
+3. After the Heroku backend is approved and deployed, set its HTTPS origin as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (origin only, without a path). Do not configure this against an unverified or temporary backend.
 4. Deploy from the repository root: `npx wrangler deploy`.
 5. Set Render's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
 
 Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Cloudflare account now has the `thepeakadventure.workers.dev` subdomain and the `peak-adventure-edge` Worker is deployed. Public Mini App URL: `https://peak-adventure-edge.thepeakadventure.workers.dev`. Set `BACKEND_ORIGIN` to the deployed Python/Aiohttp HTTPS origin before gameplay API calls can work.
 
-## Deploy with Render
-1. Push this repository to GitHub and create a new Blueprint in Render.
-2. Select this repository so Render reads `render.yaml`.
-3. Set `BOT_TOKEN` to the token from @BotFather.
-4. Set `ADMIN_IDS` to comma-separated Telegram user IDs allowed to use `/admin`.
-5. Set `WEBAPP_URL` to `https://peak-adventure-edge.thepeakadventure.workers.dev`.
-6. Set the Cloudflare Worker secret `BACKEND_ORIGIN` to the Render HTTPS origin, without a path.
-7. Register `thepeakadventure.workers.dev` as the Mini App domain with BotFather.
-8. Deploy. The blueprint includes a persistent disk mounted at `/data` so the SQLite player database survives restarts.
+## Heroku deployment readiness
 
-The included Render blueprint uses a paid Starter web service and a persistent disk. For a VPS, build the included Dockerfile and pass the same environment variables. Keep `BOT_TOKEN` private.
+**Target platform: Heroku. Deployment has not been performed.** The repository's `Procfile` already declares `web: python main.py`, and the HTTP server reads Heroku's `PORT` environment variable. However, the current game database is SQLite and the backup loop writes local snapshot files.
+
+Heroku dynos have ephemeral, isolated filesystems. A SQLite database or backup written to a dyno's local disk is not durable across restarts/deploys and is not shared between dynos. Do not deploy a live player database in this configuration.
+
+Before a safe Heroku deployment:
+1. Implement and test a PostgreSQL-backed persistence layer and schema migrations. Setting `DATABASE_URL` alone does not convert the current SQLite-specific SQL and transaction handling.
+2. Move verified backups to durable external storage or use a verified database backup/restore workflow.
+3. Keep the combined bot-polling + HTTP process to a single dyno until polling is separated into a dedicated worker and cross-process concurrency is validated.
+4. Configure `BOT_TOKEN`, `ADMIN_IDS`, and `WEBAPP_URL` as Heroku config vars. Keep Telegram Stars disabled.
+5. After the backend is deployed and verified, set the Cloudflare Worker secret `BACKEND_ORIGIN` to the Heroku HTTPS origin and set `WEBAPP_URL` to the Worker URL.
+6. Complete restart/persistence, real Telegram Mini App, backup/restore, concurrency and load checks before public launch.
+
+The existing `render.yaml` is retained as a legacy deployment artifact; Heroku is the selected target. No Heroku app, database, dyno or paid resource has been provisioned. See [docs/HEROKU_DEPLOYMENT_READINESS.md](docs/HEROKU_DEPLOYMENT_READINESS.md) for the detailed blockers and release checklist.
+
+Keep `BOT_TOKEN` private. Never deploy production or provision paid resources without explicit authorization.
 
 
 ## Commands
