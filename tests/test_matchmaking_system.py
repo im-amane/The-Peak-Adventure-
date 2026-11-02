@@ -1,8 +1,10 @@
+import time
 import unittest
 
 import aiosqlite
 
 from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
+from mana_system import init_mana_tables
 from matchmaking_system import (
     MatchmakingError,
     cancel_matchmaking,
@@ -28,7 +30,8 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
                  max_hp INTEGER NOT NULL DEFAULT 100,
                  hero_class TEXT NOT NULL DEFAULT 'Knight',
                  weapon_attack INTEGER NOT NULL DEFAULT 0,
-                 armor_defense INTEGER NOT NULL DEFAULT 0
+                 armor_defense INTEGER NOT NULL DEFAULT 0,
+                 skill_cd INTEGER NOT NULL DEFAULT 0
                )"""
         )
         await self.db.executemany(
@@ -41,6 +44,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         await init_matchmaking_tables(self.db)
+        await init_mana_tables(self.db)
         await self.db.commit()
 
     async def asyncTearDown(self):
@@ -100,6 +104,49 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(turn["turn_user_id"], 2)
         self.assertEqual(turn["turn_count"], 1)
         self.assertLess(turn["opponent_hp"], 100)
+
+    async def test_pvp_skill_consumes_mana_and_obeys_class_cooldown(self):
+        await self.db.execute("UPDATE players SET max_hp=1000 WHERE user_id IN (1,2)")
+        await self.db.commit()
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+        classes = {"Knight": {"attack": 8, "defense": 12}}
+        result = await perform_matchmaking_battle_action(
+            self.db, 1, match_id, "skill", classes,
+            rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+        )
+        self.assertGreater(result["damage"], 0)
+        cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
+        self.assertEqual((await cursor.fetchone())["mana"], 75)
+        cursor = await self.db.execute("SELECT skill_cd FROM players WHERE user_id=1")
+        self.assertEqual((await cursor.fetchone())["skill_cd"], 3)
+
+        await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes)
+        with self.assertRaisesRegex(MatchmakingBattleError, "Skill cooling down"):
+            await perform_matchmaking_battle_action(self.db, 1, match_id, "skill", classes)
+        cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
+        self.assertEqual((await cursor.fetchone())["mana"], 75)
+
+    async def test_pvp_skill_without_mana_does_not_consume_a_turn(self):
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+        await self.db.execute(
+            "INSERT INTO player_mana(user_id,mana,updated_at) VALUES(1,10,?)",
+            (int(time.time()),)
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(MatchmakingBattleError, "Not enough mana"):
+            await perform_matchmaking_battle_action(
+                self.db, 1, match_id, "skill",
+                {"Knight": {"attack": 8, "defense": 12}},
+            )
+        battle = await get_matchmaking_battle(self.db, 1, match_id)
+        self.assertTrue(battle["is_my_turn"])
+        self.assertEqual(battle["opponent_hp"], 100)
+        cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
+        self.assertEqual((await cursor.fetchone())["mana"], 10)
 
     async def test_matchmaking_pvp_surrender_settles_stats_once(self):
         await join_matchmaking(self.db, 1, "casual", now=1000)

@@ -5,6 +5,9 @@ import random
 import time
 from typing import Any
 
+from game_rules import skill_cooldown_for_class
+from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, restore_mana
+
 
 class MatchmakingBattleError(ValueError):
     """A PvP action is not valid for the current match state."""
@@ -142,7 +145,7 @@ async def perform_matchmaking_battle_action(
             winner_id = opponent_id
         else:
             attacker_cursor = await db.execute(
-                "SELECT level,hero_class,weapon_attack FROM players WHERE user_id=?",
+                "SELECT level,hero_class,weapon_attack,skill_cd FROM players WHERE user_id=?",
                 (user_id,),
             )
             attacker = await attacker_cursor.fetchone()
@@ -155,6 +158,19 @@ async def perform_matchmaking_battle_action(
                 raise MatchmakingBattleError("A player account is no longer available.")
             attacker_class = hero_classes.get(attacker["hero_class"], hero_classes["Knight"])
             defender_class = hero_classes.get(defender["hero_class"], hero_classes["Knight"])
+            if action == "skill":
+                if int(attacker["skill_cd"] or 0) > 0:
+                    raise MatchmakingBattleError(
+                        f"Skill cooling down: {int(attacker['skill_cd'])} turn(s)."
+                    )
+                try:
+                    await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
+                except ManaError as exc:
+                    raise MatchmakingBattleError(str(exc)) from exc
+                await db.execute(
+                    "UPDATE players SET skill_cd=? WHERE user_id=?",
+                    (skill_cooldown_for_class(attacker["hero_class"]), user_id),
+                )
             base = int(attacker["level"]) * 8 + attacker_class["attack"] + int(attacker["weapon_attack"] or 0)
             if action == "skill":
                 base = int(base * 1.8)
@@ -170,6 +186,12 @@ async def perform_matchmaking_battle_action(
                 f"UPDATE matchmaking_battles SET {opponent_column}=? WHERE match_id=?",
                 (new_hp, match_id),
             )
+            await db.execute(
+                """UPDATE players SET skill_cd=CASE WHEN skill_cd>0 THEN skill_cd-1 ELSE 0 END
+                   WHERE user_id=?""",
+                (user_id,),
+            )
+            await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
 
         if winner_id is not None:
             await db.execute(
