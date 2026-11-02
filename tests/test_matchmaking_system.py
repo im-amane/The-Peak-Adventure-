@@ -125,6 +125,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         result = await perform_matchmaking_battle_action(
             self.db, 1, match_id, "attack", classes,
             rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+            now=1002,
         )
         self.assertEqual(result["damage"], 86)
 
