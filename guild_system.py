@@ -66,6 +66,10 @@ def _transactional(function):
 def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
+def _lock_guild_sql(db):
+    """Serialize guild-wide limits and singleton operations on PostgreSQL."""
+    return " FOR UPDATE" if _is_postgres(db) else ""
+
 
 def _is_integrity_error(exc):
     sqlstate = getattr(exc, "sqlstate", None)
@@ -301,6 +305,12 @@ async def create_guild_invite(db,guild_id,actor_id,target_id):
         raise GuildFeatureError("Invalid guild invitation.")
     if not await _officer(db,guild_id,actor_id):
         raise GuildFeatureError("Only guild leaders and officers can invite players.")
+    cur=await db.execute(
+        "SELECT guild_id FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),
+        (guild_id,),
+    )
+    if not await cur.fetchone():
+        raise GuildFeatureError("Guild not found.")
     cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(target_id,))
     if not await cur.fetchone(): raise GuildFeatureError("That player has not registered yet.")
     cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(target_id,))
@@ -328,6 +338,14 @@ async def respond_guild_invite(db,invite_id,target_id,accept):
     if not invite or invite["status"]!="pending": raise GuildFeatureError("This invitation is no longer active.")
     if invite["target_id"]!=target_id: raise GuildFeatureError("Only the invited player can respond.")
     if accept:
+        # Lock the parent guild before checking capacity so concurrent accepts
+        # from independent PostgreSQL connections cannot exceed 20 members.
+        cur=await db.execute(
+            "SELECT guild_id FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),
+            (invite["guild_id"],),
+        )
+        if not await cur.fetchone():
+            raise GuildFeatureError("Guild not found.")
         cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(target_id,))
         if await cur.fetchone(): raise GuildFeatureError("You are already in a guild.")
         cur=await db.execute("SELECT COUNT(*) n FROM guild_members WHERE guild_id=?",(invite["guild_id"],))
@@ -458,6 +476,12 @@ async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
 @_transactional
 async def start_guild_raid(db,guild_id,user_id,boss_level,boss_name,boss_hp):
     if not await _officer(db,guild_id,user_id): raise GuildFeatureError("Only guild leaders and officers can start guild raids.")
+    cur=await db.execute(
+        "SELECT guild_id FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),
+        (guild_id,),
+    )
+    if not await cur.fetchone():
+        raise GuildFeatureError("Guild not found.")
     if not isinstance(boss_level,int) or isinstance(boss_level,bool) or not 10<=boss_level<=100 or boss_level%10:
         raise GuildFeatureError("Raid boss level must be a milestone from 10 to 100.")
     if not isinstance(boss_hp,int) or isinstance(boss_hp,bool) or not 1<=boss_hp<=10_000_000:
@@ -513,8 +537,18 @@ async def declare_guild_war(db, guild_id, leader_id, target_guild_id):
         raise GuildFeatureError("Invalid guild war challenge.")
     if await guild_role(db,guild_id,leader_id)!="leader":
         raise GuildFeatureError("Only guild leaders can declare a war.")
-    cur=await db.execute("SELECT 1 FROM guilds WHERE guild_id=?",(target_guild_id,))
-    if not await cur.fetchone(): raise GuildFeatureError("Target guild not found.")
+    # Lock both guild rows in a stable order so simultaneous challenges in
+    # opposite directions cannot pass the active-war check together.
+    if _is_postgres(db):
+        cur=await db.execute(
+            "SELECT guild_id FROM guilds WHERE guild_id IN (?,?) ORDER BY guild_id FOR UPDATE",
+            (min(guild_id,target_guild_id),max(guild_id,target_guild_id)),
+        )
+        if len(await cur.fetchall()) != 2:
+            raise GuildFeatureError("Target guild not found.")
+    else:
+        cur=await db.execute("SELECT 1 FROM guilds WHERE guild_id=?",(target_guild_id,))
+        if not await cur.fetchone(): raise GuildFeatureError("Target guild not found.")
     cur=await db.execute("""SELECT 1 FROM guild_wars WHERE status IN ('pending','active')
       AND ((challenger_guild=? AND target_guild=?) OR (challenger_guild=? AND target_guild=?))""",
       (guild_id,target_guild_id,target_guild_id,guild_id))
