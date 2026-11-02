@@ -2,8 +2,10 @@ import asyncio
 import os
 import time
 import unittest
+import uuid
 
 from psycopg.errors import UniqueViolation
+from psycopg.conninfo import make_conninfo
 
 from postgres_adapter import PostgresConnection, qmark_to_pyformat
 from moderation_system import (
@@ -2538,3 +2540,75 @@ class AdminToolsPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["coins"], 500)
         self.assertEqual(await recent_admin_actions(self.db), [])
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class MainPostgresRuntimeIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 5_000_000_000_000_801
+
+    async def asyncSetUp(self):
+        import main as game_main
+
+        self.game_main = game_main
+        self.original_backend = game_main.DATABASE_BACKEND
+        self.original_url = game_main.DATABASE_URL
+        self.schema = "peak_main_test_" + uuid.uuid4().hex
+        admin = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await admin.execute(f'CREATE SCHEMA "{self.schema}"')
+        await admin.commit()
+        await admin.close()
+
+        game_main.DATABASE_BACKEND = "postgres"
+        game_main.DATABASE_URL = make_conninfo(
+            os.environ["TEST_POSTGRES_URL"],
+            options=f"-c search_path={self.schema}",
+        )
+        await game_main.init_db()
+
+    async def asyncTearDown(self):
+        if self.game_main.db is not None:
+            await self.game_main.db.close()
+            self.game_main.db = None
+        self.game_main.DATABASE_BACKEND = self.original_backend
+        self.game_main.DATABASE_URL = self.original_url
+        admin = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await admin.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await admin.commit()
+        await admin.close()
+
+    async def test_opt_in_postgres_runtime_initializes_and_handles_bigint_players(self):
+        first = await self.game_main.get_player(self.user_id, "RuntimeHero")
+        second = await self.game_main.get_player(self.user_id, "RuntimeHero")
+        self.assertEqual(first["user_id"], self.user_id)
+        self.assertEqual(second["username"], "RuntimeHero")
+
+        cursor = await self.game_main.db.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='players' "
+            "AND column_name='user_id'"
+        )
+        self.assertEqual((await cursor.fetchone())["data_type"], "bigint")
+        cursor = await self.game_main.db.execute(
+            "SELECT is_identity FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='trades' "
+            "AND column_name='trade_id'"
+        )
+        self.assertEqual((await cursor.fetchone())["is_identity"], "YES")
+
+        await self.game_main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(0,?,?, 'pending',(CURRENT_TIMESTAMP-INTERVAL '25 hours')::text)""",
+            (self.user_id, self.user_id + 1),
+        )
+        await self.game_main.db.commit()
+        self.assertEqual(await self.game_main.expire_stale_trades(), 1)
+        cursor = await self.game_main.db.execute(
+            "SELECT status FROM trades WHERE initiator_id=?",
+            (self.user_id,),
+        )
+        self.assertEqual((await cursor.fetchone())["status"], "expired")
+
+    async def test_postgres_runtime_rejects_missing_database_url(self):
+        self.game_main.DATABASE_URL = ""
+        with self.assertRaisesRegex(RuntimeError, "DATABASE_URL is required"):
+            await self.game_main.init_db()
