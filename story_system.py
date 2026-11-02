@@ -93,9 +93,18 @@ async def get_story_chapters(db,user_id,player_level):
     flags=await get_story_flags(db,user_id)
     cur=await db.execute("SELECT chapter_id FROM story_reward_claims WHERE user_id=?",(user_id,))
     claimed={row["chapter_id"] for row in await cur.fetchall()}
+    has_party = False
+    if any(chapter.get("requires_party") for chapter in CHAPTERS):
+        cur=await db.execute("SELECT 1 FROM party_members WHERE user_id=? LIMIT 1",(user_id,))
+        has_party = await cur.fetchone() is not None
     result=[]
     for chapter in CHAPTERS:
-        unlocked=player_level>=chapter["level"] and (chapter["id"]==1 or chapter["id"]-1 in done)
+        requires_party=chapter.get("requires_party",False)
+        unlocked=(
+            player_level>=chapter["level"]
+            and (chapter["id"]==1 or chapter["id"]-1 in done)
+            and (not requires_party or has_party)
+        )
         scene=chapter["scene"]
         if chapter["id"]==3 and flags.get("trust_path")=="mira": scene += " Mira stands beside you. She has chosen not to run this time."
         elif chapter["id"]==3 and flags.get("trust_path")=="wanderer": scene += " The Wanderer walks ahead, carrying the compass with both hands."
