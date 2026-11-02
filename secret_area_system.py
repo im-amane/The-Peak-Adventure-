@@ -1,5 +1,4 @@
 """Boss-gated hidden areas and one-time discovery rewards."""
-import sqlite3
 
 from world_system import WORLD_NAMES, world_min_level
 
@@ -22,6 +21,10 @@ SECRET_AREAS = (
 )
 
 
+def _is_postgres(db):
+    return getattr(db, "dialect", "sqlite") == "postgres"
+
+
 async def init_secret_area_tables(db):
     nested = db.in_transaction
     if nested:
@@ -29,11 +32,12 @@ async def init_secret_area_tables(db):
     else:
         await db.execute("BEGIN IMMEDIATE")
     try:
-        await db.execute("""CREATE TABLE IF NOT EXISTS player_secret_areas(
-          user_id INTEGER NOT NULL,
+        timestamp_type = "TIMESTAMPTZ" if _is_postgres(db) else "TEXT"
+        await db.execute(f"""CREATE TABLE IF NOT EXISTS player_secret_areas(
+          user_id BIGINT NOT NULL,
           world_id INTEGER NOT NULL CHECK(world_id BETWEEN 1 AND 10),
           area_id TEXT NOT NULL,
-          discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          discovered_at {timestamp_type} NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,world_id)
         )""")
         if nested:
@@ -92,9 +96,9 @@ async def get_secret_area_state(db, user_id, player_level, world_id):
 
 
 async def discover_secret_area(db, user_id, player_level, world_id):
-    savepoint = db.in_transaction
+    nested = db.in_transaction
     try:
-        if savepoint:
+        if nested:
             await db.execute("SAVEPOINT discover_secret_area")
         else:
             await db.execute("BEGIN IMMEDIATE")
@@ -106,10 +110,13 @@ async def discover_secret_area(db, user_id, player_level, world_id):
                 f"Defeat the World {world_id} boss and win 5 battles in this world "
                 f"to reveal the hidden area ({state['defeats']}/5 wins)."
             )
-        await db.execute(
-            "INSERT INTO player_secret_areas(user_id,world_id,area_id) VALUES(?,?,?)",
+        cur = await db.execute(
+            """INSERT INTO player_secret_areas(user_id,world_id,area_id) VALUES(?,?,?)
+               ON CONFLICT(user_id,world_id) DO NOTHING""",
             (user_id, world_id, state["area_id"]),
         )
+        if cur.rowcount != 1:
+            raise SecretAreaError("This hidden area has already been discovered.")
         coins = 300 + world_id * 50
         potions = 2
         cur = await db.execute(
@@ -118,20 +125,13 @@ async def discover_secret_area(db, user_id, player_level, world_id):
         )
         if cur.rowcount != 1:
             raise SecretAreaError("Player account not found.")
-        if savepoint:
+        if nested:
             await db.execute("RELEASE SAVEPOINT discover_secret_area")
         else:
             await db.commit()
         return {**state, "discovered": True, "coins": coins, "potions": potions}
-    except sqlite3.IntegrityError as exc:
-        if savepoint:
-            await db.execute("ROLLBACK TO SAVEPOINT discover_secret_area")
-            await db.execute("RELEASE SAVEPOINT discover_secret_area")
-        else:
-            await db.rollback()
-        raise SecretAreaError("This hidden area has already been discovered.") from exc
     except Exception:
-        if savepoint:
+        if nested:
             await db.execute("ROLLBACK TO SAVEPOINT discover_secret_area")
             await db.execute("RELEASE SAVEPOINT discover_secret_area")
         else:

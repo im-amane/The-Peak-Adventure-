@@ -25,6 +25,7 @@ from report_system import ReportError, init_report_tables, list_open_reports, re
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
+from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
@@ -1267,4 +1268,84 @@ class PostgresPresenceServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_presence_schema_initialization_is_idempotent(self):
         await init_presence_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresSecretAreaServiceTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 9_876_543_210
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in ("player_secret_areas", "player_monster_mastery", "boss_defeats", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 potions BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES(?)", (self.user_id,))
+        await self.db.execute(
+            "CREATE TABLE boss_defeats(user_id BIGINT,monster_level INTEGER)"
+        )
+        await self.db.commit()
+        await init_evolution_tables(self.db)
+        await init_secret_area_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in ("player_secret_areas", "player_monster_mastery", "boss_defeats", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.commit()
+        await self.db.close()
+
+    async def unlock_first_area(self):
+        await self.db.execute(
+            "INSERT INTO boss_defeats(user_id,monster_level) VALUES(?,?)",
+            (self.user_id, 10),
+        )
+        await self.db.commit()
+        for _ in range(5):
+            await record_monster_defeat(self.db, self.user_id, 1)
+
+    async def test_boss_and_five_wins_unlock_and_award_once(self):
+        await self.unlock_first_area()
+        state = await get_secret_area_state(self.db, self.user_id, 10, 1)
+        self.assertTrue(state["unlocked"])
+        reward = await discover_secret_area(self.db, self.user_id, 10, 1)
+        self.assertEqual((reward["coins"], reward["potions"]), (350, 2))
+        with self.assertRaises(SecretAreaError):
+            await discover_secret_area(self.db, self.user_id, 10, 1)
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (350, 2))
+
+    async def test_discovery_and_reward_roll_back_with_outer_transaction(self):
+        await self.unlock_first_area()
+        await self.db.execute("BEGIN IMMEDIATE")
+        await discover_secret_area(self.db, self.user_id, 10, 1)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        state = await get_secret_area_state(self.db, self.user_id, 10, 1)
+        self.assertFalse(state["discovered"])
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (0, 0))
+
+    async def test_missing_player_does_not_keep_discovery(self):
+        await self.unlock_first_area()
+        await self.db.execute("DELETE FROM players WHERE user_id=?", (self.user_id,))
+        await self.db.commit()
+        with self.assertRaisesRegex(SecretAreaError, "Player account not found"):
+            await discover_secret_area(self.db, self.user_id, 10, 1)
+        cursor = await self.db.execute(
+            "SELECT 1 FROM player_secret_areas WHERE user_id=?", (self.user_id,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_secret_area_schema_initialization_is_idempotent(self):
+        await init_secret_area_tables(self.db)
         await self.db.commit()
