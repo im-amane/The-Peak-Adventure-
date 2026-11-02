@@ -221,3 +221,9 @@ button:disabled{opacity:.55}
 .matchmaking-actions button{min-height:42px}
 .matchmaking-actions button[hidden]{display:none}
 @media(max-width:520px){.matchmaking-actions{display:grid;grid-template-columns:1fr 1fr}.matchmaking-actions button{width:100%}}
+
+.matchmaking-battle{flex:1 1 100%;margin:10px 0;padding:12px;border:1px solid var(--gold);border-radius:12px;background:rgba(12,18,28,.72)}
+.matchmaking-battle h4{margin:0 0 8px}
+.matchmaking-battle p{margin:6px 0}
+.matchmaking-battle button{margin:6px 8px 0 0;min-height:40px}
+.matchmaking-battle button:disabled{opacity:.55;cursor:not-allowed}
