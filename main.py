@@ -2835,6 +2835,10 @@ async def auction_command(message: Message):
         lines.append("\nBid with /bid listing_id amount. Seller cannot bid; bids are escrowed and outbid players are refunded.")
         await message.answer("\n".join(lines))
     except (AuctionError, ValueError) as exc:
+        await record_security_event(
+            db, user_id, "invalid_economy_action",
+            f"auction_command_rejected: {type(exc).__name__}", 2
+        )
         await message.answer(escape(str(exc)))
 
 
@@ -2848,6 +2852,10 @@ async def auction_bid_command(message: Message):
         _, amount = await place_bid(db, message.from_user.id, int(args[1]), int(args[2]))
         await message.answer(f"🔨 Bid of {amount} coins placed. Your coins are held in escrow until you are outbid or the auction settles.")
     except AuctionError as exc:
+        await record_security_event(
+            db, message.from_user.id, "invalid_economy_action",
+            f"auction_bid_rejected: {type(exc).__name__}", 2
+        )
         await message.answer(escape(str(exc)))
 
 
