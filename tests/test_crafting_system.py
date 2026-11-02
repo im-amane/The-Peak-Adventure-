@@ -60,6 +60,20 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    await craft_item(self.db,1,10,"iron_sword")
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":0,"iron_ore":3})
 
+ async def test_crafting_respects_existing_caller_transaction(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  await self.db.execute("UPDATE players SET weapon='Pending Weapon' WHERE user_id=1")
+  await craft_item(self.db,1,10,"iron_sword")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["weapon"],"Rusty Sword")
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
+  cur=await self.db.execute("SELECT COUNT(*) AS n FROM crafted_items WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
+
  async def test_invalid_account_and_recipe_types_are_rejected(self):
   for user_id,recipe_id in ((True,"iron_sword"),(0,"iron_sword"),(1,[])):
    with self.subTest(user_id=user_id,recipe_id=recipe_id),self.assertRaises(CraftingError):
