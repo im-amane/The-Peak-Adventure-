@@ -73,6 +73,27 @@ async def record_admin_action(db,actor_id,action,target_id=None,details=""):
 
 
 @_transactional
+async def perform_audited_action(db,actor_id,action,target_id,operation,details=""):
+    """Run an admin mutation and its audit record in one transaction."""
+    if not callable(operation):
+        raise AdminError("Invalid administrative operation.")
+    if not isinstance(actor_id,int) or isinstance(actor_id,bool) or actor_id<=0:
+        raise AdminError("Invalid administrator ID.")
+    if not isinstance(action,str) or not action.strip():
+        raise AdminError("Invalid administrative action.")
+    if target_id is not None and (not isinstance(target_id,int) or isinstance(target_id,bool) or target_id<=0):
+        raise AdminError("Invalid administrative target.")
+    if not isinstance(details,str):
+        raise AdminError("Invalid administrative details.")
+    result=operation()
+    if not hasattr(result,"__await__"):
+        raise AdminError("Administrative operation must be asynchronous.")
+    result=await result
+    await record_admin_action(db,actor_id,action,target_id,details)
+    return result
+
+
+@_transactional
 async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int, actor_id: int | None = None) -> int:
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
         raise AdminError("Invalid player ID.")
