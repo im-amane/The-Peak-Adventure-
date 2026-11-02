@@ -1,7 +1,7 @@
 import unittest
 import sqlite3
 import aiosqlite
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 
 class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
@@ -61,6 +61,29 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(data["data"]["premium_transactions"],[])
   with self.assertRaises(AdminError): await export_player_data(self.db,202)
 
+ async def test_audited_admin_action_rolls_back_mutation_if_log_fails(self):
+  await self.db.execute("CREATE TRIGGER reject_admin_audit BEFORE INSERT ON admin_audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable'); END")
+  await self.db.commit()
+  async def mutation():
+   await self.db.execute("UPDATE players SET coins=coins+10 WHERE user_id=101")
+   return True
+  with self.assertRaisesRegex(sqlite3.IntegrityError,"audit unavailable"):
+   await perform_audited_action(self.db,999,"test_mutation",101,mutation,"test")
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
+
+ async def test_audited_admin_action_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  async def mutation():
+   await self.db.execute("UPDATE players SET coins=coins+10 WHERE user_id=101")
+   return True
+  self.assertTrue(await perform_audited_action(self.db,999,"test_mutation",101,mutation,"test"))
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
  async def test_coin_adjustment_preserves_outer_transaction(self):
   await self.db.execute("BEGIN")
   self.assertEqual(await adjust_player_coins(self.db,101,25,999),75)
