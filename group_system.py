@@ -61,6 +61,10 @@ def _transactional(function):
 def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
+def _lock_group_sql(db):
+    """Serialize group-wide state transitions across PostgreSQL connections."""
+    return " FOR UPDATE" if _is_postgres(db) else ""
+
 
 @_transactional
 async def init_group_tables(db):
@@ -256,7 +260,13 @@ async def claim_group_mission_reward(db,chat_id,user_id,mission_id):
 
 @_transactional
 async def start_group_raid(db,chat_id,user_id,boss_level,boss_name,boss_hp):
-    if not valid_chat(chat_id) or not await is_group_admin(db,chat_id,user_id):
+    if not valid_chat(chat_id) or not valid_user(user_id):
+        raise GroupError("Only verified group admins can start a raid.")
+    cur=await db.execute(
+        "SELECT owner_id FROM group_profiles WHERE chat_id=?" + _lock_group_sql(db),
+        (chat_id,),
+    )
+    if not await cur.fetchone() or not await is_group_admin(db,chat_id,user_id):
         raise GroupError("Only verified group admins can start a raid.")
     if not isinstance(boss_level,int) or isinstance(boss_level,bool) or not 10<=boss_level<=100 or boss_level%10:
         raise GroupError("Raid boss level must be a milestone from 10 to 100.")
