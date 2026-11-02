@@ -461,7 +461,7 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
 @_transactional
 async def award_guild_xp(db,guild_id,amount):
     """Award guild XP without losing concurrent rewards from other connections."""
-    if not valid_id(guild_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=5000:
+    if not valid_id(guild_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=50000:
         raise GuildFeatureError("Invalid guild XP award.")
     cur=await db.execute(
         "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),
