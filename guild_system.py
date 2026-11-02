@@ -459,6 +459,31 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
 
 
 @_transactional
+async def award_guild_xp(db,guild_id,amount):
+    """Award guild XP without losing concurrent rewards from other connections."""
+    if not valid_id(guild_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=5000:
+        raise GuildFeatureError("Invalid guild XP award.")
+    cur=await db.execute(
+        "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),
+        (guild_id,),
+    )
+    guild=await cur.fetchone()
+    if not guild:
+        raise GuildFeatureError("Guild not found.")
+    level,xp=guild["guild_level"],guild["guild_xp"]+amount
+    while level<100 and xp>=level*500:
+        xp-=level*500
+        level+=1
+    cur=await db.execute(
+        "UPDATE guilds SET guild_level=?,guild_xp=? WHERE guild_id=?",
+        (level,xp,guild_id),
+    )
+    if cur.rowcount != 1:
+        raise GuildFeatureError("Guild XP could not be recorded.")
+    return level,xp
+
+
+@_transactional
 async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
     if mission_id not in MISSIONS or not await _officer(db,guild_id,user_id):
         raise GuildFeatureError("Only guild leaders and officers can claim a completed mission.")
