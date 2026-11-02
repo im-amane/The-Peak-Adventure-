@@ -2474,7 +2474,7 @@ async def admin_command(message: Message):
                 lambda: unban_player(db,message.from_user.id,target),
             )
             await message.answer(f"✅ Player <code>{target}</code> has been reinstated.")
-        except ModerationError as exc:
+        except (ModerationError, AdminError) as exc:
             await message.answer(escape(str(exc)))
         return
     if action=="reports":
