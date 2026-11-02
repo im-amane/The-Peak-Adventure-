@@ -245,7 +245,7 @@ async def migrate_sqlite_to_postgres(
                     await target.execute(
                         f"""SELECT setval(
                                pg_get_serial_sequence(
-                                 format('%I.%I',current_schema(),?),
+                                 quote_ident(current_schema()) || '.' || quote_ident(?),
                                  ?
                                ),
                                COALESCE(MAX({quoted_column}),1),
