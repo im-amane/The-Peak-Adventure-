@@ -102,4 +102,22 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT 1 FROM world_discoveries WHERE user_id=101")
   self.assertIsNone(await cur.fetchone())
 
+ async def test_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_world_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='player_worlds'")
+   self.assertIsNone(await cur.fetchone())
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='world_discoveries'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
 if __name__=="__main__": unittest.main()
