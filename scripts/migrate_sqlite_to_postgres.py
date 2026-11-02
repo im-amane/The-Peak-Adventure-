@@ -140,12 +140,12 @@ async def _inspect_schema_constraints(
         ).fetchone()
         table_sql = table_sql_row["sql"] or ""
         without_quoted_literals = re.sub(
-            r"'(?:''|[^'])*'|\\"(?:\\"\\"|[^\\"])*\\"",
+            r"'(?:''|[^'])*'",
             "",
             table_sql,
         )
         sqlite_check_counts[table] = len(
-            re.findall(r"\\bCHECK\\s*\\(", without_quoted_literals, re.IGNORECASE)
+            re.findall(r"\bCHECK\s*\(", without_quoted_literals, re.IGNORECASE)
         )
         for fk in source.execute(f"PRAGMA foreign_key_list({quoted_table})").fetchall():
             referenced_column = fk["to"]
