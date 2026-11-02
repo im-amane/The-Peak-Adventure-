@@ -73,9 +73,9 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(await cancel_matchmaking(self.db, 1, now=1003))
         self.assertEqual((await get_matchmaking_status(self.db, 1))["status"], "cancelled")
 
-        with self.assertRaisesRegex(MatchmakingError, "Wait 8 seconds"):
+        with self.assertRaisesRegex(MatchmakingError, "Wait 6 seconds"):
             await join_matchmaking(self.db, 1, now=1004)
-        rejoined = await join_matchmaking(self.db, 1, now=1012)
+        rejoined = await join_matchmaking(self.db, 1, now=1010)
         self.assertEqual(rejoined["status"], "queued")
 
     async def test_rating_window_expands_for_waiting_players(self):
