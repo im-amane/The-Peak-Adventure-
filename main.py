@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 from aiohttp import web
 from aiogram.types import WebAppInfo
 
-from game_rules import calculate_enemy_damage, choose_monster_tactic, class_evades, get_boss_phase, nearby_monster_levels, skill_cooldown_for_class, validate_monster_catalogue
+from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack, skill_cooldown_for_class, validate_monster_catalogue
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
@@ -3129,7 +3129,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text("This battle has ended. Use /explore to find another monster.")
         return
     p = await get_player(user_id, call.from_user.username)
-    m = await build_battle_monster(user_id, b)
+    m = build_battle_monster(b)
     class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
     action = call.data.split(":", 1)[1]
     if action not in {"attack", "skill", "potion", "flee"}:
@@ -3150,38 +3150,41 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await db.execute("UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?", (heal_amount, user_id))
         damage = 0
         action_line = f"🧪 You recover {heal_amount} HP."
-    elif action == "skill":
-        if p["skill_cd"] > 0:
-            await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
-            return
-        try:
-            await consume_mana(db, user_id, SKILL_MANA_COST)
-        except ManaError as exc:
-            await call.message.answer("🔮 " + escape(str(exc)))
-            return
-        damage = max(25, (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2) - m["defense"] // 2) * 2
-        await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-        action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
     else:
-        damage = max(8, p["level"] * 10 + class_stats["attack"] + p["weapon_attack"] + random.randint(5, 18) - m["defense"] // 3)
-        action_line = f"⚔️ You strike for {damage} damage."
-    if action != "potion":
-        elemental_multiplier = 1.0
-        if class_stats["element"] == m["weakness"]:
-            elemental_multiplier = 1.5
-            action_line += f" ✨ Super effective! {class_stats['element']} exploits its weakness."
-        elif class_stats["element"] == m["element"]:
-            elemental_multiplier = 0.8
-            action_line += f" 🧱 {m['element']} resists your matching element."
-        damage = max(1, int(damage * elemental_multiplier))
-        if m["trait_effect"] == "armored":
-            damage = max(1, int(damage * 0.85))
-            action_line += " 🛡️ Its armor absorbs part of the hit."
-        if m["trait_effect"] == "shield" and (b["turn_count"] + 1) % 3 == 1:
-            damage = max(1, int(damage * 0.7))
-            action_line += " 🔰 Its shield blocks part of this strike."
-    else:
-        damage = 0
+        if action == "skill":
+            if p["skill_cd"] > 0:
+                await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
+                return
+            try:
+                await consume_mana(db, user_id, SKILL_MANA_COST)
+            except ManaError as exc:
+                await call.message.answer("🔮 " + escape(str(exc)))
+                return
+            await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+        damage, damage_effects = resolve_player_attack(
+            action,
+            player_level=p["level"],
+            class_attack=class_stats["attack"],
+            weapon_attack=p["weapon_attack"],
+            monster_defense=m["defense"],
+            class_element=class_stats["element"],
+            monster_element=m["element"],
+            monster_weakness=m["weakness"],
+            trait_effect=m["trait_effect"],
+            next_turn=b["turn_count"] + 1,
+            random_bonus=random.randint(5, 18) if action == "attack" else 0,
+        )
+        if action == "skill":
+            action_line = f"🔥 <b>{class_stats['skill']}!</b> You deal {damage} damage."
+        else:
+            action_line = f"⚔️ You strike for {damage} damage."
+        for effect in damage_effects:
+            action_line += {
+                "weakness": f" ✨ Super effective! {class_stats['element']} exploits its weakness.",
+                "resisted": f" 🧱 {m['element']} resists your matching element.",
+                "armored": " 🛡️ Its armor absorbs part of the hit.",
+                "shield": " 🔰 Its shield blocks part of this strike.",
+            }[effect]
     new_enemy_hp = max(0, b["monster_hp"] - damage)
     turn_count = b["turn_count"] + 1
     if new_enemy_hp > 0 and m["trait_effect"] == "regenerate":
@@ -3195,45 +3198,41 @@ async def _battle_action_unlocked(call: CallbackQuery):
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
     p = await get_player(user_id)
-    previous_boss_phase = get_boss_phase(m["boss"], b["monster_hp"], m["hp"])
-    current_boss_phase = get_boss_phase(m["boss"], new_enemy_hp, m["hp"])
-    enemy_tactic = choose_monster_tactic(m["trait_effect"], turn_count, new_enemy_hp, m["hp"], is_boss=m["boss"], boss_phase=current_boss_phase)
-    special_turn = enemy_tactic == "special"
-    enemy_damage = calculate_enemy_damage(
-        m["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
-        m["speed"], random.randint(-3, 6),
-        fury=m["trait_effect"] == "fury" and new_enemy_hp <= int(m["hp"] * 0.3),
-        special=special_turn,
-        boss_phase=current_boss_phase,
+    combat_result = resolve_enemy_turn(
+        trait_effect=m["trait_effect"],
+        turn_count=turn_count,
+        monster_hp_before=b["monster_hp"],
+        monster_hp_after_action=new_enemy_hp,
+        monster_max_hp=m["hp"],
+        monster_attack_power=m["attack_power"],
+        monster_speed=m["speed"],
+        player_hp=p["hp"],
+        player_max_hp=p["max_hp"],
+        player_level=p["level"],
+        armor_defense=p["armor_defense"],
+        class_defense=class_stats["defense"],
+        class_speed=class_stats["speed"],
+        player_damage=damage,
+        action=action,
+        random_bonus=random.randint(-3, 6),
+        dodge_roll=random.randint(1, 100),
+        is_boss=m["boss"],
+        boss_name=m["name"],
+        hero_class=p["hero_class"],
     )
-    if m["trait_effect"] == "berserk" and new_enemy_hp <= int(m["hp"] * 0.5):
-        enemy_damage = int(enemy_damage * 1.35)
-    evaded = class_evades(class_stats["speed"], random.randint(1, 100))
-    if evaded:
-        enemy_damage = 0
-    reflect_damage = max(1, damage // 5) if m["trait_effect"] == "reflect" and action != "potion" else 0
-    poison_damage = max(1, p["max_hp"] // 40) if m["trait_effect"] == "poison" else 0
-    new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
-    effect_notes = []
-    if current_boss_phase > previous_boss_phase:
-        effect_notes.append(f"👑 {m['name']} enters BOSS PHASE {current_boss_phase}!")
-    if evaded:
-        effect_notes.append(f"💨 Your {p['hero_class']} speed dodges the monster's strike.")
-    if reflect_damage:
-        effect_notes.append(f"🪞 Your strike is reflected for {reflect_damage} damage.")
-    if poison_damage:
-        effect_notes.append(f"☠️ Poison deals {poison_damage} damage.")
-    if enemy_damage > 0 and m["trait_effect"] == "drain":
-        new_enemy_hp = min(m["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-    elif enemy_damage > 0 and m["trait_effect"] == "lifesteal":
-        stolen = max(1, enemy_damage // 4)
-        new_enemy_hp = min(m["hp"], new_enemy_hp + stolen)
-        effect_notes.append(f"🩸 The monster steals {stolen} HP.")
+    new_enemy_hp = combat_result["monster_hp"]
+    enemy_damage = combat_result["enemy_damage"]
+    evaded = combat_result["evaded"]
+    special_turn = combat_result["special_turn"]
+    reflect_damage = combat_result["reflect_damage"]
+    poison_damage = combat_result["poison_damage"]
+    new_hp = combat_result["player_hp"]
+    effect_notes = combat_result["effect_notes"]
+    effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
     await db.commit()
     await restore_mana(db, user_id, TURN_MANA_REGEN)
-    effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
@@ -3341,8 +3340,52 @@ async def miniapp_state(user: dict):
          "inviter_level":row["inviter_level"]}
         for row in pending_guild_invites
     ]
-    trade_cur = await db.execute("SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)", (user_id,user_id))
-    pending_trades = (await trade_cur.fetchone())["total"]
+    trade_cur = await db.execute(
+        """SELECT t.trade_id,t.initiator_id,t.partner_id,t.created_at,
+                  p.username AS other_username
+           FROM trades t
+           JOIN players p ON p.user_id=CASE WHEN t.initiator_id=? THEN t.partner_id ELSE t.initiator_id END
+           WHERE t.status='pending' AND (t.initiator_id=? OR t.partner_id=?)
+           ORDER BY t.created_at DESC,t.trade_id DESC LIMIT 10""",
+        (user_id,user_id,user_id),
+    )
+    pending_trade_rows = await trade_cur.fetchall()
+    pending_trades = [
+        {"trade_id":row["trade_id"],"incoming":row["partner_id"] == user_id,
+         "other_username":row["other_username"] or "Adventurer","created_at":row["created_at"]}
+        for row in pending_trade_rows
+    ]
+    trade_count_cur = await db.execute(
+        "SELECT COUNT(*) AS total FROM trades WHERE status='pending' AND (initiator_id=? OR partner_id=?)",
+        (user_id,user_id),
+    )
+    pending_trade_count = (await trade_count_cur.fetchone())["total"]
+    open_trade_cur = await db.execute(
+        """SELECT t.*,p.username AS other_username
+           FROM trades t
+           JOIN players p ON p.user_id=CASE WHEN t.initiator_id=? THEN t.partner_id ELSE t.initiator_id END
+           WHERE t.status='open' AND (t.initiator_id=? OR t.partner_id=?)
+           ORDER BY t.created_at DESC,t.trade_id DESC LIMIT 10""",
+        (user_id,user_id,user_id),
+    )
+    open_trade_rows = await open_trade_cur.fetchall()
+    open_trades = [
+        {
+            "trade_id":row["trade_id"],
+            "other_username":row["other_username"] or "Adventurer",
+            "my_coins":row["initiator_coins"] if row["initiator_id"] == user_id else row["partner_coins"],
+            "my_potions":row["initiator_potions"] if row["initiator_id"] == user_id else row["partner_potions"],
+            "their_coins":row["partner_coins"] if row["initiator_id"] == user_id else row["initiator_coins"],
+            "their_potions":row["partner_potions"] if row["initiator_id"] == user_id else row["initiator_potions"],
+            "my_weapon":row["initiator_weapon"] if row["initiator_id"] == user_id else row["partner_weapon"],
+            "my_armor":row["initiator_armor"] if row["initiator_id"] == user_id else row["partner_armor"],
+            "their_weapon":row["partner_weapon"] if row["initiator_id"] == user_id else row["initiator_weapon"],
+            "their_armor":row["partner_armor"] if row["initiator_id"] == user_id else row["initiator_armor"],
+            "my_confirmed":bool(row["initiator_confirmed"] if row["initiator_id"] == user_id else row["partner_confirmed"]),
+            "their_confirmed":bool(row["partner_confirmed"] if row["initiator_id"] == user_id else row["initiator_confirmed"]),
+        }
+        for row in open_trade_rows
+    ]
     dungeon_state = await get_dungeon_state(db, user_id)
     dungeon_choices = available_dungeons(p["level"])
     claimed_cur = await db.execute("SELECT dungeon_id FROM dungeon_rewards WHERE user_id=?", (user_id,))
@@ -3369,7 +3412,8 @@ async def miniapp_state(user: dict):
         "quests": quest_state,
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
-                    "pending_trades": pending_trades},
+                    "pending_trades": pending_trades, "pending_trade_count": pending_trade_count,
+                    "open_trades": open_trades},
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
@@ -3412,6 +3456,7 @@ async def api_state(request: web.Request):
     except ValueError as exc:
         return web.json_response({"error": str(exc)}, status=401)
     async with db_lock:
+        await expire_stale_trades()
         return web.json_response(await miniapp_state(user))
 
 
@@ -3743,6 +3788,22 @@ async def api_premium_shop(request: web.Request):
     return web.json_response({"message": f"Purchased {purchase['title']}.", "purchase": purchase, "state": state})
 
 
+async def expire_stale_trades():
+    """Expire abandoned invitations and open offers after 24 hours."""
+    if db is None:
+        return 0
+    cur = await db.execute(
+        """UPDATE trades
+           SET status='expired',initiator_confirmed=0,partner_confirmed=0
+           WHERE status IN ('pending','open')
+             AND datetime(created_at) <= datetime('now','-24 hours')"""
+    )
+    expired_count = cur.rowcount
+    if expired_count:
+        await db.commit()
+    return expired_count
+
+
 async def api_social(request: web.Request):
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
@@ -3760,6 +3821,7 @@ async def api_social(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
+            await expire_stale_trades()
             async with player_locks[user_id]:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "friend_search":
@@ -3831,6 +3893,173 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
                     await respond_guild_invite(db, payload["invite_id"], user_id, action == "guild_accept")
                     result = {"accepted": action == "guild_accept"}
+                elif action == "trade_create":
+                    if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int or payload["target_id"] <= 0:
+                        return web.json_response({"error": "A valid target_id is required."}, status=400)
+                    target_id = payload["target_id"]
+                    if target_id == user_id:
+                        return web.json_response({"error": "You cannot trade with yourself."}, status=400)
+                    low_id, high_id = sorted((user_id, target_id))
+                    friend_cur = await db.execute(
+                        "SELECT 1 FROM friend_requests WHERE user_low=? AND user_high=? AND status='accepted'",
+                        (low_id, high_id),
+                    )
+                    if not await friend_cur.fetchone():
+                        return web.json_response({"error": "You can only start trades with accepted friends."}, status=409)
+                    target_cur = await db.execute(
+                        "SELECT class_selected FROM players WHERE user_id=?", (target_id,)
+                    )
+                    target = await target_cur.fetchone()
+                    if not target or not target["class_selected"] or not player["class_selected"]:
+                        return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
+                    active_cur = await db.execute(
+                        """SELECT 1 FROM trades WHERE status IN ('pending','open')
+                           AND (initiator_id IN (?,?) OR partner_id IN (?,?)) LIMIT 1""",
+                        (user_id,target_id,user_id,target_id),
+                    )
+                    if await active_cur.fetchone():
+                        return web.json_response({"error": "One of these players already has an active trade."}, status=409)
+                    trade_cur = await db.execute(
+                        "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
+                        (user_id,target_id),
+                    )
+                    result = {"trade_id": trade_cur.lastrowid, "status": "pending"}
+                elif action in {"trade_accept", "trade_decline"}:
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_status = "open" if action == "trade_accept" else "declined"
+                    trade_cur = await db.execute(
+                        """UPDATE trades SET status=?
+                           WHERE trade_id=? AND partner_id=? AND status='pending'""",
+                        (trade_status,payload["trade_id"],user_id),
+                    )
+                    if trade_cur.rowcount != 1:
+                        return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
+                    result = {"trade_id":payload["trade_id"],"status":trade_status}
+                elif action == "trade_offer":
+                    if (set(payload) != {"action", "trade_id", "coins", "potions", "offer_weapon", "offer_armor"}
+                            or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0
+                            or type(payload["coins"]) is not int or payload["coins"] < 0
+                            or type(payload["potions"]) is not int or payload["potions"] < 0
+                            or type(payload["offer_weapon"]) is not bool
+                            or type(payload["offer_armor"]) is not bool):
+                        return web.json_response({"error": "A valid trade_id, non-negative balances and equipment choices are required."}, status=400)
+                    trade_cur = await db.execute(
+                        "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
+                    )
+                    trade = await trade_cur.fetchone()
+                    if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
+                        return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
+                    weapon = player["weapon"] if payload["offer_weapon"] else None
+                    weapon_attack = player["weapon_attack"] if payload["offer_weapon"] else None
+                    armor = player["armor"] if payload["offer_armor"] else None
+                    armor_defense = player["armor_defense"] if payload["offer_armor"] else None
+                    if user_id == trade["initiator_id"]:
+                        await db.execute(
+                            """UPDATE trades SET initiator_coins=?,initiator_potions=?,
+                               initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
+                               initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                            (payload["coins"],payload["potions"],weapon,weapon_attack,armor,armor_defense,payload["trade_id"]),
+                        )
+                    else:
+                        await db.execute(
+                            """UPDATE trades SET partner_coins=?,partner_potions=?,
+                               partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
+                               initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                            (payload["coins"],payload["potions"],weapon,weapon_attack,armor,armor_defense,payload["trade_id"]),
+                        )
+                    await db.commit()
+                    result = {"trade_id":payload["trade_id"],"status":"open","offer_updated":True}
+                elif action == "trade_confirm":
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_cur = await db.execute(
+                        "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
+                    )
+                    trade = await trade_cur.fetchone()
+                    if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if user_id == trade["initiator_id"]:
+                        await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
+                    else:
+                        await db.execute("UPDATE trades SET partner_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
+                    trade_cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (payload["trade_id"],))
+                    trade = await trade_cur.fetchone()
+                    if trade["initiator_confirmed"] and trade["partner_confirmed"]:
+                        initiator = await get_player(trade["initiator_id"])
+                        partner = await get_player(trade["partner_id"])
+                        invalid_equipment = (
+                            bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"])
+                            or bool(trade["initiator_armor"]) != bool(trade["partner_armor"])
+                            or (trade["initiator_weapon"] and (
+                                initiator["weapon"] != trade["initiator_weapon"]
+                                or initiator["weapon_attack"] != trade["initiator_weapon_attack"]
+                            ))
+                            or (trade["partner_weapon"] and (
+                                partner["weapon"] != trade["partner_weapon"]
+                                or partner["weapon_attack"] != trade["partner_weapon_attack"]
+                            ))
+                            or (trade["initiator_armor"] and (
+                                initiator["armor"] != trade["initiator_armor"]
+                                or initiator["armor_defense"] != trade["initiator_armor_defense"]
+                            ))
+                            or (trade["partner_armor"] and (
+                                partner["armor"] != trade["partner_armor"]
+                                or partner["armor_defense"] != trade["partner_armor_defense"]
+                            ))
+                        )
+                        invalid_balance = (
+                            initiator["coins"] < trade["initiator_coins"]
+                            or initiator["potions"] < trade["initiator_potions"]
+                            or partner["coins"] < trade["partner_coins"]
+                            or partner["potions"] < trade["partner_potions"]
+                        )
+                        if invalid_equipment or invalid_balance:
+                            await db.execute(
+                                "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                                (payload["trade_id"],),
+                            )
+                            await db.commit()
+                            return web.json_response({
+                                "error": "Trade paused because an offered item or balance changed. Update offers and confirm again."
+                            }, status=409)
+                        initiator_weapon = (trade["partner_weapon"],trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"],initiator["weapon_attack"])
+                        partner_weapon = (trade["initiator_weapon"],trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"],partner["weapon_attack"])
+                        initiator_armor = (trade["partner_armor"],trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"],initiator["armor_defense"])
+                        partner_armor = (trade["initiator_armor"],trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"],partner["armor_defense"])
+                        await db.execute(
+                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+                            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
+                             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
+                        )
+                        await db.execute(
+                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+                            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
+                             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
+                        )
+                        await db.execute(
+                            "UPDATE trades SET status='completed' WHERE trade_id=? AND status='open'",
+                            (payload["trade_id"],),
+                        )
+                        result = {"trade_id":payload["trade_id"],"status":"completed"}
+                    else:
+                        result = {"trade_id":payload["trade_id"],"status":"open","waiting_for_other_player":True}
+                    await db.commit()
+                elif action == "trade_cancel":
+                    if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        return web.json_response({"error": "A valid trade_id is required."}, status=400)
+                    trade_cur = await db.execute(
+                        """UPDATE trades SET status='cancelled',initiator_confirmed=0,partner_confirmed=0
+                           WHERE trade_id=? AND (initiator_id=? OR partner_id=?) AND status IN ('pending','open')""",
+                        (payload["trade_id"],user_id,user_id),
+                    )
+                    if trade_cur.rowcount != 1:
+                        return web.json_response({"error": "This trade cannot be cancelled by you."}, status=409)
+                    result = {"trade_id":payload["trade_id"],"status":"cancelled"}
                 elif action in {"guild_chat", "guild_send"}:
                     expected = {"action", "message"} if action == "guild_send" else {"action"}
                     if set(payload) != expected:
@@ -3853,6 +4082,7 @@ async def api_social(request: web.Request):
                 else:
                     await record_security_event(db, user_id, "invalid_social_action", action[:80], 2)
                     return web.json_response({"error": "Unsupported social action."}, status=400)
+                await db.commit()
                 state = await miniapp_state(user)
     except (FriendError, PartyError, GuildFeatureError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
@@ -3953,40 +4183,39 @@ async def api_action(request: web.Request):
             )
             damage = 0
             action_line = f"You recover {heal_amount} HP."
-        elif action == "skill":
-            if p["skill_cd"] > 0:
-                return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
-            try:
-                await consume_mana(db, user_id, SKILL_MANA_COST)
-            except ManaError as exc:
-                return web.json_response({"error": str(exc)}, status=409)
-            damage = max(
-                25,
-                (p["level"] * 13 + 30 + class_stats["attack"] * 2 + p["weapon_attack"] * 2)
-                - monster["defense"] // 2,
-            ) * 2
-            await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-            action_line = f"{class_stats['skill']} deals {damage} damage."
         else:
-            damage = max(
-                8,
-                p["level"] * 10 + class_stats["attack"] + p["weapon_attack"]
-                + random.randint(5, 18) - monster["defense"] // 3,
+            if action == "skill":
+                if p["skill_cd"] > 0:
+                    return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+                try:
+                    await consume_mana(db, user_id, SKILL_MANA_COST)
+                except ManaError as exc:
+                    return web.json_response({"error": str(exc)}, status=409)
+                await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+            damage, damage_effects = resolve_player_attack(
+                action,
+                player_level=p["level"],
+                class_attack=class_stats["attack"],
+                weapon_attack=p["weapon_attack"],
+                monster_defense=monster["defense"],
+                class_element=class_stats["element"],
+                monster_element=monster["element"],
+                monster_weakness=monster["weakness"],
+                trait_effect=monster["trait_effect"],
+                next_turn=battle["turn_count"] + 1,
+                random_bonus=random.randint(5, 18) if action == "attack" else 0,
             )
-            action_line = f"You strike for {damage} damage."
-        if action != "potion":
-            if class_stats["element"] == monster["weakness"]:
-                damage = int(damage * 1.5)
-                action_line += f" Super effective: {class_stats['element']} hits its weakness."
-            elif class_stats["element"] == monster["element"]:
-                damage = int(damage * 0.8)
-                action_line += f" {monster['element']} resists your matching element."
-            if monster["trait_effect"] == "armored":
-                damage = int(damage * 0.85)
-                action_line += " Its armor absorbs part of the hit."
-            if monster["trait_effect"] == "shield" and (battle["turn_count"] + 1) % 3 == 1:
-                damage = max(1, int(damage * 0.7))
-                action_line += " Its shield blocks part of this strike."
+            if action == "skill":
+                action_line = f"{class_stats['skill']} deals {damage} damage."
+            else:
+                action_line = f"You strike for {damage} damage."
+            for effect in damage_effects:
+                action_line += {
+                    "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
+                    "resisted": f" {monster['element']} resists your matching element.",
+                    "armored": " Its armor absorbs part of the hit.",
+                    "shield": " Its shield blocks part of this strike.",
+                }[effect]
         new_enemy_hp = max(0, battle["monster_hp"] - damage)
         turn_count = battle["turn_count"] + 1
         if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
@@ -4001,40 +4230,37 @@ async def api_action(request: web.Request):
             message = await finish_battle(user_id, True)
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
-        previous_boss_phase = get_boss_phase(monster["boss"], battle["monster_hp"], monster["hp"])
-        current_boss_phase = get_boss_phase(monster["boss"], new_enemy_hp, monster["hp"])
-        enemy_tactic = choose_monster_tactic(monster["trait_effect"], turn_count, new_enemy_hp, monster["hp"], is_boss=monster["boss"], boss_phase=current_boss_phase)
-        special_turn = enemy_tactic == "special"
-        enemy_damage = calculate_enemy_damage(
-            monster["attack_power"], p["level"], p["armor_defense"], class_stats["defense"],
-            monster["speed"], random.randint(-3, 6),
-            fury=monster["trait_effect"] == "fury" and new_enemy_hp <= int(monster["hp"] * 0.3),
-            special=special_turn,
-            boss_phase=current_boss_phase,
+        combat_result = resolve_enemy_turn(
+            trait_effect=monster["trait_effect"],
+            turn_count=turn_count,
+            monster_hp_before=battle["monster_hp"],
+            monster_hp_after_action=new_enemy_hp,
+            monster_max_hp=monster["hp"],
+            monster_attack_power=monster["attack_power"],
+            monster_speed=monster["speed"],
+            player_hp=p["hp"],
+            player_max_hp=p["max_hp"],
+            player_level=p["level"],
+            armor_defense=p["armor_defense"],
+            class_defense=class_stats["defense"],
+            class_speed=class_stats["speed"],
+            player_damage=damage,
+            action=action,
+            random_bonus=random.randint(-3, 6),
+            dodge_roll=random.randint(1, 100),
+            is_boss=monster["boss"],
+            boss_name=monster["name"],
+            hero_class=p["hero_class"],
         )
-        if monster["trait_effect"] == "berserk" and new_enemy_hp <= int(monster["hp"] * 0.5):
-            enemy_damage = int(enemy_damage * 1.35)
-        evaded = class_evades(class_stats["speed"], random.randint(1, 100))
-        if evaded:
-            enemy_damage = 0
-        reflect_damage = max(1, damage // 5) if monster["trait_effect"] == "reflect" and action != "potion" else 0
-        poison_damage = max(1, p["max_hp"] // 40) if monster["trait_effect"] == "poison" else 0
-        new_hp = max(0, p["hp"] - enemy_damage - reflect_damage - poison_damage)
-        effect_notes = []
-        if current_boss_phase > previous_boss_phase:
-            effect_notes.append(f"{monster['name']} enters BOSS PHASE {current_boss_phase}!")
-        if evaded:
-            effect_notes.append(f"Your {p['hero_class']} speed dodges the monster's strike.")
-        if reflect_damage:
-            effect_notes.append(f"Your strike is reflected for {reflect_damage} damage.")
-        if poison_damage:
-            effect_notes.append(f"Poison deals {poison_damage} damage.")
-        if enemy_damage > 0 and monster["trait_effect"] == "drain":
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, enemy_damage // 10))
-        elif enemy_damage > 0 and monster["trait_effect"] == "lifesteal":
-            stolen = max(1, enemy_damage // 4)
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + stolen)
-            effect_notes.append(f"The monster steals {stolen} HP.")
+        new_enemy_hp = combat_result["monster_hp"]
+        enemy_damage = combat_result["enemy_damage"]
+        evaded = combat_result["evaded"]
+        special_turn = combat_result["special_turn"]
+        reflect_damage = combat_result["reflect_damage"]
+        poison_damage = combat_result["poison_damage"]
+        new_hp = combat_result["player_hp"]
+        effect_notes = combat_result["effect_notes"]
+        effect_text = " " + " ".join(effect_notes) if effect_notes else ""
         await db.execute(
             "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
             (new_enemy_hp, turn_count, user_id),
@@ -4045,7 +4271,6 @@ async def api_action(request: web.Request):
         )
         await db.commit()
         await restore_mana(db, user_id, TURN_MANA_REGEN)
-        effect_text = " " + " ".join(effect_notes) if effect_notes else ""
         if new_hp == 0:
             message = await finish_battle(user_id, False)
             return web.json_response({

@@ -1,6 +1,4 @@
 """Persistent multi-room dungeons tied to the ten unlocked worlds."""
-from datetime import datetime, timezone
-
 import aiosqlite
 
 DUNGEONS=[
@@ -10,8 +8,39 @@ DUNGEONS=[
  "Ember Furnace","Frostfang Deep","Primordial Maw","Celestial Archive","Clockwork Sepulcher","Origin Sanctum"))
 ]
 
+
 class DungeonError(ValueError):
     pass
+
+
+async def _begin_transaction(db, savepoint):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _validate_user_id(user_id):
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise DungeonError("Invalid player account.")
+
 
 async def init_dungeon_tables(db):
     await db.executescript("""
@@ -27,15 +56,16 @@ async def init_dungeon_tables(db):
     """)
     await db.commit()
 
+
 def available_dungeons(player_level):
     if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
         raise DungeonError("Player level must be between 1 and 100.")
     return [{"id":d["id"],"world":d["world"],"name":d["name"],"unlocked":player_level>=((d["world"]-1)*10+1),
       "min_level":(d["world"]-1)*10+1} for d in DUNGEONS]
 
+
 async def enter_dungeon(db,user_id,player_level,dungeon_id):
-    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
-        raise DungeonError("Invalid player account.")
+    _validate_user_id(user_id)
     if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
         raise DungeonError("Invalid player level.")
     if not isinstance(dungeon_id,int) or isinstance(dungeon_id,bool) or not 1<=dungeon_id<=10:
@@ -43,8 +73,8 @@ async def enter_dungeon(db,user_id,player_level,dungeon_id):
     dungeon=DUNGEONS[dungeon_id-1]
     if player_level<((dungeon["world"]-1)*10+1):
         raise DungeonError(f"This dungeon unlocks at level {(dungeon['world']-1)*10+1}.")
+    nested=await _begin_transaction(db,"enter_dungeon")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur=await db.execute("SELECT dungeon_id,status FROM dungeon_runs WHERE user_id=?",(user_id,))
         run=await cur.fetchone()
         if run and run["status"]=="active":
@@ -61,64 +91,78 @@ async def enter_dungeon(db,user_id,player_level,dungeon_id):
                room=1,status='active',started_at=CURRENT_TIMESTAMP,completed_at=NULL""",
             (user_id,dungeon_id),
         )
-        await db.commit()
+        await _commit_transaction(db,nested,"enter_dungeon")
     except Exception:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"enter_dungeon")
         raise
     return await get_dungeon_state(db,user_id)
 
+
 async def get_dungeon_state(db,user_id):
+    _validate_user_id(user_id)
     cur=await db.execute("SELECT * FROM dungeon_runs WHERE user_id=?",(user_id,))
     run=await cur.fetchone()
     if not run:return None
+    if not isinstance(run["dungeon_id"],int) or not 1<=run["dungeon_id"]<=len(DUNGEONS):
+        raise DungeonError("Stored dungeon run is invalid.")
+    if not isinstance(run["room"],int) or not 1<=run["room"]<=3:
+        raise DungeonError("Stored dungeon room is invalid.")
     dungeon=DUNGEONS[run["dungeon_id"]-1]
-    room=dungeon["rooms"][min(run["room"]-1,2)]
+    room=dungeon["rooms"][run["room"]-1]
     return {"dungeon_id":dungeon["id"],"name":dungeon["name"],"room":run["room"],"room_count":3,
       "target_level":room[0],"room_type":room[1],"status":run["status"],
       "reward_coins":dungeon["reward_coins"],"reward_potions":dungeon["reward_potions"]}
 
+
 async def advance_dungeon(db,user_id,monster_level):
-    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
-        raise DungeonError("Invalid player account.")
+    _validate_user_id(user_id)
     if not isinstance(monster_level,int) or isinstance(monster_level,bool) or not 1<=monster_level<=100:
         raise DungeonError("Invalid monster level.")
+    nested=await _begin_transaction(db,"advance_dungeon")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur=await db.execute("SELECT dungeon_id,room,status FROM dungeon_runs WHERE user_id=?",(user_id,))
         run=await cur.fetchone()
         if not run or run["status"]!="active":
-            await db.commit()
+            await _commit_transaction(db,nested,"advance_dungeon")
             return None
+        if not isinstance(run["dungeon_id"],int) or not 1<=run["dungeon_id"]<=len(DUNGEONS):
+            raise DungeonError("Stored dungeon run is invalid.")
+        if not isinstance(run["room"],int) or not 1<=run["room"]<=3:
+            raise DungeonError("Stored dungeon room is invalid.")
         dungeon=DUNGEONS[run["dungeon_id"]-1]
-        target_level=dungeon["rooms"][min(run["room"]-1,2)][0]
+        target_level=dungeon["rooms"][run["room"]-1][0]
         if monster_level<target_level:
-            await db.commit()
+            await _commit_transaction(db,nested,"advance_dungeon")
             return None
         if run["room"]<3:
-            await db.execute(
+            cur=await db.execute(
                 "UPDATE dungeon_runs SET room=room+1 WHERE user_id=? AND status='active' AND room=?",
                 (user_id,run["room"]),
             )
         else:
-            await db.execute(
+            cur=await db.execute(
                 "UPDATE dungeon_runs SET status='completed',completed_at=CURRENT_TIMESTAMP WHERE user_id=? AND status='active' AND room=3",
                 (user_id,),
             )
-        await db.commit()
+        if cur.rowcount!=1:
+            raise DungeonError("Dungeon state changed; retry the encounter.")
+        await _commit_transaction(db,nested,"advance_dungeon")
     except Exception:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"advance_dungeon")
         raise
     return await get_dungeon_state(db,user_id)
 
+
 async def claim_dungeon_reward(db,user_id):
-    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
-        raise DungeonError("Invalid player account.")
+    _validate_user_id(user_id)
+    nested=await _begin_transaction(db,"claim_dungeon_reward")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur=await db.execute("SELECT dungeon_id,room,status FROM dungeon_runs WHERE user_id=?",(user_id,))
         run=await cur.fetchone()
         if not run or run["status"]!="completed" or run["room"]!=3:
             raise DungeonError("Complete all three dungeon rooms before claiming rewards.")
+        if not isinstance(run["dungeon_id"],int) or not 1<=run["dungeon_id"]<=len(DUNGEONS):
+            raise DungeonError("Stored dungeon run is invalid.")
         dungeon=DUNGEONS[run["dungeon_id"]-1]
         await db.execute(
             "INSERT INTO dungeon_rewards(user_id,dungeon_id) VALUES(?,?)",
@@ -130,16 +174,24 @@ async def claim_dungeon_reward(db,user_id):
         )
         if cur.rowcount!=1:
             raise DungeonError("Player account not found.")
-        await db.commit()
+        await _commit_transaction(db,nested,"claim_dungeon_reward")
         return dungeon["reward_coins"],dungeon["reward_potions"]
     except aiosqlite.IntegrityError as exc:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"claim_dungeon_reward")
         raise DungeonError("This dungeon reward has already been claimed.") from exc
     except Exception:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"claim_dungeon_reward")
         raise
 
+
 async def abandon_dungeon(db,user_id):
-    cur=await db.execute("UPDATE dungeon_runs SET status='abandoned' WHERE user_id=? AND status='active'",(user_id,))
-    await db.commit()
-    if cur.rowcount==0:raise DungeonError("You do not have an active dungeon.")
+    _validate_user_id(user_id)
+    nested=await _begin_transaction(db,"abandon_dungeon")
+    try:
+        cur=await db.execute("UPDATE dungeon_runs SET status='abandoned' WHERE user_id=? AND status='active'",(user_id,))
+        if cur.rowcount==0:
+            raise DungeonError("You do not have an active dungeon.")
+        await _commit_transaction(db,nested,"abandon_dungeon")
+    except Exception:
+        await _rollback_transaction(db,nested,"abandon_dungeon")
+        raise

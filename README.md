@@ -166,7 +166,7 @@ Work still needed before calling the game production-ready:
 
 Telegram Stars purchases are disabled by default. Enable them only after setting package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true. The in-game gem shop can still spend gems already in a player wallet.
 
-The latest verified GitHub Actions run passed 311 Python tests and 27 Cloudflare Worker tests, including JavaScript syntax, portal gating, A-star obstacle/corner checks, hero appearance and combat-effect checks.
+The latest verified GitHub Actions run (#992) passed 374 Python tests, 10 pathfinding tests and 35 Cloudflare Worker tests. CI also passed Python compile/import checks, JavaScript syntax checks and Cloudflare embedded-asset parity.
 The project manifest currently tracks 152 items complete, 17 in progress, and 2 blocked on live bot credentials and production database hosting.
 
 The Cloudflare Worker and Render deployment configuration are present, but a configured live Python backend and full production end-to-end launch have not been verified. The included Render blueprint provisions paid resources, so create it only after choosing and authorizing the hosting plan.

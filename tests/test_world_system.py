@@ -34,6 +34,11 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   for world in range(1,11):
    levels=world_encounter_levels(100,world,False)
    self.assertTrue(all((world-1)*10<level<=world*10 for level in levels))
+ async def test_encounter_rejects_non_boolean_boss_completion_state(self):
+  for value in (0,1,None,"yes"):
+   with self.subTest(value=value),self.assertRaises(WorldError):
+    world_encounter_levels(100,10,value)
+
  async def test_unbeaten_boss_is_mandatory_at_world_cap(self):
   self.assertEqual(world_encounter_levels(100,10,False),(100,))
  async def test_defeated_boss_allows_regular_monsters(self):
@@ -59,5 +64,42 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(WorldError): await travel_to_world(self.db,0,10,1)
  async def test_locked_landmark_cannot_be_discovered(self):
   with self.assertRaises(WorldError):await discover_world_landmark(self.db,101,10,2)
+
+
+ async def test_world_reads_preserve_outer_transaction(self):
+  await self.db.execute("UPDATE players SET coins=coins+7 WHERE user_id=101")
+  self.assertEqual(await get_current_world(self.db,101,1),1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())["coins"],0)
+  cur=await self.db.execute("SELECT 1 FROM player_worlds WHERE user_id=101")
+  self.assertIsNone(await cur.fetchone())
+
+ async def test_fast_travel_preserves_outer_transaction(self):
+  await self.db.execute("UPDATE players SET coins=coins+9 WHERE user_id=101")
+  await travel_to_world(self.db,101,21,3)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM player_worlds WHERE user_id=101")
+  self.assertIsNone(await cur.fetchone())
+
+ async def test_landmark_discovery_preserves_outer_transaction(self):
+  await self.db.execute("UPDATE players SET coins=coins+11 WHERE user_id=101")
+  await discover_world_landmark(self.db,101,1,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT coins,potions FROM players WHERE user_id=101")
+  self.assertEqual(tuple(await cur.fetchone()),(0,0))
+  cur=await self.db.execute("SELECT 1 FROM world_discoveries WHERE user_id=101")
+  self.assertIsNone(await cur.fetchone())
+
+ async def test_missing_player_does_not_leave_landmark_discovery(self):
+  await self.db.execute("DELETE FROM players WHERE user_id=101")
+  await self.db.commit()
+  with self.assertRaisesRegex(WorldError,"Player account not found"):
+   await discover_world_landmark(self.db,101,1,1)
+  cur=await self.db.execute("SELECT 1 FROM world_discoveries WHERE user_id=101")
+  self.assertIsNone(await cur.fetchone())
 
 if __name__=="__main__": unittest.main()

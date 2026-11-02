@@ -453,7 +453,10 @@
       parent.appendChild(button);
     };
     const friendsCard=addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
-    (social.friends||[]).forEach(friend=>addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id}));
+    (social.friends||[]).forEach(friend=>{
+      addAction(friendsCard,"Trade with "+friend.username,"trade_create",{targetId:friend.user_id});
+      addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id});
+    });
     const requests=social.friend_requests||[];
     if(requests.length){
       const card=addCard("Incoming friend requests",requests.map(x=>x.username+" · Lv."+x.level));
@@ -483,9 +486,66 @@
         addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
       });
     }
-    if(social.pending_trades){
-      const note=document.createElement("p");note.className="small";note.textContent="🤝 Pending trades: "+social.pending_trades;
-      ui.socialOverview.appendChild(note);
+    const pendingTrades=social.pending_trades||[];
+    if(pendingTrades.length){
+      const card=addCard("Trade invitations",pendingTrades.map(trade=>
+        (trade.incoming?"From ":"To ")+trade.other_username+" · #"+trade.trade_id
+      ));
+      pendingTrades.forEach(trade=>{
+        if(trade.incoming){
+          addAction(card,"Accept trade","trade_accept",{tradeId:trade.trade_id});
+          addAction(card,"Decline","trade_decline",{tradeId:trade.trade_id});
+        }else{
+          const waiting=document.createElement("p");waiting.className="small";
+          waiting.textContent="Waiting for "+trade.other_username+" to respond to trade #"+trade.trade_id+".";
+          card.appendChild(waiting);
+          addAction(card,"Cancel invitation","trade_cancel",{tradeId:trade.trade_id});
+        }
+      });
+    }else{
+      addCard("Trading",["No pending trade invitations."]);
+    }
+    const openTrades=social.open_trades||[];
+    if(openTrades.length){
+      const card=addCard("Active trades",openTrades.map(trade=>
+        "#"+trade.trade_id+" with "+trade.other_username+
+        " · Your offer: "+trade.my_coins+" coins, "+trade.my_potions+" potions"+
+        " · Their offer: "+trade.their_coins+" coins, "+trade.their_potions+" potions"+
+        " · Gear: "+(trade.my_weapon||"no weapon")+"/"+(trade.my_armor||"no armor")+
+        " ↔ "+(trade.their_weapon||"no weapon")+"/"+(trade.their_armor||"no armor")+
+        " · Confirmations: "+(trade.my_confirmed?"✅":"⌛")+" / "+(trade.their_confirmed?"✅":"⌛")
+      ));
+      openTrades.forEach(trade=>{
+        const form=document.createElement("form");form.className="social-trade-offer-form";
+        const coinsLabel=document.createElement("label");coinsLabel.textContent="Coins to offer";
+        const coinsInput=document.createElement("input");coinsInput.type="number";coinsInput.min="0";coinsInput.step="1";coinsInput.required=true;coinsInput.value=String(trade.my_coins);coinsInput.inputMode="numeric";
+        const potionsLabel=document.createElement("label");potionsLabel.textContent="Potions to offer";
+        const potionsInput=document.createElement("input");potionsInput.type="number";potionsInput.min="0";potionsInput.step="1";potionsInput.required=true;potionsInput.value=String(trade.my_potions);potionsInput.inputMode="numeric";
+        const weaponLabel=document.createElement("label");weaponLabel.className="trade-equipment-choice";
+        const weaponInput=document.createElement("input");weaponInput.type="checkbox";weaponInput.checked=Boolean(trade.my_weapon);
+        weaponLabel.append(weaponInput,document.createTextNode(" Offer equipped weapon ("+(gameState.weapon||"none")+")"));
+        const armorLabel=document.createElement("label");armorLabel.className="trade-equipment-choice";
+        const armorInput=document.createElement("input");armorInput.type="checkbox";armorInput.checked=Boolean(trade.my_armor);
+        armorLabel.append(armorInput,document.createTextNode(" Offer equipped armor ("+(gameState.armor||"none")+")"));
+        const save=document.createElement("button");save.type="submit";save.textContent="Save offer";
+        form.append(coinsLabel,coinsInput,potionsLabel,potionsInput,weaponLabel,armorLabel,save);
+        form.addEventListener("submit",async event=>{
+          event.preventDefault();
+          const coins=Number(coinsInput.value),potions=Number(potionsInput.value);
+          if(!Number.isSafeInteger(coins)||coins<0||!Number.isSafeInteger(potions)||potions<0){
+            ui.status.textContent="Enter valid whole-number amounts for your trade offer.";return;
+          }
+          save.disabled=true;
+          try{await runSocialAction({
+            action:"trade_offer",trade_id:trade.trade_id,coins,potions,
+            offer_weapon:weaponInput.checked,offer_armor:armorInput.checked
+          });}
+          catch(_){save.disabled=false;}
+        });
+        card.appendChild(form);
+        addAction(card,trade.my_confirmed?"Confirmed":"Confirm trade #"+trade.trade_id,"trade_confirm",{tradeId:trade.trade_id});
+        addAction(card,"Cancel trade #"+trade.trade_id,"trade_cancel",{tradeId:trade.trade_id});
+      });
     }
     if(ui.partyCreate)ui.partyCreate.hidden=Boolean(party);
     if(ui.partyInvite)ui.partyInvite.hidden=!party;
@@ -976,6 +1036,7 @@
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
       this.heroBaseScaleX=this.hero.scaleX||1;
+      this.heroFacing=1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
       this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
@@ -1086,7 +1147,7 @@
     playRespawnAnimation(){
       if(!this.hero)return;
       this.tweens.killTweensOf(this.hero);
-      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:this.heroBaseScaleX||1,scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
+      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:(this.heroBaseScaleX||1)*(this.heroFacing||1),scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
       this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
     }
     playLevelUpAnimation(){
@@ -1171,21 +1232,29 @@
       if(dx&&dy){dx*=0.707;dy*=0.707;}
       const moving=dx!==0||dy!==0;
       const sprinting=moving&&sprintHeld;
+      if(dx < -0.01 || dx > 0.01){
+        const nextFacing=dx<0?-1:1;
+        if(nextFacing!==this.heroFacing){
+          this.heroFacing=nextFacing;
+          if(this.heroWalkTween){this.heroWalkTween.stop();this.heroWalkTween=null;}
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
+        }
+      }
       if(moving){
         if(this.heroIdle){
           this.heroIdle.stop();
           this.heroIdle=null;
         }
         if(!this.heroWalkTween){
-          this.hero.setScale(this.heroBaseScaleX,1);
-          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
+          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*this.heroFacing*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
         this.hero.setRotation(dx*0.045);
       }else{
         if(this.heroWalkTween){
           this.heroWalkTween.stop();
           this.heroWalkTween=null;
-          this.hero.setScale(this.heroBaseScaleX,1);
+          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
           this.hero.setRotation(0);
         }
         if(!this.heroIdle){
@@ -1333,9 +1402,11 @@
     const action=button.dataset.socialAction;
     const payload={action};
     if(action==="friend_request")payload.target_id=Number(button.dataset.targetId);
+    if(action==="trade_create")payload.target_id=Number(button.dataset.targetId);
     if(action==="friend_accept"||action==="friend_decline")payload.request_id=Number(button.dataset.requestId);
     if(action==="friend_remove")payload.friend_id=Number(button.dataset.friendId);
     if(action==="party_accept"||action==="party_decline"||action==="guild_accept"||action==="guild_decline")payload.invite_id=Number(button.dataset.inviteId);
+    if(action==="trade_accept"||action==="trade_decline"||action==="trade_cancel"||action==="trade_confirm")payload.trade_id=Number(button.dataset.tradeId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
   });

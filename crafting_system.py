@@ -33,6 +33,8 @@ async def init_crafting_tables(db):
     await db.commit()
 
 async def get_materials(db,user_id):
+    if type(user_id) is not int or user_id <= 0:
+        raise CraftingError("Invalid player account.")
     cur=await db.execute("SELECT material_id,quantity FROM player_materials WHERE user_id=? ORDER BY material_id",(user_id,))
     rows=await cur.fetchall()
     return {row["material_id"]:row["quantity"] for row in rows}
@@ -58,30 +60,72 @@ async def award_material_drop(db,user_id,monster,rng=None):
     return {"id":material,"name":MATERIALS[material],"quantity":amount}
 
 async def craft_item(db,user_id,player_level,recipe_id):
-    if recipe_id not in RECIPES:raise CraftingError("Recipe not found.")
+    if type(user_id) is not int or user_id <= 0:
+        raise CraftingError("Invalid player account.")
+    if type(player_level) is not int or not 1 <= player_level <= 100:
+        raise CraftingError("Invalid player level.")
+    if not isinstance(recipe_id,str) or recipe_id not in RECIPES:
+        raise CraftingError("Recipe not found.")
+
     recipe=RECIPES[recipe_id]
-    if not isinstance(player_level,int) or isinstance(player_level,bool) or player_level<recipe["level"]:
-        raise CraftingError("This recipe requires player level "+str(recipe["level"])+".")
-    cur=await db.execute("SELECT 1 FROM crafted_items WHERE user_id=? AND recipe_id=?",(user_id,recipe_id))
-    if await cur.fetchone():raise CraftingError("You have already crafted this unique recipe.")
-    materials=await get_materials(db,user_id)
-    missing=[MATERIALS[key]+" x"+str(qty-materials.get(key,0)) for key,qty in recipe["cost"].items() if materials.get(key,0)<qty]
-    if missing:raise CraftingError("Missing materials: "+", ".join(missing))
-    for material,qty in recipe["cost"].items():
-        await db.execute("UPDATE player_materials SET quantity=quantity-? WHERE user_id=? AND material_id=? AND quantity>=?",(qty,user_id,material,qty))
+    savepoint="craft_item_transaction"
+    await db.execute(f"SAVEPOINT {savepoint}")
     try:
-        await db.execute("INSERT INTO crafted_items(user_id,recipe_id) VALUES(?,?)",(user_id,recipe_id))
+        player=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+        if await player.fetchone() is None:
+            raise CraftingError("Player account not found.")
+        if player_level<recipe["level"]:
+            raise CraftingError("This recipe requires player level "+str(recipe["level"])+".")
+
+        existing=await db.execute(
+            "SELECT 1 FROM crafted_items WHERE user_id=? AND recipe_id=?",
+            (user_id,recipe_id),
+        )
+        if await existing.fetchone():
+            raise CraftingError("You have already crafted this unique recipe.")
+
+        for material,quantity in recipe["cost"].items():
+            debit=await db.execute(
+                """UPDATE player_materials SET quantity=quantity-?
+                   WHERE user_id=? AND material_id=? AND quantity>=?""",
+                (quantity,user_id,material,quantity),
+            )
+            if debit.rowcount!=1:
+                raise CraftingError(
+                    "Missing materials: "+MATERIALS[material]+" x"+
+                    str(quantity-(await get_materials(db,user_id)).get(material,0))
+                )
+
+        await db.execute(
+            "INSERT INTO crafted_items(user_id,recipe_id) VALUES(?,?)",
+            (user_id,recipe_id),
+        )
+        if recipe["slot"]=="weapon":
+            equipped=await db.execute(
+                """UPDATE players SET weapon=?,weapon_attack=MAX(weapon_attack,?)
+                   WHERE user_id=?""",
+                (recipe["name"],recipe["attack"],user_id),
+            )
+        else:
+            equipped=await db.execute(
+                """UPDATE players SET armor=?,armor_defense=MAX(armor_defense,?)
+                   WHERE user_id=?""",
+                (recipe["name"],recipe["defense"],user_id),
+            )
+        if equipped.rowcount!=1:
+            raise CraftingError("Player account not found.")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        return recipe
+    except CraftingError:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
     except Exception as exc:
-        await db.rollback()
-        raise CraftingError("This recipe was already crafted.") from exc
-    if recipe["slot"]=="weapon":
-        await db.execute("UPDATE players SET weapon=?,weapon_attack=MAX(weapon_attack,?) WHERE user_id=?",
-          (recipe["name"],recipe["attack"],user_id))
-    else:
-        await db.execute("UPDATE players SET armor=?,armor_defense=MAX(armor_defense,?) WHERE user_id=?",
-          (recipe["name"],recipe["defense"],user_id))
-    await db.commit()
-    return recipe
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise CraftingError("Crafting failed safely. No materials were consumed.") from exc
 
 async def list_recipes(player_level):
+    if type(player_level) is not int or not 1 <= player_level <= 100:
+        raise CraftingError("Invalid player level.")
     return [{"id":key,**value,"unlocked":player_level>=value["level"]} for key,value in RECIPES.items()]

@@ -93,6 +93,13 @@ button:disabled{cursor:not-allowed}
 .social-card h3{font-size:13px;color:#e8d5b4;margin:0 0 7px}
 .social-card p{font-size:11px;color:#bdc8d0;margin:4px 0;overflow-wrap:anywhere}
 .social-card .social-member{padding:5px 0;border-top:1px solid #293949}
+.social-trade-offer-form{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:9px 0;padding:9px;background:#172431;border:1px solid #354a5a;border-radius:9px}
+.social-trade-offer-form label{display:grid;gap:4px;color:#d8cbb8;font-size:11px}
+.social-trade-offer-form input{min-width:0;width:100%;padding:8px;border-radius:7px;border:1px solid #53697a;background:#0e1822;color:#fff1d8;font:inherit}
+.social-trade-offer-form button{grid-column:1/-1;width:100%;margin-top:2px}
+.social-trade-offer-form .trade-equipment-choice{display:flex;align-items:center;gap:7px;grid-column:1/-1}
+.social-trade-offer-form .trade-equipment-choice input{width:auto;min-width:16px;margin:0}
+@media(max-width:360px){.social-trade-offer-form{grid-template-columns:1fr}}
 @media(max-width:520px){.social-overview{grid-template-columns:1fr}}
 
 .dungeon-status{margin-top:10px;padding:9px;border-radius:9px;background:#182f36;border:1px solid #466b65;color:#d8e9d9;font-size:12px}

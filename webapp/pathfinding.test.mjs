@@ -100,3 +100,38 @@ test("ignores malformed obstacles without breaking valid routes", () => {
   assert.ok(path.length > 0);
   assert.deepEqual(path.at(-1), { x: 112, y: 16 });
 });
+
+test("routes around thin obstacles crossed by diagonal movement segments", () => {
+  const obstacle = { x: 32, y: 32, width: 8, height: 8 };
+  const path = findPath(
+    { x: 16, y: 16 },
+    { x: 48, y: 48 },
+    [obstacle],
+    { width: 96, height: 96, cellSize: 32, margin: 0 },
+  );
+
+  assert.ok(path.length >= 2, "a safe orthogonal detour should be found");
+  const points = [{ x: 16, y: 16 }, ...path];
+  for (let index = 1; index < points.length; index++) {
+    const from = points[index - 1];
+    const to = points[index];
+    // This fixture's obstacle is centered on the direct diagonal. A route
+    // must not use that diagonal even though both endpoint cells are open.
+    assert.ok(
+      !(from.x === 16 && from.y === 16 && to.x === 48 && to.y === 48),
+      "the path must not cut through the thin obstacle",
+    );
+  }
+  assert.deepEqual(path.at(-1), { x: 48, y: 48 });
+});
+
+test("checks direct movement when start and goal share a grid cell", () => {
+  const path = findPath(
+    { x: 5, y: 16 },
+    { x: 27, y: 16 },
+    [{ x: 16, y: 16, width: 4, height: 4 }],
+    { width: 96, height: 96, cellSize: 32, margin: 0 },
+  );
+
+  assert.deepEqual(path, []);
+});

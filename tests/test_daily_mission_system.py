@@ -45,6 +45,37 @@ class DailyMissionTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT coins,potions FROM players WHERE user_id=101")
         self.assertEqual(tuple(await cur.fetchone()), (75, 1))
 
+    async def test_daily_operations_preserve_outer_transaction(self):
+        now = 1_800_000_000
+        await self.db.execute("CREATE TABLE audit_log(value TEXT)")
+        await self.db.execute("INSERT INTO audit_log VALUES('keep')")
+        await record_daily_progress(self.db, 101, "wins", 3, now)
+        self.assertTrue(self.db.in_transaction)
+        await get_daily_missions(self.db, 101, now)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+
+        rows = await get_daily_missions(self.db, 101, now)
+        hunter = next(row for row in rows if row["id"] == "daily_hunter")
+        self.assertEqual(hunter["progress"], 0)
+        cur = await self.db.execute("SELECT COUNT(*) FROM audit_log")
+        self.assertEqual((await cur.fetchone())[0], 0)
+
+    async def test_daily_reward_claim_preserves_outer_transaction(self):
+        now = 1_800_000_000
+        await record_daily_progress(self.db, 101, "wins", 3, now)
+        await self.db.execute("CREATE TABLE audit_log(value TEXT)")
+        await self.db.execute("INSERT INTO audit_log VALUES('keep')")
+        await claim_daily_mission(self.db, 101, "daily_hunter", now)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+
+        cur = await self.db.execute("SELECT coins,potions FROM players WHERE user_id=101")
+        self.assertEqual(tuple(await cur.fetchone()), (0, 0))
+        rows = await get_daily_missions(self.db, 101, now)
+        hunter = next(row for row in rows if row["id"] == "daily_hunter")
+        self.assertFalse(hunter["claimed"])
+
     async def test_unknown_progress_type_rejected(self):
         with self.assertRaises(DailyMissionError):
             await record_daily_progress(self.db, 101, "pvp", now=1_800_000_000)

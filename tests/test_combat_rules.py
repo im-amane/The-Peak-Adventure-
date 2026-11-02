@@ -1,9 +1,81 @@
+import ast
+import tempfile
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import main
 
 from game_rules import calculate_enemy_damage
 
 
-class CombatRuleTests(unittest.TestCase):
+class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
+    def test_telegram_battle_uses_synchronous_monster_builder_correctly(self):
+        source = Path(__file__).resolve().parents[1].joinpath("main.py").read_text(encoding="utf-8")
+        module = ast.parse(source)
+        handler = next(
+            node for node in module.body
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == "_battle_action_unlocked"
+        )
+        assignment = next(
+            node for node in ast.walk(handler)
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "m" for target in node.targets)
+        )
+        self.assertIsInstance(assignment.value, ast.Call)
+        self.assertIsInstance(assignment.value.func, ast.Name)
+        self.assertEqual(assignment.value.func.id, "build_battle_monster")
+        self.assertEqual(len(assignment.value.args), 1)
+        self.assertIsInstance(assignment.value.args[0], ast.Name)
+        self.assertEqual(assignment.value.args[0].id, "b")
+
+
+    async def test_telegram_attack_executes_and_advances_the_active_battle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            previous_path, previous_db = main.DB_PATH, main.db
+            main.DB_PATH = str(Path(temp_dir) / "combat-test.db")
+            main.db = None
+            try:
+                await main.init_db()
+                user_id = 987654321
+                await main.get_player(user_id, "CombatTester")
+                await main.db.execute(
+                    "UPDATE players SET class_selected=1,hp=500,max_hp=500,armor_defense=1000 WHERE user_id=?",
+                    (user_id,),
+                )
+                await main.db.execute(
+                    """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+                       VALUES(?,1,77,0,0,0)""",
+                    (user_id,),
+                )
+                await main.db.commit()
+
+                call = SimpleNamespace(
+                    from_user=SimpleNamespace(id=user_id, username="CombatTester"),
+                    data="battle:attack",
+                    answer=AsyncMock(),
+                    message=SimpleNamespace(edit_text=AsyncMock()),
+                )
+                await main._battle_action_unlocked(call)
+
+                cursor = await main.db.execute(
+                    "SELECT turn_count,monster_hp FROM battles WHERE user_id=?",
+                    (user_id,),
+                )
+                battle = await cursor.fetchone()
+                self.assertEqual(battle["turn_count"], 1)
+                self.assertLess(battle["monster_hp"], 77)
+                player = await main.get_player(user_id)
+                self.assertLess(player["hp"], 500)
+                call.answer.assert_awaited_once()
+                call.message.edit_text.assert_awaited_once()
+            finally:
+                if main.db is not None:
+                    await main.db.close()
+                main.db = previous_db
+                main.DB_PATH = previous_path
+
     def test_player_defence_reduces_monster_damage(self):
         base = calculate_enemy_damage(60, 5, 0, 0, 0, 0)
         guarded = calculate_enemy_damage(60, 5, 12, 8, 0, 0)

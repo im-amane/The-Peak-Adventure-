@@ -24,6 +24,36 @@
     };
     if (pointBlocked(start) || pointBlocked(goal)) return [];
 
+    // Grid-cell centers alone are not enough for collision safety: a diagonal
+    // edge can clip a thin obstacle even when both adjacent cells are walkable.
+    // Use a segment-vs-expanded-rectangle test for every movement edge.
+    const segmentBlocked = (from, to) => obstacles.some(obstacle => {
+      if (!obstacle || !Number.isFinite(obstacle.x) || !Number.isFinite(obstacle.y)) return false;
+      const halfWidth = Math.max(0, Number(obstacle.width) || 0) / 2 + margin;
+      const halfHeight = Math.max(0, Number(obstacle.height) || 0) / 2 + margin;
+      const left = obstacle.x - halfWidth;
+      const right = obstacle.x + halfWidth;
+      const top = obstacle.y - halfHeight;
+      const bottom = obstacle.y + halfHeight;
+      const dx = to.x - from.x;
+      const dy = to.y - from.y;
+      let enter = 0;
+      let leave = 1;
+      const p = [-dx, dx, -dy, dy];
+      const q = [from.x - left, right - from.x, from.y - top, bottom - from.y];
+      for (let index = 0; index < 4; index++) {
+        if (p[index] === 0) {
+          if (q[index] < 0) return false;
+          continue;
+        }
+        const ratio = q[index] / p[index];
+        if (p[index] < 0) enter = Math.max(enter, ratio);
+        else leave = Math.min(leave, ratio);
+        if (enter > leave) return false;
+      }
+      return true;
+    });
+
     const cols = Math.ceil(width / cellSize);
     const rows = Math.ceil(height / cellSize);
     const totalCells = cols * rows;
@@ -36,7 +66,7 @@
     const indexOf = (x, y) => y * cols + x;
     const startIndex = indexOf(startCell.x, startCell.y);
     const goalIndex = indexOf(goalCell.x, goalCell.y);
-    if (startIndex === goalIndex) return [{ x: goal.x, y: goal.y }];
+    if (startIndex === goalIndex) return segmentBlocked(start, goal) ? [] : [{ x: goal.x, y: goal.y }];
 
     // Build the collision grid once. Re-testing every obstacle for every A-star
     // neighbor used to multiply collision work by the number of expanded nodes.
@@ -135,6 +165,11 @@
           if (cursor < 0) return [];
         }
         path.reverse();
+        const firstWaypoint = path[0];
+        const lastWaypoint = path[path.length - 1];
+        // Validate the partial-cell connectors too. Without these checks a
+        // valid grid route could still clip an obstacle at its first/last edge.
+        if (segmentBlocked(start, firstWaypoint) || segmentBlocked(lastWaypoint, goal)) return [];
         path[path.length - 1] = { x: goal.x, y: goal.y };
         return path;
       }
@@ -147,6 +182,9 @@
         if (blocked[nextIndex] || closed[nextIndex]) continue;
         if (dx && dy && (blocked[indexOf(current.x + dx, current.y)] ||
             blocked[indexOf(current.x, current.y + dy)])) continue;
+        const currentPoint = { x: current.x * cellSize + cellSize / 2, y: current.y * cellSize + cellSize / 2 };
+        const nextPoint = { x: nx * cellSize + cellSize / 2, y: ny * cellSize + cellSize / 2 };
+        if (segmentBlocked(currentPoint, nextPoint)) continue;
 
         const tentativeG = current.g + cost;
         if (tentativeG >= bestG[nextIndex]) continue;

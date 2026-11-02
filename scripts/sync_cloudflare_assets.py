@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,12 +30,26 @@ def main() -> None:
         raw = raw[:-1]
     assets = json.loads(raw)
 
-    for route, (path, content_type) in ASSETS.items():
-        assets[route] = {
+    expected = {
+        route: {
             "body": path.read_text(encoding="utf-8"),
             "type": content_type,
         }
+        for route, (path, content_type) in ASSETS.items()
+    }
+    drifted = [route for route, asset in expected.items() if assets.get(route) != asset]
 
+    if "--check" in sys.argv[1:]:
+        if drifted:
+            raise SystemExit(
+                "Cloudflare fallback assets are out of sync: "
+                + ", ".join(drifted)
+                + ". Run python scripts/sync_cloudflare_assets.py to update them."
+            )
+        print("Cloudflare fallback assets match webapp/.")
+        return
+
+    assets.update(expected)
     block = MARKER + json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
     updated = source[:start] + block + source[end:]
     if updated != source:
