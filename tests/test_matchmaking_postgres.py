@@ -89,11 +89,13 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.db_one.execute(
             "SELECT pvp_wins,pvp_losses FROM players WHERE user_id=9_100_000_002"
         )
-        self.assertEqual(tuple(await cursor.fetchone()), (1, 0))
+        winner_stats = await cursor.fetchone()
+        self.assertEqual((winner_stats["pvp_wins"], winner_stats["pvp_losses"]), (1, 0))
         cursor = await self.db_one.execute(
             "SELECT pvp_wins,pvp_losses FROM players WHERE user_id=9_100_000_001"
         )
-        self.assertEqual(tuple(await cursor.fetchone()), (0, 1))
+        loser_stats = await cursor.fetchone()
+        self.assertEqual((loser_stats["pvp_wins"], loser_stats["pvp_losses"]), (0, 1))
 
     async def test_two_accounts_match_once_under_concurrent_joins(self):
         results = await asyncio.gather(
