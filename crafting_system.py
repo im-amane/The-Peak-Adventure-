@@ -20,17 +20,32 @@ class CraftingError(ValueError):
     pass
 
 async def init_crafting_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS player_materials(
-      user_id INTEGER NOT NULL,material_id TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),
-      PRIMARY KEY(user_id,material_id)
-    );
-    CREATE TABLE IF NOT EXISTS crafted_items(
-      user_id INTEGER NOT NULL,recipe_id TEXT NOT NULL,crafted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,recipe_id)
-    );
-    """)
-    await db.commit()
+    nested = db.in_transaction
+    savepoint = "init_crafting_tables"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_materials(
+          user_id INTEGER NOT NULL,material_id TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),
+          PRIMARY KEY(user_id,material_id)
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS crafted_items(
+          user_id INTEGER NOT NULL,recipe_id TEXT NOT NULL,crafted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,recipe_id)
+        )""")
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
 
 async def get_materials(db,user_id):
     if type(user_id) is not int or user_id <= 0:
