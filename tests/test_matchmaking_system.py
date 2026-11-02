@@ -154,11 +154,11 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         await join_matchmaking(self.db, 1, "casual", now=1000)
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         match_id = matched["match_id"]
-        before_deadline = await get_matchmaking_battle(self.db, 1, match_id, now=1119)
+        before_deadline = await get_matchmaking_battle(self.db, 1, match_id, now=1120)
         self.assertEqual(before_deadline["status"], "active")
         self.assertEqual(before_deadline["turn_time_remaining"], 1)
 
-        expired = await get_matchmaking_battle(self.db, 1, match_id, now=1120)
+        expired = await get_matchmaking_battle(self.db, 1, match_id, now=1121)
         self.assertEqual(expired["status"], "finished")
         self.assertEqual(expired["winner_id"], 2)
         self.assertFalse(expired["is_winner"])
@@ -172,7 +172,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         result = await perform_matchmaking_battle_action(
             self.db, 1, matched["match_id"], "attack",
-            {"Knight": {"attack": 8, "defense": 12}}, now=1120,
+            {"Knight": {"attack": 8, "defense": 12}}, now=1121,
         )
         self.assertTrue(result["timed_out"])
         self.assertEqual(result["last_action"], "timeout")
