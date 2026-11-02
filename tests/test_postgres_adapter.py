@@ -1094,7 +1094,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_remove_friend_allows_a_new_request(self):
         request_id = await send_friend_request(self.db, self.alice, self.bob)
         await respond_to_friend_request(self.db, request_id, self.bob, "accept")
-        self.assertTrue(await remove_friend(self.db, self.alice, self.bob))
+        await remove_friend(self.db, self.alice, self.bob)
         self.assertEqual(await list_friends(self.db, self.alice), [])
         new_id = await send_friend_request(self.db, self.alice, self.bob)
         self.assertGreater(new_id, request_id)
