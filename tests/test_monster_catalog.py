@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MONSTERS = json.loads((ROOT / "monsters.json").read_text(encoding="utf-8"))
+
+from scripts.generate_monster_power_chart import render_csv
 EXPECTED_TRAITS = {
     "regenerate",
     "fury",
@@ -21,6 +23,11 @@ EXPECTED_TRAITS = {
 
 
 class MonsterCatalogTests(unittest.TestCase):
+    def test_generated_power_chart_matches_canonical_catalog(self):
+        chart = (ROOT / "docs" / "monster_power_chart.csv").read_text(encoding="utf-8")
+        self.assertEqual(chart, render_csv(MONSTERS))
+        self.assertEqual(len(chart.splitlines()), 101)
+
     def test_catalog_has_exactly_one_record_for_each_level(self):
         self.assertEqual(len(MONSTERS), 100)
         self.assertEqual([monster["level"] for monster in MONSTERS], list(range(1, 101)))
