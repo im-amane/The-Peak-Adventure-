@@ -45,6 +45,8 @@ from party_system import (
     get_party_info, init_party_tables, invite_to_party, leave_party,
     respond_to_party_invite, reward_party_battle, start_party_battle,
 )
+from rate_limit import DatabaseSlidingWindowRateLimiter
+
 from account_system import (
     AccountError, delete_player_account, get_settings,
     init_account_tables, update_settings,
@@ -2047,6 +2049,22 @@ class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
         await self.db.commit()
         await self.db.close()
+
+    async def test_database_rate_limit_is_shared_across_postgres_connections(self):
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        limiter = DatabaseSlidingWindowRateLimiter(window_seconds=10)
+        try:
+            await limiter.init(self.db)
+            await limiter.init(other_db)
+            results = await asyncio.gather(
+                limiter.allow(self.db, "shared-player-key", 1, now=500),
+                limiter.allow(other_db, "shared-player-key", 1, now=500),
+            )
+            self.assertEqual(sum(allowed for allowed, _ in results), 1)
+        finally:
+            await other_db.close()
+            await self.db.execute("DROP TABLE IF EXISTS api_rate_limit_events")
+            await self.db.commit()
 
     async def test_settings_use_bigint_ids_and_postgres_catalog_migration(self):
         self.assertEqual(
