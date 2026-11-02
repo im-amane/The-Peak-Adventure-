@@ -280,15 +280,33 @@ async def init_db():
 
 
 async def get_player(user_id: int, username: str | None = None):
+    """Read/update a player without committing a transaction owned by the caller."""
     assert db is not None
-    await db.execute("INSERT OR IGNORE INTO players(user_id, username) VALUES (?, ?)", (user_id, username or "Adventurer"))
-    if username:
-        await db.execute("UPDATE players SET username=? WHERE user_id=?", (username, user_id))
-    await db.commit()
-    cur = await db.execute("SELECT * FROM players WHERE user_id=?", (user_id,))
-    player = await cur.fetchone()
-    await touch_presence(db, user_id)
-    return player
+    nested = db.in_transaction
+    if nested:
+        await db.execute("SAVEPOINT get_player")
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO players(user_id, username) VALUES (?, ?)",
+            (user_id, username or "Adventurer"),
+        )
+        if username:
+            await db.execute("UPDATE players SET username=? WHERE user_id=?", (username, user_id))
+        cur = await db.execute("SELECT * FROM players WHERE user_id=?", (user_id,))
+        player = await cur.fetchone()
+        await touch_presence(db, user_id)
+        if nested:
+            await db.execute("RELEASE SAVEPOINT get_player")
+        else:
+            await db.commit()
+        return player
+    except Exception:
+        if nested:
+            await db.execute("ROLLBACK TO SAVEPOINT get_player")
+            await db.execute("RELEASE SAVEPOINT get_player")
+        else:
+            await db.rollback()
+        raise
 
 
 def menu(include_webapp: bool = False):
