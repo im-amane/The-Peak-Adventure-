@@ -137,6 +137,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["role"],"leader")
  async def test_delete_account_removes_social_and_economy_data(self):
+  await self.db.execute("CREATE TABLE guild_war_duel_events(duel_id INTEGER PRIMARY KEY,war_id INTEGER,winner_id INTEGER)")
+  await self.db.execute("INSERT INTO guild_war_duel_events VALUES(1,5,2),(2,5,1)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM players")
@@ -146,6 +148,8 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   for table in ("friend_requests","duels","trades"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
    self.assertEqual((await cur.fetchone())["n"],0)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM guild_war_duel_events")
+  self.assertEqual((await cur.fetchone())["n"],0)
  async def test_delete_party_leader_transfers_leadership(self):
   await self.db.execute("INSERT INTO parties VALUES(7,1)")
   await self.db.execute("INSERT INTO party_members VALUES(1,7,CURRENT_TIMESTAMP),(2,7,CURRENT_TIMESTAMP)")
