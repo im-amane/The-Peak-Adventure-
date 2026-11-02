@@ -26,6 +26,10 @@ def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
 
+def _for_update_sql(db):
+    return " FOR UPDATE" if _is_postgres(db) else ""
+
+
 async def _table_exists(db, table):
     if _is_postgres(db):
         cur = await db.execute(
@@ -84,23 +88,47 @@ async def get_settings(db,user_id):
 
 async def update_settings(db,user_id,notifications_enabled=None,profile_visibility=None,sound_enabled=None):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
-    current=await get_settings(db,user_id)
-    if notifications_enabled is not None:
-        if not isinstance(notifications_enabled,bool): raise AccountError("Notification setting must be on or off.")
-        current["notifications_enabled"]=int(notifications_enabled)
-    if profile_visibility is not None:
-        if not isinstance(profile_visibility,str) or profile_visibility not in {"public","friends"}: raise AccountError("Profile visibility must be public or friends.")
-        current["profile_visibility"]=profile_visibility
-    if sound_enabled is not None:
-        if not isinstance(sound_enabled,bool): raise AccountError("Sound setting must be on or off.")
-        current["sound_enabled"]=int(sound_enabled)
+    if notifications_enabled is not None and not isinstance(notifications_enabled,bool):
+        raise AccountError("Notification setting must be on or off.")
+    if profile_visibility is not None and (
+        not isinstance(profile_visibility,str) or profile_visibility not in {"public","friends"}
+    ):
+        raise AccountError("Profile visibility must be public or friends.")
+    if sound_enabled is not None and not isinstance(sound_enabled,bool):
+        raise AccountError("Sound setting must be on or off.")
+
+    # Materialize the default row inside the transaction, then lock it before
+    # reading so concurrent partial updates cannot overwrite each other's fields.
     name = "update_player_settings"
     nested = await _atomic_start(db, name)
     try:
-        await db.execute("""INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility,sound_enabled) VALUES(?,?,?,?)
-          ON CONFLICT(user_id) DO UPDATE SET notifications_enabled=excluded.notifications_enabled,
-          profile_visibility=excluded.profile_visibility,sound_enabled=excluded.sound_enabled,updated_at=CURRENT_TIMESTAMP""",
-          (user_id,current["notifications_enabled"],current["profile_visibility"],current["sound_enabled"]))
+        await db.execute(
+            """INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility,sound_enabled)
+               VALUES(?,?,?,?) ON CONFLICT(user_id) DO NOTHING""",
+            (user_id, DEFAULT_SETTINGS["notifications_enabled"],
+             DEFAULT_SETTINGS["profile_visibility"], DEFAULT_SETTINGS["sound_enabled"]),
+        )
+        cur = await db.execute(
+            "SELECT notifications_enabled,profile_visibility,sound_enabled "
+            "FROM player_settings WHERE user_id=?" + _for_update_sql(db),
+            (user_id,),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            raise AccountError("Player settings could not be initialized.")
+        current = dict(row)
+        if notifications_enabled is not None:
+            current["notifications_enabled"] = int(notifications_enabled)
+        if profile_visibility is not None:
+            current["profile_visibility"] = profile_visibility
+        if sound_enabled is not None:
+            current["sound_enabled"] = int(sound_enabled)
+        await db.execute(
+            """UPDATE player_settings SET notifications_enabled=?,profile_visibility=?,
+               sound_enabled=?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?""",
+            (current["notifications_enabled"], current["profile_visibility"],
+             current["sound_enabled"], user_id),
+        )
         await _atomic_finish(db, name, nested)
     except Exception:
         await _atomic_rollback(db, name, nested)
@@ -109,7 +137,7 @@ async def update_settings(db,user_id,notifications_enabled=None,profile_visibili
 
 async def _delete_player_account_unlocked(db,user_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
-    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?" + _for_update_sql(db),(user_id,))
     if not await cur.fetchone(): raise AccountError("Player account not found.")
     cur=await db.execute("SELECT guild_id,role FROM guild_members WHERE user_id=?",(user_id,))
     membership=await cur.fetchone()
