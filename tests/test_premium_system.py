@@ -1,5 +1,4 @@
 import unittest
-import sqlite3
 import aiosqlite
 from unittest.mock import patch
 
@@ -92,6 +91,24 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await get_premium_balance(self.db, 101), 0)
         cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
         self.assertEqual((await cur.fetchone())["potions"], 2)
+
+    async def test_shop_purchase_rolls_back_effect_if_wallet_debit_is_ignored(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await self.db.commit()
+        await self.db.execute(
+            """CREATE TRIGGER ignore_premium_wallet_debit
+               BEFORE UPDATE OF balance ON premium_wallets
+               WHEN NEW.balance < OLD.balance
+               BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(PremiumError, "balance changed"):
+            await buy_premium_item(self.db, 101, "potion_bundle")
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, 101), 100)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_shop_purchases")
+        self.assertEqual((await cur.fetchone())["total"], 0)
 
     async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
