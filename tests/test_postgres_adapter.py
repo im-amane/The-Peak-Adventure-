@@ -3366,7 +3366,7 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_dry_run_is_read_only_and_apply_copies_rows_and_resets_identity(self):
         dry_run = await migrate_sqlite_to_postgres(self.sqlite_path, self.postgres)
-        self.assertTrue(dry_run["compatible"])
+        self.assertTrue(dry_run["compatible"], dry_run.get("schema_differences"))
         self.assertFalse(dry_run["applied"])
         self.assertEqual(dry_run["total_target_rows_before"], 0)
         cursor = await self.postgres.execute("SELECT COUNT(*) AS count FROM players")
