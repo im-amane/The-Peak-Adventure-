@@ -72,6 +72,27 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(await cursor.fetchone())
 
+    async def test_battle_hp_helpers_use_portable_case_updates(self):
+        user_id = 987654399
+        await main.get_player(user_id, "BattleSqlHero")
+        await main.db.execute(
+            "UPDATE players SET hp=95,max_hp=100,skill_cd=2 WHERE user_id=?",
+            (user_id,),
+        )
+        await main._apply_battle_victory_heal(main.db, user_id)
+        cursor = await main.db.execute(
+            "SELECT hp,skill_cd FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), (100, 1))
+
+        await main._apply_battle_turn_state(main.db, user_id, 80)
+        cursor = await main.db.execute(
+            "SELECT hp,skill_cd FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        self.assertEqual(tuple(await cursor.fetchone()), (80, 0))
+
     async def test_dialect_specific_social_and_expiry_sql(self):
         self.assertIn("MIN(?,?)", main._friend_pair_lookup_sql(main.db))
         self.assertIn("MAX(?,?)", main._friend_pair_lookup_sql(main.db))
