@@ -143,10 +143,10 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
             """CREATE TRIGGER reject_premium_wallet_credit
                BEFORE UPDATE OF balance ON premium_wallets
                WHEN NEW.balance > OLD.balance
-               BEGIN SELECT RAISE(ABORT, 'wallet credit unavailable'); END"""
+               BEGIN SELECT RAISE(IGNORE); END"""
         )
         package = get_premium_packages()["spark"]
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaisesRegex(PremiumError, "wallet could not be credited"):
             await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-rollback")
         self.assertTrue(self.db.in_transaction)
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
