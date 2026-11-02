@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import main
 
@@ -101,7 +101,7 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                     answer=AsyncMock(),
                     message=SimpleNamespace(edit_text=AsyncMock()),
                 )
-                with unittest.mock.patch(
+                with patch(
                     "main.finish_battle",
                     side_effect=RuntimeError("simulated Telegram reward failure"),
                 ):
