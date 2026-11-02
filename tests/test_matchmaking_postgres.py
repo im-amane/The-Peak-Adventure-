@@ -7,7 +7,7 @@ import uuid
 from postgres_adapter import PostgresConnection
 import main
 from matchmaking_system import MatchmakingError, join_matchmaking
-from matchmaking_battle_system import MatchmakingBattleError, perform_matchmaking_battle_action
+from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
 
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
@@ -75,6 +75,27 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         battle = await cursor.fetchone()
         self.assertEqual(battle["turn_count"], 1)
         self.assertEqual(battle["turn_user_id"], 9_100_000_002)
+
+    async def test_concurrent_turn_expiry_settles_match_and_stats_once(self):
+        await join_matchmaking(self.db_one, 9_100_000_001, "casual", now=2_000_000_300)
+        matched = await join_matchmaking(self.db_two, 9_100_000_002, "casual", now=2_000_000_301)
+        match_id = matched["match_id"]
+        states = await asyncio.gather(
+            get_matchmaking_battle(self.db_one, 9_100_000_001, match_id, now=2_000_000_421),
+            get_matchmaking_battle(self.db_two, 9_100_000_002, match_id, now=2_000_000_421),
+        )
+        self.assertEqual([state["status"] for state in states], ["finished", "finished"])
+        self.assertEqual([state["winner_id"] for state in states], [9_100_000_002, 9_100_000_002])
+        cursor = await self.db_one.execute(
+            "SELECT pvp_wins,pvp_losses FROM players WHERE user_id=9_100_000_002"
+        )
+        winner_stats = await cursor.fetchone()
+        self.assertEqual((winner_stats["pvp_wins"], winner_stats["pvp_losses"]), (1, 0))
+        cursor = await self.db_one.execute(
+            "SELECT pvp_wins,pvp_losses FROM players WHERE user_id=9_100_000_001"
+        )
+        loser_stats = await cursor.fetchone()
+        self.assertEqual((loser_stats["pvp_wins"], loser_stats["pvp_losses"]), (0, 1))
 
     async def test_two_accounts_match_once_under_concurrent_joins(self):
         results = await asyncio.gather(

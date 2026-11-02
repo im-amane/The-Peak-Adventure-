@@ -489,9 +489,12 @@
         panel.appendChild(hpLine);
         const turnLine = document.createElement("p");
         turnLine.className = "small";
+        const secondsLeft = Math.max(0, Number(battle.turn_time_remaining) || 0);
         turnLine.textContent = battle.status === "finished"
           ? (battle.is_winner ? "You won this match." : (battle.winner_id ? "Your opponent won this match." : "Match closed."))
-          : (battle.is_my_turn ? "Your turn. Choose an action." : "Waiting for your opponent...");
+          : (battle.is_my_turn
+            ? "Your turn. Choose an action · " + secondsLeft + "s remaining."
+            : "Waiting for your opponent · " + secondsLeft + "s remaining.");
         panel.appendChild(turnLine);
         if (battle.status === "active") {
           [["attack","⚔️ Attack"],["skill","✨ Class Skill"],["surrender","🏳️ Surrender"]].forEach(([action,label]) => {
@@ -1641,6 +1644,10 @@
   }).catch(error=>{
     ui.status.textContent=error.message || "Could not load the game. Reopen it from Telegram.";
   });
+  window.setInterval(()=>{
+    if(document.hidden||requestInFlight||!gameState||!gameState.matchmaking||!["queued","matched"].includes(gameState.matchmaking.status))return;
+    loadState().catch(()=>{});
+  },10000);
   document.addEventListener("visibilitychange",()=>{
     if (!document.hidden && initData && !requestInFlight) {
       loadState().catch(()=>{});
