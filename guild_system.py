@@ -1,6 +1,7 @@
 """Advanced guild roles, invitations, missions and shared boss raids."""
 from datetime import datetime, timezone
 from functools import wraps
+import asyncio
 
 class GuildFeatureError(ValueError):
     pass
@@ -11,6 +12,8 @@ MISSIONS={
  "trades":("Guild Traders",3,45),
 }
 ACTIVITY={"battle":"battles","boss":"boss","trade":"trades"}
+
+_DB_WRITE_LOCKS: dict[tuple[int,int], asyncio.Lock] = {}
 
 async def _begin_atomic(db, savepoint):
     nested=db.in_transaction
@@ -40,15 +43,21 @@ def _transactional(function):
     """Give each guild mutation an atomic, transaction-aware boundary."""
     @wraps(function)
     async def wrapped(db, *args, **kwargs):
-        savepoint = "guild_" + function.__name__
-        nested = await _begin_atomic(db, savepoint)
-        try:
-            result = await function(db, *args, **kwargs)
-            await _commit_atomic(db, nested, savepoint)
-            return result
-        except Exception:
-            await _rollback_atomic(db, nested, savepoint)
-            raise
+        key=(id(db),id(asyncio.get_running_loop()))
+        lock=_DB_WRITE_LOCKS.get(key)
+        if lock is None:
+            lock=asyncio.Lock()
+            _DB_WRITE_LOCKS[key]=lock
+        async with lock:
+            savepoint = "guild_" + function.__name__
+            nested = await _begin_atomic(db, savepoint)
+            try:
+                result = await function(db, *args, **kwargs)
+                await _commit_atomic(db, nested, savepoint)
+                return result
+            except Exception:
+                await _rollback_atomic(db, nested, savepoint)
+                raise
     return wrapped
 
 
