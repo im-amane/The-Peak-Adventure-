@@ -47,7 +47,7 @@ def current_week_key(now=None):
 
 async def init_weekly_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_weekly_quests(
-      user_id INTEGER NOT NULL,week_key TEXT NOT NULL,quest_id TEXT NOT NULL,
+      user_id BIGINT NOT NULL,week_key TEXT NOT NULL,quest_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0 CHECK(progress>=0),
       claimed INTEGER NOT NULL DEFAULT 0 CHECK(claimed IN (0,1)),
       PRIMARY KEY(user_id,week_key,quest_id)
@@ -57,7 +57,7 @@ async def init_weekly_tables(db):
 
 async def _ensure_week(db, user_id, week_key):
     await db.executemany(
-        "INSERT OR IGNORE INTO player_weekly_quests(user_id,week_key,quest_id) VALUES(?,?,?)",
+        "INSERT INTO player_weekly_quests(user_id,week_key,quest_id) VALUES(?,?,?) ON CONFLICT(user_id,week_key,quest_id) DO NOTHING",
         [(user_id, week_key, quest["id"]) for quest in WEEKLY_QUESTS],
     )
 
@@ -77,8 +77,8 @@ async def record_weekly_progress(db, user_id, kind, amount=1, now=None):
         for quest in WEEKLY_QUESTS:
             if quest["kind"] == kind:
                 await db.execute(
-                    "UPDATE player_weekly_quests SET progress=MIN(?,progress+?) WHERE user_id=? AND week_key=? AND quest_id=?",
-                    (quest["target"], amount, user_id, week_key, quest["id"]),
+                    "UPDATE player_weekly_quests SET progress=CASE WHEN progress+? > ? THEN ? ELSE progress+? END WHERE user_id=? AND week_key=? AND quest_id=?",
+                    (amount, quest["target"], quest["target"], amount, user_id, week_key, quest["id"]),
                 )
         await _commit_transaction(db, nested, savepoint)
     except Exception:
