@@ -47,13 +47,19 @@ def current_day_key(now=None):
 
 
 async def init_daily_mission_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_daily_missions(
+    savepoint = "init_daily_mission_tables"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_daily_missions(
       user_id BIGINT NOT NULL,day_key TEXT NOT NULL,mission_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0 CHECK(progress>=0),
       claimed INTEGER NOT NULL DEFAULT 0 CHECK(claimed IN (0,1)),
       PRIMARY KEY(user_id,day_key,mission_id)
     )""")
-    await db.commit()
+        await _commit_transaction(db, nested, savepoint)
+    except Exception:
+        await _rollback_transaction(db, nested, savepoint)
+        raise
 
 
 async def _ensure_day(db, user_id, day_key):
