@@ -134,7 +134,7 @@ def _is_write_statement(sql: str) -> bool:
 
 def _prepare_statement(sql: str) -> str:
     """Translate legacy placeholders and the SQLite-only explicit write-begin form."""
-    statement = _prepare_statement(sql)
+    statement = qmark_to_pyformat(sql)
     if re.fullmatch(r"\s*BEGIN\s+IMMEDIATE\s*;?\s*", statement, re.IGNORECASE):
         return "BEGIN"
     return statement
@@ -271,7 +271,7 @@ class PostgresConnection:
         return self._connection.info.transaction_status != TransactionStatus.IDLE
 
     async def execute(self, sql: str, parameters: Sequence[Any] | None = None):
-        statement = qmark_to_pyformat(sql)
+        statement = _prepare_statement(sql)
         # SQLite starts implicit transactions for writes, but not for SELECTs.
         # Psycopg autocommit mode plus this explicit write detection preserves
         # that observable in_transaction behavior for the supported SQL subset.
@@ -283,7 +283,7 @@ class PostgresConnection:
     async def executemany(
         self, sql: str, parameters: Iterable[Sequence[Any]]
     ):
-        statement = qmark_to_pyformat(sql)
+        statement = _prepare_statement(sql)
         is_write = _is_write_statement(statement)
         if is_write and not self.in_transaction:
             await self._connection.execute("BEGIN")
