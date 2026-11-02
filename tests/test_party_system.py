@@ -3,6 +3,8 @@ import unittest
 
 import aiosqlite
 
+from stamina_system import consume_stamina, get_stamina, init_stamina_tables
+
 from party_system import (
     PartyError,
     create_party,
@@ -233,6 +235,92 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         await attack_party_battle(self.db,party_id,101,10)
         with self.assertRaises(PartyError):
             await attack_party_battle(self.db,party_id,101,10)
+
+
+    async def test_party_table_initialization_preserves_outer_transaction(self):
+        db = await aiosqlite.connect(":memory:")
+        try:
+            await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+            await db.execute("BEGIN")
+            await db.execute("INSERT INTO transaction_marker VALUES(1)")
+            await init_party_tables(db)
+            self.assertTrue(db.in_transaction)
+            await db.rollback()
+            cur = await db.execute("SELECT COUNT(*) FROM transaction_marker")
+            self.assertEqual((await cur.fetchone())[0], 0)
+            cur = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='parties'")
+            self.assertIsNone(await cur.fetchone())
+        finally:
+            await db.close()
+
+    async def test_party_exploration_rolls_back_stamina_if_battle_creation_fails(self):
+        party_id = await create_party(self.db, 101)
+        await init_stamina_tables(self.db)
+        await get_stamina(self.db, 101, now=1000)
+        await self.db.execute("CREATE TRIGGER reject_party_battle BEFORE INSERT ON party_battles BEGIN SELECT RAISE(ABORT,'battle unavailable'); END")
+        await self.db.commit()
+        await self.db.execute("BEGIN IMMEDIATE")
+        try:
+            await consume_stamina(self.db, 101, 10, now=1000, commit=False)
+            with self.assertRaises(Exception):
+                await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        finally:
+            await self.db.rollback()
+        state = await get_stamina(self.db, 101, now=1000)
+        self.assertEqual(state["stamina"], 100)
+        self.assertIsNone(await get_party_battle(self.db, party_id))
+
+    async def test_coop_attack_rolls_back_if_contribution_write_fails(self):
+        party_id = await create_party(self.db, 101)
+        battle_id = await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        await self.db.execute("CREATE TRIGGER reject_party_contribution BEFORE INSERT ON party_battle_contributions BEGIN SELECT RAISE(ABORT,'contribution unavailable'); END")
+        await self.db.commit()
+        with self.assertRaises(Exception):
+            await attack_party_battle(self.db, party_id, 101, 20)
+        battle = await get_party_battle(self.db, party_id)
+        self.assertEqual(battle["hp"], 100)
+        cur = await self.db.execute("SELECT COUNT(*) FROM party_battle_cooldowns WHERE battle_id=?", (battle_id,))
+        self.assertEqual((await cur.fetchone())[0], 0)
+
+    async def test_coop_reward_rolls_back_if_player_update_fails(self):
+        party_id = await create_party(self.db, 101)
+        battle_id = await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        await attack_party_battle(self.db, party_id, 101, 100)
+        await self.db.execute("CREATE TRIGGER reject_party_reward BEFORE UPDATE OF coins ON players BEGIN SELECT RAISE(ABORT,'reward unavailable'); END")
+        await self.db.commit()
+        with self.assertRaises(Exception):
+            await reward_party_battle(self.db, battle_id, 101, 50, 40)
+        cur = await self.db.execute("SELECT COUNT(*) FROM party_battle_rewards WHERE battle_id=? AND user_id=101", (battle_id,))
+        self.assertEqual((await cur.fetchone())[0], 0)
+        cur = await self.db.execute("SELECT coins,xp FROM players WHERE user_id=101")
+        self.assertEqual(tuple(await cur.fetchone()), (0, 0))
+
+    async def test_leaving_and_rejoining_does_not_reset_old_battle_reward_claim(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, invite_id, 202, True)
+        battle_id = await start_party_battle(
+            self.db, party_id, 101, 10, "Root Warden", 100
+        )
+        await attack_party_battle(self.db, party_id, 101, 100)
+        await reward_party_battle(self.db, battle_id, 101, 50, 40)
+
+        await leave_party(self.db, 101)
+        rejoin_invite = await invite_to_party(self.db, party_id, 202, 101)
+        await respond_to_party_invite(self.db, rejoin_invite, 101, True)
+
+        with self.assertRaisesRegex(PartyError, "already claimed"):
+            await reward_party_battle(self.db, battle_id, 101, 50, 40)
+        cur = await self.db.execute(
+            "SELECT coins,xp FROM players WHERE user_id=101"
+        )
+        player = await cur.fetchone()
+        self.assertEqual((player["coins"], player["xp"]), (50, 40))
+        cur = await self.db.execute(
+            "SELECT COUNT(*) FROM party_battle_rewards WHERE battle_id=? AND user_id=101",
+            (battle_id,),
+        )
+        self.assertEqual((await cur.fetchone())[0], 1)
 
 if __name__ == "__main__":
     unittest.main()

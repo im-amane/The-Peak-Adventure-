@@ -1,5 +1,9 @@
 """Advanced guild roles, invitations, missions and shared boss raids."""
 from datetime import datetime, timezone
+from functools import wraps
+import asyncio
+import re
+import sqlite3
 
 class GuildFeatureError(ValueError):
     pass
@@ -11,60 +15,250 @@ MISSIONS={
 }
 ACTIVITY={"battle":"battles","boss":"boss","trade":"trades"}
 
+_DB_WRITE_LOCKS: dict[tuple[int,int], asyncio.Lock] = {}
+
+async def _begin_atomic(db, savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Give each guild mutation an atomic, transaction-aware boundary."""
+    @wraps(function)
+    async def wrapped(db, *args, **kwargs):
+        key=(id(db),id(asyncio.get_running_loop()))
+        lock=_DB_WRITE_LOCKS.get(key)
+        if lock is None:
+            lock=asyncio.Lock()
+            _DB_WRITE_LOCKS[key]=lock
+        async with lock:
+            savepoint = "guild_" + function.__name__
+            nested = await _begin_atomic(db, savepoint)
+            try:
+                result = await function(db, *args, **kwargs)
+                await _commit_atomic(db, nested, savepoint)
+                return result
+            except Exception:
+                await _rollback_atomic(db, nested, savepoint)
+                raise
+    return wrapped
+
+
 def valid_id(value):
     return isinstance(value,int) and not isinstance(value,bool) and value>0
 
+@_transactional
 async def init_guild_features(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS guild_invites(
-      invite_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
-      inviter_id INTEGER NOT NULL,target_id INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','cancelled')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,responded_at TEXT
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_invite_pending
-      ON guild_invites(target_id) WHERE status='pending';
-    CREATE TABLE IF NOT EXISTS guild_announcements(
-      guild_id INTEGER PRIMARY KEY,message TEXT NOT NULL,author_id INTEGER NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS guild_chat_messages(
-      message_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
-      user_id INTEGER NOT NULL,message TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_guild_chat_history ON guild_chat_messages(guild_id,message_id DESC);
-    CREATE TABLE IF NOT EXISTS guild_missions(
-      guild_id INTEGER NOT NULL,mission_date TEXT NOT NULL,mission_id TEXT NOT NULL,
-      progress INTEGER NOT NULL DEFAULT 0,claimed INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY(guild_id,mission_date,mission_id)
-    );
-    CREATE TABLE IF NOT EXISTS guild_raids(
-      raid_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
-      boss_level INTEGER NOT NULL,boss_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS guild_raid_contributions(
-      raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY(raid_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS guild_raid_cooldowns(
-      raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(raid_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS guild_wars(
-      war_id INTEGER PRIMARY KEY AUTOINCREMENT,challenger_guild INTEGER NOT NULL,
-      target_guild INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending'
-      CHECK(status IN ('pending','active','completed','declined')),
-      winner_guild INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      challenger_score INTEGER NOT NULL DEFAULT 0,target_score INTEGER NOT NULL DEFAULT 0,
-      CHECK(challenger_guild!=target_guild)
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_war_pair
-      ON guild_wars(challenger_guild,target_guild) WHERE status IN ('pending','active');
-    """)
-    await db.commit()
+    """Create guild feature tables without committing a caller-owned transaction."""
+    statements = (
+        """CREATE TABLE IF NOT EXISTS guild_invites(
+          invite_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
+          inviter_id INTEGER NOT NULL,target_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','declined','cancelled')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,responded_at TEXT
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_invite_pending ON guild_invites(target_id) WHERE status='pending'",
+        """CREATE TABLE IF NOT EXISTS guild_announcements(
+          guild_id INTEGER PRIMARY KEY,message TEXT NOT NULL,author_id INTEGER NOT NULL,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_chat_messages(
+          message_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,message TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_guild_chat_history ON guild_chat_messages(guild_id,message_id DESC)",
+        """CREATE TABLE IF NOT EXISTS guild_missions(
+          guild_id INTEGER NOT NULL,mission_date TEXT NOT NULL,mission_id TEXT NOT NULL,
+          progress INTEGER NOT NULL DEFAULT 0,claimed INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(guild_id,mission_date,mission_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_raids(
+          raid_id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id INTEGER NOT NULL,
+          boss_level INTEGER NOT NULL,boss_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_raid_contributions(
+          raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(raid_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_raid_cooldowns(
+          raid_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(raid_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_wars(
+          war_id INTEGER PRIMARY KEY AUTOINCREMENT,challenger_guild INTEGER NOT NULL,
+          target_guild INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'pending'
+          CHECK(status IN ('pending','active','completed','declined')),
+          winner_guild INTEGER,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          challenger_score INTEGER NOT NULL DEFAULT 0,target_score INTEGER NOT NULL DEFAULT 0,
+          CHECK(challenger_guild!=target_guild)
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_guild_war_pair ON guild_wars(challenger_guild,target_guild) WHERE status IN ('pending','active')",
+        """CREATE TABLE IF NOT EXISTS guild_war_duel_events(
+          duel_id INTEGER PRIMARY KEY,war_id INTEGER NOT NULL,winner_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+    )
+    for statement in statements:
+        await db.execute(statement)
+
+
+
+async def _delete_guild_records_unlocked(db,guild_id,actor_id):
+    if not valid_id(guild_id) or not valid_id(actor_id):
+        raise GuildFeatureError("Invalid guild disband request.")
+    cur=await db.execute(
+        "SELECT g.guild_id,m.role FROM guilds g "
+        "JOIN guild_members m ON m.guild_id=g.guild_id "
+        "WHERE g.guild_id=? AND m.user_id=?",
+        (guild_id,actor_id),
+    )
+    membership=await cur.fetchone()
+    if not membership or membership["role"]!="leader":
+        raise GuildFeatureError("Only the guild leader can disband this guild.")
+
+    await db.execute(
+        "DELETE FROM guild_war_duel_events WHERE war_id IN "
+        "(SELECT war_id FROM guild_wars WHERE challenger_guild=? OR target_guild=?)",
+        (guild_id,guild_id),
+    )
+    await db.execute(
+        "DELETE FROM guild_raid_contributions WHERE raid_id IN "
+        "(SELECT raid_id FROM guild_raids WHERE guild_id=?)",
+        (guild_id,),
+    )
+    await db.execute(
+        "DELETE FROM guild_raid_cooldowns WHERE raid_id IN "
+        "(SELECT raid_id FROM guild_raids WHERE guild_id=?)",
+        (guild_id,),
+    )
+    for table in (
+        "guild_invites","guild_announcements","guild_chat_messages",
+        "guild_missions","guild_raids",
+    ):
+        await db.execute(f"DELETE FROM {table} WHERE guild_id=?",(guild_id,))
+    await db.execute(
+        "DELETE FROM guild_wars WHERE challenger_guild=? OR target_guild=?",
+        (guild_id,guild_id),
+    )
+    await db.execute("DELETE FROM guild_members WHERE guild_id=?",(guild_id,))
+    cur=await db.execute("DELETE FROM guilds WHERE guild_id=?",(guild_id,))
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild changed while it was being disbanded.")
+    return True
+
+
+@_transactional
+async def disband_guild(db,guild_id,actor_id):
+    """Delete a guild and every guild-owned record atomically."""
+    return await _delete_guild_records_unlocked(db,guild_id,actor_id)
+
+
+@_transactional
+async def create_guild(db,user_id,name):
+    if not valid_id(user_id) or not isinstance(name,str):
+        raise GuildFeatureError("Invalid guild creation request.")
+    name=" ".join(name.split()).strip()
+    if not 3<=len(name)<=20 or not re.fullmatch(r"[A-Za-z0-9 _-]+",name):
+        raise GuildFeatureError("Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone():
+        raise GuildFeatureError("Register before creating a guild.")
+    cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
+    if await cur.fetchone():
+        raise GuildFeatureError("You are already in a guild.")
+    cur=await db.execute(
+        "UPDATE players SET coins=coins-100 WHERE user_id=? AND coins>=100",
+        (user_id,),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Creating a guild costs 100 coins.")
+    try:
+        cur=await db.execute("INSERT INTO guilds(name,leader_id) VALUES(?,?)",(name,user_id))
+    except sqlite3.IntegrityError as exc:
+        raise GuildFeatureError("That guild name is already taken.") from exc
+    guild_id=int(cur.lastrowid)
+    cur=await db.execute(
+        "INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'leader')",
+        (user_id,guild_id),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership could not be created.")
+    return guild_id
+
+
+@_transactional
+async def join_guild(db,user_id,guild_id):
+    if not valid_id(user_id) or not valid_id(guild_id):
+        raise GuildFeatureError("Invalid guild join request.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone():
+        raise GuildFeatureError("Register before joining a guild.")
+    cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
+    if await cur.fetchone():
+        raise GuildFeatureError("You are already in a guild.")
+    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?",(guild_id,))
+    guild=await cur.fetchone()
+    if not guild:
+        raise GuildFeatureError("Guild not found.")
+    cur=await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?",(guild_id,))
+    if (await cur.fetchone())["total"]>=20:
+        raise GuildFeatureError("This guild has reached its 20-member limit.")
+    try:
+        cur=await db.execute(
+            "INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'member')",
+            (user_id,guild_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise GuildFeatureError("You are already in a guild.") from exc
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership could not be created.")
+    return guild["name"]
+
+
+@_transactional
+async def leave_guild(db,user_id):
+    if not valid_id(user_id):
+        raise GuildFeatureError("Invalid player account.")
+    cur=await db.execute("SELECT guild_id,role FROM guild_members WHERE user_id=?",(user_id,))
+    membership=await cur.fetchone()
+    if not membership:
+        raise GuildFeatureError("You are not in a guild.")
+    guild_id=membership["guild_id"]
+    if membership["role"]=="leader":
+        cur=await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?",(guild_id,))
+        if (await cur.fetchone())["total"]>1:
+            raise GuildFeatureError("Guild leaders cannot leave while members remain. Use /guild disband; leadership transfer is not available yet.")
+        await _delete_guild_records_unlocked(db,guild_id,user_id)
+        return True
+    cur=await db.execute(
+        "DELETE FROM guild_members WHERE user_id=? AND guild_id=?",
+        (user_id,guild_id),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership changed; retry leaving.")
+    return False
 
 async def guild_role(db,guild_id,user_id):
     cur=await db.execute("SELECT role FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
@@ -75,6 +269,7 @@ async def _officer(db,guild_id,user_id):
     role=await guild_role(db,guild_id,user_id)
     return role in {"leader","officer"}
 
+@_transactional
 async def create_guild_invite(db,guild_id,actor_id,target_id):
     if not all(valid_id(x) for x in (guild_id,actor_id,target_id)) or actor_id==target_id:
         raise GuildFeatureError("Invalid guild invitation.")
@@ -88,12 +283,11 @@ async def create_guild_invite(db,guild_id,actor_id,target_id):
     if (await cur.fetchone())["n"]>=20: raise GuildFeatureError("This guild is full.")
     try:
         cur=await db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(?,?,?)",(guild_id,actor_id,target_id))
-        await db.commit()
         return int(cur.lastrowid)
     except Exception as exc:
-        await db.rollback()
         raise GuildFeatureError("That player already has a pending guild invitation.") from exc
 
+@_transactional
 async def respond_guild_invite(db,invite_id,target_id,accept):
     if not valid_id(invite_id) or not valid_id(target_id): raise GuildFeatureError("Invalid guild invitation.")
     cur=await db.execute("SELECT guild_id,target_id,status FROM guild_invites WHERE invite_id=?",(invite_id,))
@@ -108,10 +302,12 @@ async def respond_guild_invite(db,invite_id,target_id,accept):
         await db.execute("INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'member')",(target_id,invite["guild_id"]))
         status="accepted"
     else: status="declined"
-    await db.execute("UPDATE guild_invites SET status=?,responded_at=CURRENT_TIMESTAMP WHERE invite_id=? AND status='pending'",(status,invite_id))
-    await db.commit()
+    cur = await db.execute("UPDATE guild_invites SET status=?,responded_at=CURRENT_TIMESTAMP WHERE invite_id=? AND status='pending'", (status, invite_id))
+    if cur.rowcount != 1:
+        raise GuildFeatureError("This invitation was already handled.")
     return invite["guild_id"]
 
+@_transactional
 async def set_guild_role(db,guild_id,actor_id,target_id,role):
     if not all(valid_id(x) for x in (guild_id,actor_id,target_id)) or role not in {"officer","member"}:
         raise GuildFeatureError("Invalid guild role update.")
@@ -123,9 +319,9 @@ async def set_guild_role(db,guild_id,actor_id,target_id,role):
     if not target: raise GuildFeatureError("That player is not in this guild.")
     if target["role"]=="leader": raise GuildFeatureError("Guild leader role cannot be changed.")
     await db.execute("UPDATE guild_members SET role=? WHERE guild_id=? AND user_id=?",(role,guild_id,target_id))
-    await db.commit()
+ 
 
-
+@_transactional
 async def send_guild_message(db,guild_id,user_id,message):
     if not valid_id(guild_id) or not valid_id(user_id):
         raise GuildFeatureError("Invalid guild chat account.")
@@ -135,7 +331,6 @@ async def send_guild_message(db,guild_id,user_id,message):
     if not message or len(message)>500:
         raise GuildFeatureError("Guild messages must contain 1 to 500 characters.")
     cur=await db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(?,?,?)",(guild_id,user_id,message))
-    await db.commit()
     return int(cur.lastrowid)
 
 async def get_guild_chat(db,guild_id,user_id,limit=10):
@@ -147,6 +342,7 @@ async def get_guild_chat(db,guild_id,user_id,limit=10):
       WHERE c.guild_id=? ORDER BY c.message_id DESC LIMIT ?""",(guild_id,limit))
     return list(reversed(await cur.fetchall()))
 
+@_transactional
 async def set_guild_announcement(db,guild_id,actor_id,message):
     if not await _officer(db,guild_id,actor_id): raise GuildFeatureError("Only guild leaders and officers can post announcements.")
     message=" ".join(str(message or "").split())
@@ -154,7 +350,6 @@ async def set_guild_announcement(db,guild_id,actor_id,message):
     await db.execute("""INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(?,?,?)
       ON CONFLICT(guild_id) DO UPDATE SET message=excluded.message,author_id=excluded.author_id,updated_at=CURRENT_TIMESTAMP""",
       (guild_id,message,actor_id))
-    await db.commit()
     return message
 
 async def get_guild_announcement(db,guild_id):
@@ -166,14 +361,21 @@ def _date(value=None):
 
 async def get_guild_missions(db,guild_id,mission_date=None):
     date=_date(mission_date)
-    for key in MISSIONS:
-        await db.execute("INSERT OR IGNORE INTO guild_missions(guild_id,mission_date,mission_id) VALUES(?,?,?)",(guild_id,date,key))
-    await db.commit()
-    cur=await db.execute("SELECT mission_id,progress,claimed FROM guild_missions WHERE guild_id=? AND mission_date=?",(guild_id,date))
-    rows=await cur.fetchall()
-    return [{"id":r["mission_id"],"title":MISSIONS[r["mission_id"]][0],"target":MISSIONS[r["mission_id"]][1],
-      "xp":MISSIONS[r["mission_id"]][2],"progress":r["progress"],"claimed":bool(r["claimed"]),
-      "completed":r["progress"]>=MISSIONS[r["mission_id"]][1]} for r in rows]
+    nested=await _begin_atomic(db,"get_guild_missions")
+    try:
+        for key in MISSIONS:
+            await db.execute("INSERT OR IGNORE INTO guild_missions(guild_id,mission_date,mission_id) VALUES(?,?,?)",(guild_id,date,key))
+        cur=await db.execute("SELECT mission_id,progress,claimed FROM guild_missions WHERE guild_id=? AND mission_date=?",(guild_id,date))
+        rows=await cur.fetchall()
+        result=[{"id":r["mission_id"],"title":MISSIONS[r["mission_id"]][0],"target":MISSIONS[r["mission_id"]][1],
+          "xp":MISSIONS[r["mission_id"]][2],"progress":r["progress"],"claimed":bool(r["claimed"]),
+          "completed":r["progress"]>=MISSIONS[r["mission_id"]][1]} for r in rows]
+        await _commit_atomic(db,nested,"get_guild_missions")
+        return result
+    except Exception:
+        await _rollback_atomic(db,nested,"get_guild_missions")
+        raise
+
 
 async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
     key=ACTIVITY.get(kind)
@@ -181,13 +383,21 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
         raise GuildFeatureError("Invalid guild activity.")
     cur=await db.execute("SELECT 1 FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
     if not await cur.fetchone(): return []
-    date=_date()
-    await get_guild_missions(db,guild_id,date)
-    target=MISSIONS[key][1]
-    await db.execute("UPDATE guild_missions SET progress=MIN(?,progress+?) WHERE guild_id=? AND mission_date=? AND mission_id=?",(target,amount,guild_id,date,key))
-    await db.commit()
-    return await get_guild_missions(db,guild_id,date)
+    nested=await _begin_atomic(db,"record_guild_activity")
+    try:
+        date=_date()
+        await get_guild_missions(db,guild_id,date)
+        target=MISSIONS[key][1]
+        await db.execute("UPDATE guild_missions SET progress=MIN(?,progress+?) WHERE guild_id=? AND mission_date=? AND mission_id=?",(target,amount,guild_id,date,key))
+        result=await get_guild_missions(db,guild_id,date)
+        await _commit_atomic(db,nested,"record_guild_activity")
+        return result
+    except Exception:
+        await _rollback_atomic(db,nested,"record_guild_activity")
+        raise
 
+
+@_transactional
 async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
     if mission_id not in MISSIONS or not await _officer(db,guild_id,user_id):
         raise GuildFeatureError("Only guild leaders and officers can claim a completed mission.")
@@ -196,16 +406,18 @@ async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
     mission=next(x for x in missions if x["id"]==mission_id)
     if not mission["completed"]: raise GuildFeatureError("This guild mission is not complete.")
     if mission["claimed"]: raise GuildFeatureError("This guild mission reward was already claimed.")
-    await db.execute("UPDATE guild_missions SET claimed=1 WHERE guild_id=? AND mission_date=? AND mission_id=? AND claimed=0",(guild_id,date,mission_id))
+    cur = await db.execute("UPDATE guild_missions SET claimed=1 WHERE guild_id=? AND mission_date=? AND mission_id=? AND claimed=0 AND progress>=?", (guild_id, date, mission_id, MISSIONS[mission_id][1]))
+    if cur.rowcount != 1:
+        raise GuildFeatureError("This guild mission reward was already claimed or is no longer complete.")
     cur=await db.execute("SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",(guild_id,))
     guild=await cur.fetchone()
     if not guild: raise GuildFeatureError("Guild not found.")
     level,xp=guild["guild_level"],guild["guild_xp"]+mission["xp"]
     while level<100 and xp>=level*500: xp-=level*500; level+=1
     await db.execute("UPDATE guilds SET guild_level=?,guild_xp=? WHERE guild_id=?",(level,xp,guild_id))
-    await db.commit()
     return mission["xp"]
 
+@_transactional
 async def start_guild_raid(db,guild_id,user_id,boss_level,boss_name,boss_hp):
     if not await _officer(db,guild_id,user_id): raise GuildFeatureError("Only guild leaders and officers can start guild raids.")
     if not isinstance(boss_level,int) or isinstance(boss_level,bool) or not 10<=boss_level<=100 or boss_level%10:
@@ -215,9 +427,9 @@ async def start_guild_raid(db,guild_id,user_id,boss_level,boss_name,boss_hp):
     cur=await db.execute("SELECT 1 FROM guild_raids WHERE guild_id=? AND status='active'",(guild_id,))
     if await cur.fetchone(): raise GuildFeatureError("Your guild already has an active raid.")
     cur=await db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(?,?,?,?,?)",(guild_id,boss_level,str(boss_name)[:80],boss_hp,boss_hp))
-    await db.commit()
     return int(cur.lastrowid)
 
+@_transactional
 async def attack_guild_raid(db,guild_id,user_id,damage):
     if not all(valid_id(x) for x in (guild_id,user_id)) or not isinstance(damage,int) or isinstance(damage,bool) or not 1<=damage<=10000:
         raise GuildFeatureError("Invalid guild raid attack.")
@@ -229,17 +441,20 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
     cur=await db.execute("SELECT 1 FROM guild_raid_cooldowns WHERE raid_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)",(raid["raid_id"],user_id))
     if await cur.fetchone(): raise GuildFeatureError("Guild raid cooldown: wait 5 seconds before attacking again.")
     dealt=min(damage,raid["hp"]); hp=raid["hp"]-dealt; status="won" if hp==0 else "active"
-    await db.execute("UPDATE guild_raids SET hp=?,status=? WHERE raid_id=? AND status='active'",(hp,status,raid["raid_id"]))
+    cur = await db.execute("UPDATE guild_raids SET hp=?,status=? WHERE raid_id=? AND status='active' AND hp=?", (hp, status, raid["raid_id"], raid["hp"]))
+    if cur.rowcount != 1:
+        raise GuildFeatureError("The guild raid changed; retry your attack.")
     await db.execute("INSERT INTO guild_raid_cooldowns(raid_id,user_id,last_attack_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(raid_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP",(raid["raid_id"],user_id))
     await db.execute("""INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
       ON CONFLICT(raid_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(raid["raid_id"],user_id,dealt))
-    await db.commit()
     if status=="won":
-        await db.execute("UPDATE guilds SET guild_xp=guild_xp+100 WHERE guild_id=?",(guild_id,))
-        await db.commit()
+        cur = await db.execute("UPDATE guilds SET guild_xp=guild_xp+100 WHERE guild_id=?", (guild_id,))
+        if cur.rowcount != 1:
+            raise GuildFeatureError("Guild raid rewards could not be recorded.")
     return {"boss_name":raid["boss_name"],"hp":hp,"max_hp":raid["max_hp"],"damage":dealt,"status":status}
 
 
+@_transactional
 async def declare_guild_war(db, guild_id, leader_id, target_guild_id):
     if not all(valid_id(x) for x in (guild_id,leader_id,target_guild_id)) or guild_id==target_guild_id:
         raise GuildFeatureError("Invalid guild war challenge.")
@@ -252,10 +467,10 @@ async def declare_guild_war(db, guild_id, leader_id, target_guild_id):
       (guild_id,target_guild_id,target_guild_id,guild_id))
     if await cur.fetchone(): raise GuildFeatureError("A war between these guilds is already pending or active.")
     cur=await db.execute("INSERT INTO guild_wars(challenger_guild,target_guild) VALUES(?,?)",(guild_id,target_guild_id))
-    await db.commit()
     return int(cur.lastrowid)
 
 
+@_transactional
 async def respond_guild_war(db, war_id, leader_id, accept):
     if not valid_id(war_id) or not valid_id(leader_id): raise GuildFeatureError("Invalid guild war response.")
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=? AND status='pending'",(war_id,))
@@ -264,13 +479,17 @@ async def respond_guild_war(db, war_id, leader_id, accept):
     if await guild_role(db,war["target_guild"],leader_id)!="leader":
         raise GuildFeatureError("Only the challenged guild leader can respond.")
     status="active" if accept else "declined"
-    await db.execute("UPDATE guild_wars SET status=? WHERE war_id=? AND status='pending'",(status,war_id))
-    await db.commit()
+    cur = await db.execute("UPDATE guild_wars SET status=? WHERE war_id=? AND status='pending'", (status, war_id))
+    if cur.rowcount != 1:
+        raise GuildFeatureError("This guild war was already answered.")
     return status
 
 
-async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
+@_transactional
+async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id, duel_id=None):
     if not all(valid_id(x) for x in (challenger_id,opponent_id,winner_id)) or winner_id not in {challenger_id,opponent_id}:
+        return None
+    if duel_id is not None and not valid_id(duel_id):
         return None
     cur=await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?",(challenger_id,))
     first=await cur.fetchone()
@@ -283,23 +502,31 @@ async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id):
       (first["guild_id"],second["guild_id"],second["guild_id"],first["guild_id"]))
     war=await cur.fetchone()
     if not war: return None
+    if duel_id is not None:
+        cur=await db.execute(
+            "INSERT OR IGNORE INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(?,?,?)",
+            (duel_id,war["war_id"],winner_id),
+        )
+        if cur.rowcount != 1:
+            return None
     winner_member=first if winner_id==challenger_id else second
     winner_guild=winner_member["guild_id"]
     if winner_guild==war["challenger_guild"]:
-        await db.execute("UPDATE guild_wars SET challenger_score=challenger_score+1 WHERE war_id=?",(war["war_id"],))
+        cur = await db.execute("UPDATE guild_wars SET challenger_score=challenger_score+1 WHERE war_id=? AND status='active'", (war["war_id"],))
+        if cur.rowcount != 1: raise GuildFeatureError("This guild war is no longer active.")
     else:
-        await db.execute("UPDATE guild_wars SET target_score=target_score+1 WHERE war_id=?",(war["war_id"],))
+        cur = await db.execute("UPDATE guild_wars SET target_score=target_score+1 WHERE war_id=? AND status='active'", (war["war_id"],))
+        if cur.rowcount != 1: raise GuildFeatureError("This guild war is no longer active.")
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
     updated=await cur.fetchone()
     completed=max(updated["challenger_score"],updated["target_score"])>=3
     if completed:
         winner=updated["challenger_guild"] if updated["challenger_score"]>updated["target_score"] else updated["target_guild"]
-        await db.execute("UPDATE guild_wars SET status='completed',winner_guild=? WHERE war_id=?",(winner,war["war_id"]))
+        cur = await db.execute("UPDATE guild_wars SET status='completed',winner_guild=? WHERE war_id=? AND status='active'", (winner, war["war_id"]))
+        if cur.rowcount != 1: raise GuildFeatureError("This guild war has already completed.")
         await db.execute("UPDATE guilds SET guild_xp=guild_xp+150 WHERE guild_id=?",(winner,))
-    await db.commit()
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
     return await cur.fetchone()
-
 
 async def get_guild_war(db,war_id):
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war_id,))

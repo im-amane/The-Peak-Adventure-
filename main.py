@@ -25,11 +25,11 @@ from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
-from group_system import GroupError, attack_group_raid, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
+from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
+from guild_system import GuildFeatureError, create_guild, disband_guild, join_guild, leave_guild, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
@@ -146,7 +146,13 @@ class DatabaseLockMiddleware:
                     elif callback is not None:
                         await callback.answer("Your game account is suspended.", show_alert=True)
                     return None
-            return await handler(event, data)
+            try:
+                return await handler(event, data)
+            except Exception:
+                # A failed update must not leave partial writes for the next serialized handler to commit.
+                if db is not None and db.in_transaction:
+                    await db.rollback()
+                raise
 
 
 dp.update.outer_middleware(DatabaseLockMiddleware())
@@ -280,15 +286,33 @@ async def init_db():
 
 
 async def get_player(user_id: int, username: str | None = None):
+    """Read/update a player without committing a transaction owned by the caller."""
     assert db is not None
-    await db.execute("INSERT OR IGNORE INTO players(user_id, username) VALUES (?, ?)", (user_id, username or "Adventurer"))
-    if username:
-        await db.execute("UPDATE players SET username=? WHERE user_id=?", (username, user_id))
-    await db.commit()
-    cur = await db.execute("SELECT * FROM players WHERE user_id=?", (user_id,))
-    player = await cur.fetchone()
-    await touch_presence(db, user_id)
-    return player
+    nested = db.in_transaction
+    if nested:
+        await db.execute("SAVEPOINT get_player")
+    try:
+        await db.execute(
+            "INSERT OR IGNORE INTO players(user_id, username) VALUES (?, ?)",
+            (user_id, username or "Adventurer"),
+        )
+        if username:
+            await db.execute("UPDATE players SET username=? WHERE user_id=?", (username, user_id))
+        cur = await db.execute("SELECT * FROM players WHERE user_id=?", (user_id,))
+        player = await cur.fetchone()
+        await touch_presence(db, user_id)
+        if nested:
+            await db.execute("RELEASE SAVEPOINT get_player")
+        else:
+            await db.commit()
+        return player
+    except Exception:
+        if nested:
+            await db.execute("ROLLBACK TO SAVEPOINT get_player")
+            await db.execute("RELEASE SAVEPOINT get_player")
+        else:
+            await db.rollback()
+        raise
 
 
 def menu(include_webapp: bool = False):
@@ -422,33 +446,37 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
         return
     try:
-        await consume_stamina(db, user_id, EXPLORE_COST)
+        await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
         state = await get_stamina(db, user_id)
         await send_target.answer("⚡ " + escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
         return
-    world_id = await get_current_world(db, user_id, p["level"])
-    boss_level = world_id * 10
-    boss_defeated = False
-    if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
-        cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, boss_level))
-        boss_defeated = await cur.fetchone() is not None
-    monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
-    m = MONSTER_BY_LEVEL[monster_level]
-    mastery = await get_evolution_state(db, user_id, monster_level)
-    evolved = is_evolved_spawn(mastery["evolved"] and not m["boss"], random.randint(1, 100))
-    elite = is_elite_spawn(m["boss"], random.randint(1, 100))
-    battle_monster = scale_evolved_monster(m) if evolved else m
-    if elite:
-        battle_monster = scale_elite_monster(battle_monster)
-    await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
-    await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
-                     (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
-    await db.execute(
-        "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
-        (user_id, monster_level),
-    )
-    await db.commit()
+    try:
+        world_id = await get_current_world(db, user_id, p["level"])
+        boss_level = world_id * 10
+        boss_defeated = False
+        if p["level"] >= boss_level and boss_level in BOSS_LEVELS:
+            cur = await db.execute("SELECT 1 FROM boss_defeats WHERE user_id=? AND monster_level=?", (user_id, boss_level))
+            boss_defeated = await cur.fetchone() is not None
+        monster_level = random.choice(world_encounter_levels(p["level"], world_id, boss_defeated))
+        m = MONSTER_BY_LEVEL[monster_level]
+        mastery = await get_evolution_state(db, user_id, monster_level)
+        evolved = is_evolved_spawn(mastery["evolved"] and not m["boss"], random.randint(1, 100))
+        elite = is_elite_spawn(m["boss"], random.randint(1, 100))
+        battle_monster = scale_evolved_monster(m) if evolved else m
+        if elite:
+            battle_monster = scale_elite_monster(battle_monster)
+        await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
+        await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                         (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
+        await db.execute(
+            "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+            (user_id, monster_level),
+        )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     await send_battle(send_target, user_id, "🌲 <b>You enter the wilds...</b>")
 
 
@@ -457,25 +485,58 @@ async def start_battle(user_id: int, username: str | None, send_target):
         await _start_battle_unlocked(user_id, username, send_target)
 
 
-async def claim_daily_reward(user_id: int) -> bool:
+async def claim_daily_reward(user_id: int, now: int | None = None) -> bool:
     assert db is not None
-    async with player_locks[user_id]:
-        now = int(datetime.now(timezone.utc).timestamp())
-        cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
-        previous = await cur.fetchone()
-        if previous and now - previous["claimed_at"] < 86400:
-            return False
-        await db.execute(
-            "INSERT INTO daily_claims(user_id, claimed_at) VALUES (?, ?) "
-            "ON CONFLICT(user_id) DO UPDATE SET claimed_at=excluded.claimed_at",
-            (user_id, now),
-        )
-        await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (user_id,))
-        await db.commit()
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise ValueError("Invalid player account.")
+    stamp = int(datetime.now(timezone.utc).timestamp()) if now is None else now
+    if not isinstance(stamp,int) or isinstance(stamp,bool) or stamp<0:
+        raise ValueError("Invalid daily reward timestamp.")
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_daily_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
+            previous = await cur.fetchone()
+            if previous and stamp - previous["claimed_at"] < 86400:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_daily_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+                else:
+                    await db.rollback()
+                return False
+            cur = await db.execute(
+                "INSERT INTO daily_claims(user_id, claimed_at) VALUES (?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET claimed_at=excluded.claimed_at",
+                (user_id, stamp),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Daily reward claim could not be recorded.")
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?",
+                (user_id,),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Daily reward wallet update failed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+        else:
+            await db.commit()
         return True
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_daily_reward")
+                await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+            else:
+                await db.rollback()
+        raise
 
 
-async def refresh_quest_progress(user_id: int):
+async def refresh_quest_progress(user_id: int, commit: bool = True):
     assert db is not None
     p = await get_player(user_id)
     for quest in QUESTS:
@@ -495,7 +556,8 @@ async def refresh_quest_progress(user_id: int):
             "completed=MAX(quest_progress.completed, excluded.completed)",
             (user_id, quest["id"], progress, int(progress >= quest["target"])),
         )
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def quest_view(user_id: int):
@@ -520,33 +582,69 @@ async def quest_view(user_id: int):
 
 async def claim_quest_reward(user_id: int, quest_id: str) -> str:
     assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        return "Invalid player account."
+    if not isinstance(quest_id,str):
+        return "That quest does not exist."
     quest = next((q for q in QUESTS if q["id"] == quest_id), None)
     if not quest:
         return "That quest does not exist."
-    async with player_locks[user_id]:
-        await refresh_quest_progress(user_id)
-        cur = await db.execute(
-            "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
-            (user_id, quest_id),
-        )
-        state = await cur.fetchone()
-        if not state or not state["completed"]:
-            return "This quest is not complete yet."
-        if state["claimed"]:
-            return "You have already claimed this quest reward."
-        await db.execute(
-            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
-            (quest["coins"], quest["potions"], user_id),
-        )
-        await db.execute(
-            "UPDATE quest_progress SET claimed=1 WHERE user_id=? AND quest_id=?",
-            (user_id, quest_id),
-        )
-        await db.commit()
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_quest_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            await refresh_quest_progress(user_id, commit=False)
+            cur = await db.execute(
+                "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
+                (user_id, quest_id),
+            )
+            state = await cur.fetchone()
+            if not state or not state["completed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+                else:
+                    await db.rollback()
+                return "This quest is not complete yet."
+            if state["claimed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+                else:
+                    await db.rollback()
+                return "You have already claimed this quest reward."
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+                (quest["coins"], quest["potions"], user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Quest reward wallet update failed.")
+            cur = await db.execute(
+                """UPDATE quest_progress SET claimed=1
+                   WHERE user_id=? AND quest_id=? AND completed=1 AND claimed=0""",
+                (user_id, quest_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Quest reward was already claimed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+        else:
+            await db.commit()
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+            else:
+                await db.rollback()
+        raise
     return f"🎁 <b>{quest['title']}</b> reward claimed: +{quest['coins']} coins and +{quest['potions']} potions."
 
 
-async def refresh_achievement_progress(user_id: int):
+async def refresh_achievement_progress(user_id: int, commit: bool = True):
     assert db is not None
     p = await get_player(user_id)
     cur = await db.execute("SELECT COUNT(*) AS total FROM boss_defeats WHERE user_id=?", (user_id,))
@@ -571,7 +669,8 @@ async def refresh_achievement_progress(user_id: int):
             "completed=MAX(achievement_progress.completed, excluded.completed)",
             (user_id, achievement["id"], progress, int(progress >= achievement["target"])),
         )
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def achievement_view(user_id: int):
@@ -599,29 +698,65 @@ async def achievement_view(user_id: int):
 
 async def claim_achievement_reward(user_id: int, achievement_id: str) -> str:
     assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        return "Invalid player account."
+    if not isinstance(achievement_id,str):
+        return "That achievement does not exist."
     achievement = next((a for a in ACHIEVEMENTS if a["id"] == achievement_id), None)
     if not achievement:
         return "That achievement does not exist."
-    async with player_locks[user_id]:
-        await refresh_achievement_progress(user_id)
-        cur = await db.execute(
-            "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
-            (user_id, achievement_id),
-        )
-        state = await cur.fetchone()
-        if not state or not state["completed"]:
-            return "This achievement is not complete yet."
-        if state["claimed"]:
-            return "You have already claimed this achievement reward."
-        await db.execute(
-            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
-            (achievement["coins"], achievement["potions"], user_id),
-        )
-        await db.execute(
-            "UPDATE achievement_progress SET claimed=1 WHERE user_id=? AND achievement_id=?",
-            (user_id, achievement_id),
-        )
-        await db.commit()
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_achievement_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            await refresh_achievement_progress(user_id, commit=False)
+            cur = await db.execute(
+                "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
+                (user_id, achievement_id),
+            )
+            state = await cur.fetchone()
+            if not state or not state["completed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+                else:
+                    await db.rollback()
+                return "This achievement is not complete yet."
+            if state["claimed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+                else:
+                    await db.rollback()
+                return "You have already claimed this achievement reward."
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+                (achievement["coins"], achievement["potions"], user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Achievement reward wallet update failed.")
+            cur = await db.execute(
+                """UPDATE achievement_progress SET claimed=1
+                   WHERE user_id=? AND achievement_id=? AND completed=1 AND claimed=0""",
+                (user_id, achievement_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Achievement reward was already claimed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+        else:
+            await db.commit()
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+            else:
+                await db.rollback()
+        raise
     return f"🏅 <b>{achievement['title']}</b> reward claimed: +{achievement['coins']} coins and +{achievement['potions']} potions."
 
 
@@ -748,6 +883,70 @@ def trade_keyboard(trade_id: int):
     ]])
 
 
+class TradeSettlementConflict(Exception):
+    """Raised when a trade participant cannot be updated during settlement."""
+
+
+async def settle_trade_assets(db, trade, initiator, partner):
+    """Apply both sides of a trade atomically; never leave a one-sided transfer."""
+    savepoint = "trade_settlement"
+    await db.execute(f"SAVEPOINT {savepoint}")
+    try:
+        initiator_weapon = (
+            (trade["partner_weapon"], trade["partner_weapon_attack"])
+            if trade["initiator_weapon"] else (initiator["weapon"], initiator["weapon_attack"])
+        )
+        partner_weapon = (
+            (trade["initiator_weapon"], trade["initiator_weapon_attack"])
+            if trade["partner_weapon"] else (partner["weapon"], partner["weapon_attack"])
+        )
+        initiator_armor = (
+            (trade["partner_armor"], trade["partner_armor_defense"])
+            if trade["initiator_armor"] else (initiator["armor"], initiator["armor_defense"])
+        )
+        partner_armor = (
+            (trade["initiator_armor"], trade["initiator_armor_defense"])
+            if trade["partner_armor"] else (partner["armor"], partner["armor_defense"])
+        )
+        cur = await db.execute(
+            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
+             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
+        )
+        if cur.rowcount != 1:
+            raise TradeSettlementConflict("The initiating player account could not be updated.")
+        cur = await db.execute(
+            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
+             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
+        )
+        if cur.rowcount != 1:
+            raise TradeSettlementConflict("The receiving player account could not be updated.")
+        cur = await db.execute(
+            "UPDATE trades SET status='completed' WHERE trade_id=? AND status='open'",
+            (trade["trade_id"],),
+        )
+        if cur.rowcount != 1:
+            raise TradeSettlementConflict("The trade is no longer open for settlement.")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        return True
+    except TradeSettlementConflict:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        await db.execute(
+            """UPDATE trades SET initiator_confirmed=0,partner_confirmed=0
+               WHERE trade_id=? AND status='open'""",
+            (trade["trade_id"],),
+        )
+        return False
+    except Exception:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        raise
+
+
 async def trade_summary(trade):
     initiator = await get_player(trade["initiator_id"])
     partner = await get_player(trade["partner_id"])
@@ -770,6 +969,7 @@ async def create_trade(message: Message):
         await message.answer("Reply to another player's message in a group, then send /trade.")
         return
     initiator_id = message.from_user.id
+    await expire_stale_trades()
     partner_id = message.reply_to_message.from_user.id
     if initiator_id == partner_id or message.reply_to_message.from_user.is_bot:
         await message.answer("Choose another human player.")
@@ -803,6 +1003,7 @@ async def create_trade(message: Message):
 
 @dp.callback_query(F.data.startswith("trade_accept:"))
 async def accept_trade(call: CallbackQuery):
+    await expire_stale_trades()
     trade_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
@@ -824,6 +1025,7 @@ async def accept_trade(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("trade_decline:"))
 async def decline_trade(call: CallbackQuery):
+    await expire_stale_trades()
     trade_id = int(call.data.split(":", 1)[1])
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
@@ -845,6 +1047,7 @@ async def set_trade_offer(message: Message):
         await message.answer("Usage: /offer trade_id coins potions [weapon_name|none] [armor_name|none]. Use underscores for spaces.")
         return
     trade_id, coins, potions = map(int, message.command[1:4])
+    await expire_stale_trades()
     weapon_token = message.command[4] if len(message.command) >= 5 else "none"
     armor_token = message.command[5] if len(message.command) >= 6 else "none"
     weapon = None if weapon_token.lower() == "none" else weapon_token.replace("_", " ")
@@ -892,6 +1095,7 @@ async def confirm_trade(message: Message):
         await message.answer("Usage: <code>/confirmtrade trade_id</code>.")
         return
     trade_id = int(message.command[1])
+    await expire_stale_trades()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] != "open":
@@ -931,24 +1135,14 @@ async def confirm_trade(message: Message):
             await db.commit()
             await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
             return
-        initiator_weapon = (trade["partner_weapon"], trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"], initiator["weapon_attack"])
-        partner_weapon = (trade["initiator_weapon"], trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"], partner["weapon_attack"])
-        initiator_armor = (trade["partner_armor"], trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"], initiator["armor_defense"])
-        partner_armor = (trade["initiator_armor"], trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"], partner["armor_defense"])
-        await db.execute(
-            "UPDATE players SET coins=coins-?+?,potions=potions-?+?,weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?",
-            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
-        )
-        await db.execute(
-            "UPDATE players SET coins=coins-?+?,potions=potions-?+?,weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?",
-            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
-        )
-        await db.execute("UPDATE trades SET status='completed' WHERE trade_id=?", (trade_id,))
+        if not await settle_trade_assets(db, trade, initiator, partner):
+            await db.commit()
+            await message.answer("Trade paused because an account changed during settlement. Both offers remain intact; confirm again after checking the trade.")
+            return
         await db.commit()
         if trade["chat_id"] < 0:
             try:
-                await record_group_activity(db,trade["chat_id"],"trade")
-                await award_group_xp(db,trade["chat_id"],10)
+                await record_group_activity_reward(db,trade["chat_id"],"trade",10)
             except GroupError:
                 pass
         await record_player_guild_activity(trade["initiator_id"], "trade")
@@ -964,6 +1158,7 @@ async def cancel_trade(message: Message):
         await message.answer("Usage: <code>/canceltrade trade_id</code>.")
         return
     trade_id = int(message.command[1])
+    await expire_stale_trades()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] not in {"pending", "open"}:
@@ -1193,15 +1388,21 @@ async def party_command(message: Message):
             if existing_battle and existing_battle["status"] == "active":
                 raise PartyError("Your party already has an active co-op encounter.")
             try:
-                await consume_stamina(db, user_id, EXPLORE_COST)
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
+                    battle_id = await start_party_battle(
+                        db, party["party_id"], user_id, monster_level, monster["name"],
+                        monster["hp"] * max(2, len(members) * 2),
+                    )
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    raise
             except StaminaError as exc:
                 state = await get_stamina(db, user_id)
                 await message.answer(escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}.")
                 return
-            battle_id = await start_party_battle(
-                db, party["party_id"], user_id, monster_level, monster["name"],
-                monster["hp"] * max(2, len(members) * 2),
-            )
             notice = (
                 f"🧭 <b>Party expedition #{battle_id}</b>\\n"
                 f"{escape(monster['name'])} · Lv.{monster_level} · World {world_id}\\n"
@@ -1408,8 +1609,7 @@ async def group_command(message: Message):
         if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
         try:
             if not await verify_live_group_admin(message): raise GroupError("Your Telegram administrator role is no longer active.")
-            coins,xp=await claim_group_mission(db,cid,uid,args[2].lower())
-            await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(coins,uid)); await db.commit()
+            coins,xp=await claim_group_mission_reward(db,cid,uid,args[2].lower())
             await message.answer(f"🎁 Claimed {coins} coins and {xp} group XP.")
         except GroupError as exc: await message.answer(escape(str(exc)))
         return
@@ -1425,9 +1625,7 @@ async def group_command(message: Message):
             return
         if sub=="attack":
             try:
-                result=await attack_group_raid(db,cid,uid,max(1,player["level"]*5+player["weapon_attack"]))
-                await record_group_activity(db,cid,"boss" if result["status"]=="won" else "battle")
-                await award_group_xp(db,cid,100 if result["status"]=="won" else 10)
+                result=await attack_group_raid_and_reward(db,cid,uid,max(1,player["level"]*5+player["weapon_attack"]))
                 await message.answer(f"⚔️ {escape(player['username'] or 'Adventurer')} deals {result['damage']} damage.\n{escape(result['boss_name'])}: {result['hp']}/{result['max_hp']} HP\n"+("🏆 <b>RAID CLEARED!</b>" if result["status"]=="won" else "The raid continues."))
             except GroupError as exc: await message.answer(escape(str(exc)))
             return
@@ -1494,9 +1692,6 @@ async def guild_command(message: Message):
     membership = await cur.fetchone()
 
     if action == "create":
-        if membership:
-            await message.answer("You are already in a guild. Leave it before creating another.")
-            return
         if len(args) < 3:
             await message.answer("Usage: <code>/guild create Guild Name</code> (3–20 characters).")
             return
@@ -1504,69 +1699,46 @@ async def guild_command(message: Message):
         if not 3 <= len(name) <= 20 or not re.fullmatch(r"[A-Za-z0-9 _-]+", name):
             await message.answer("Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.")
             return
-        debit = await db.execute("UPDATE players SET coins=coins-100 WHERE user_id=? AND coins>=100", (user_id,))
-        if debit.rowcount == 0:
-            await message.answer("Creating a guild costs 100 coins.")
-            return
         try:
-            cur = await db.execute("INSERT INTO guilds(name, leader_id) VALUES (?, ?)", (name, user_id))
-        except aiosqlite.IntegrityError:
-            await db.rollback()
-            await message.answer("That guild name is already taken.")
+            guild_id = await create_guild(db,user_id,name)
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        guild_id = cur.lastrowid
-        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'leader')", (user_id, guild_id))
-        await db.commit()
         await message.answer(f"🏰 Guild <b>{escape(name)}</b> created! Guild ID: <code>{guild_id}</code>.")
         return
 
     if action == "join":
-        if membership:
-            await message.answer("You are already in a guild.")
-            return
         if len(args) < 3 or not args[2].isdigit():
             await message.answer("Usage: <code>/guild join guild_id</code>.")
             return
-        guild_id = int(args[2])
-        cur = await db.execute("SELECT name FROM guilds WHERE guild_id=?", (guild_id,))
-        guild = await cur.fetchone()
-        if not guild:
-            await message.answer("Guild not found.")
+        try:
+            guild_name = await join_guild(db,user_id,int(args[2]))
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (guild_id,))
-        if (await cur.fetchone())["total"] >= 20:
-            await message.answer("This guild has reached its 20-member limit.")
-            return
-        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'member')", (user_id, guild_id))
-        await db.commit()
-        await message.answer(f"✅ You joined <b>{escape(guild['name'])}</b>.")
+        await message.answer(f"✅ You joined <b>{escape(guild_name)}</b>.")
         return
 
     if action == "leave":
-        if not membership:
-            await message.answer("You are not in a guild.")
+        try:
+            disbanded = await leave_guild(db,user_id)
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        if membership["role"] == "leader":
-            cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
-            if (await cur.fetchone())["total"] > 1:
-                await message.answer("Guild leaders cannot leave while members remain. Use /guild disband; leadership transfer is not available yet.")
-                return
-            await db.execute("DELETE FROM guilds WHERE guild_id=?", (membership["guild_id"],))
-        await db.execute("DELETE FROM guild_members WHERE user_id=?", (user_id,))
-        await db.commit()
-        await message.answer("You left your guild.")
+        await message.answer(
+            "You left your guild; the empty guild was cleaned up."
+            if disbanded else "You left your guild."
+        )
         return
 
     if action == "disband":
-        if not membership or membership["role"] != "leader":
-            await message.answer("Only a guild leader can disband a guild.")
+        try:
+            await disband_guild(db,membership["guild_id"] if membership else None,user_id)
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        await db.execute("DELETE FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
-        await db.execute("DELETE FROM guilds WHERE guild_id=?", (membership["guild_id"],))
-        await db.commit()
         await message.answer("🏰 Your guild has been disbanded.")
         return
-
 
     if action == "invite":
         if not membership or len(args) < 3 or not args[2].isdigit():
@@ -1827,21 +1999,37 @@ async def create_duel(message: Message):
 
 @dp.callback_query(F.data.startswith("duel_accept:"))
 async def accept_duel(call: CallbackQuery):
-    duel_id = int(call.data.split(":", 1)[1])
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "pending":
-        await call.answer("This duel invitation is no longer active.", show_alert=True)
+    duel_id_text = call.data.split(":", 1)[1]
+    if not duel_id_text.isdigit():
+        await call.answer("Invalid duel invitation.", show_alert=True)
         return
-    if call.from_user.id != duel["opponent_id"]:
-        await call.answer("Only the challenged player can accept.", show_alert=True)
-        return
-    await call.answer()
-    await db.execute(
-        "UPDATE duels SET status='active', turn_user_id=challenger_id WHERE duel_id=? AND status='pending'",
-        (duel_id,),
-    )
-    await db.commit()
+    duel_id = int(duel_id_text)
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "pending":
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        if call.from_user.id != duel["opponent_id"]:
+            await db.rollback()
+            await call.answer("Only the challenged player can accept.", show_alert=True)
+            return
+        await call.answer()
+        cur = await db.execute(
+            """UPDATE duels SET status='active',turn_user_id=challenger_id
+               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+            (duel_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     await call.message.edit_text(await duel_text(duel), reply_markup=duel_keyboard(duel_id))
@@ -1849,84 +2037,137 @@ async def accept_duel(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("duel_decline:"))
 async def decline_duel(call: CallbackQuery):
-    duel_id = int(call.data.split(":", 1)[1])
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "pending":
-        await call.answer("This duel invitation is no longer active.", show_alert=True)
+    duel_id_text = call.data.split(":", 1)[1]
+    if not duel_id_text.isdigit():
+        await call.answer("Invalid duel invitation.", show_alert=True)
         return
-    if call.from_user.id != duel["opponent_id"]:
-        await call.answer("Only the challenged player can decline.", show_alert=True)
-        return
-    await call.answer()
-    await db.execute("UPDATE duels SET status='declined' WHERE duel_id=?", (duel_id,))
-    await db.commit()
+    duel_id = int(duel_id_text)
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "pending":
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        if call.from_user.id != duel["opponent_id"]:
+            await db.rollback()
+            await call.answer("Only the challenged player can decline.", show_alert=True)
+            return
+        await call.answer()
+        cur = await db.execute(
+            """UPDATE duels SET status='declined'
+               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+            (duel_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     await call.message.edit_text("✋ Duel declined.")
 
 
 @dp.callback_query(F.data.startswith("duel_action:"))
 async def duel_action(call: CallbackQuery):
     _, action, duel_id_text = call.data.split(":", 2)
-    duel_id = int(duel_id_text)
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "active":
-        await call.answer("This duel is not active.", show_alert=True)
-        return
-    user_id = call.from_user.id
-    if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
-        await call.answer("You are not part of this duel.", show_alert=True)
-        return
-    if duel["turn_user_id"] != user_id:
-        await call.answer("Wait for your turn.", show_alert=True)
-        return
-    if action not in {"attack", "skill", "surrender"}:
+    if not duel_id_text.isdigit() or action not in {"attack", "skill", "surrender"}:
         await call.answer("Unknown duel action.", show_alert=True)
         return
-    await call.answer()
-    if action == "surrender":
-        winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
-        loser_id = user_id
-        await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (winner_id, duel_id))
-        await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
-        await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
-        await db.commit()
-    else:
-        attacker_id = user_id
-        defender_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
-        attacker = await get_player(attacker_id)
-        defender = await get_player(defender_id)
-        attacker_class = HERO_CLASSES.get(attacker["hero_class"], HERO_CLASSES["Knight"])
-        defender_class = HERO_CLASSES.get(defender["hero_class"], HERO_CLASSES["Knight"])
-        base = attacker["level"] * 8 + attacker_class["attack"] + attacker["weapon_attack"]
-        if action == "skill":
-            base = int(base * 1.8)
-        damage = max(5, base + random.randint(0, 12) - defender["armor_defense"] - defender_class["defense"])
-        if user_id == duel["challenger_id"]:
-            new_hp = max(0, duel["opponent_hp"] - damage)
-            await db.execute("UPDATE duels SET opponent_hp=? WHERE duel_id=?", (new_hp, duel_id))
+    duel_id = int(duel_id_text)
+    user_id = call.from_user.id
+
+    # Serialize the read/validate/write sequence across processes sharing SQLite.
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "active":
+            await db.rollback()
+            await call.answer("This duel is not active.", show_alert=True)
+            return
+        if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
+            await db.rollback()
+            await call.answer("You are not part of this duel.", show_alert=True)
+            return
+        if duel["turn_user_id"] != user_id:
+            await db.rollback()
+            await call.answer("Wait for your turn.", show_alert=True)
+            return
+
+        await call.answer()
+        if action == "surrender":
+            winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+            loser_id = user_id
+            cur = await db.execute(
+                """UPDATE duels SET status='finished',winner_id=?,turn_user_id=NULL
+                   WHERE duel_id=? AND status='active' AND turn_user_id=?""",
+                (winner_id, duel_id, user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel state changed before surrender could be settled.")
+            cur = await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel winner account could not be updated.")
+            cur = await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel loser account could not be updated.")
         else:
-            new_hp = max(0, duel["challenger_hp"] - damage)
-            await db.execute("UPDATE duels SET challenger_hp=? WHERE duel_id=?", (new_hp, duel_id))
-        if new_hp == 0:
-            await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (user_id, duel_id))
-            await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (user_id,))
-            await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (defender_id,))
-        else:
-            await db.execute("UPDATE duels SET turn_user_id=? WHERE duel_id=?", (defender_id, duel_id))
+            attacker_id = user_id
+            defender_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+            attacker = await get_player(attacker_id)
+            defender = await get_player(defender_id)
+            attacker_class = HERO_CLASSES.get(attacker["hero_class"], HERO_CLASSES["Knight"])
+            defender_class = HERO_CLASSES.get(defender["hero_class"], HERO_CLASSES["Knight"])
+            base = attacker["level"] * 8 + attacker_class["attack"] + attacker["weapon_attack"]
+            if action == "skill":
+                base = int(base * 1.8)
+            damage = max(5, base + random.randint(0, 12) - defender["armor_defense"] - defender_class["defense"])
+            if user_id == duel["challenger_id"]:
+                hp_column = "opponent_hp"
+                previous_hp = duel["opponent_hp"]
+            else:
+                hp_column = "challenger_hp"
+                previous_hp = duel["challenger_hp"]
+            new_hp = max(0, previous_hp - damage)
+            if new_hp == 0:
+                query = f"""UPDATE duels SET {hp_column}=?,status='finished',winner_id=?,turn_user_id=NULL
+                            WHERE duel_id=? AND status='active' AND turn_user_id=? AND {hp_column}=?"""
+                params = (new_hp, user_id, duel_id, user_id, previous_hp)
+            else:
+                query = f"""UPDATE duels SET {hp_column}=?,turn_user_id=?
+                            WHERE duel_id=? AND status='active' AND turn_user_id=? AND {hp_column}=?"""
+                params = (new_hp, defender_id, duel_id, user_id, previous_hp)
+            cur = await db.execute(query, params)
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel state changed before the attack could be settled.")
+            if new_hp == 0:
+                cur = await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (user_id,))
+                if cur.rowcount != 1:
+                    raise RuntimeError("Duel winner account could not be updated.")
+                cur = await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (defender_id,))
+                if cur.rowcount != 1:
+                    raise RuntimeError("Duel loser account could not be updated.")
         await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
+
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     if duel["status"] == "finished" and duel["chat_id"] < 0 and duel["winner_id"]:
         try:
-            await record_group_activity(db,duel["chat_id"],"battle")
-            await award_group_xp(db,duel["chat_id"],20)
+            await record_group_activity_reward(db,duel["chat_id"],"battle",20)
         except GroupError:
             pass
     war_result = None
     if duel["status"] == "finished" and duel["winner_id"]:
         await record_player_guild_activity(duel["winner_id"], "battle")
-        war_result = await record_guild_war_duel(db, duel["challenger_id"], duel["opponent_id"], duel["winner_id"])
+        war_result = await record_guild_war_duel(db, duel["challenger_id"], duel["opponent_id"], duel["winner_id"], duel["duel_id"])
     duel_message = await duel_text(duel)
     if war_result:
         duel_message += "\n\n⚔️ Guild War score: " + str(war_result["challenger_score"]) + " - " + str(war_result["target_score"])
@@ -2215,10 +2456,12 @@ async def admin_command(message: Message):
         if not parts[0].isdigit() or len(parts)<2:
             await message.answer("Usage: /admin ban PLAYER_ID reason"); return
         try:
-            await ban_player(db,message.from_user.id,int(parts[0]),parts[1])
-            await record_admin_action(db,message.from_user.id,"player_ban",int(parts[0]),parts[1])
+            await perform_audited_action(
+                db,message.from_user.id,"player_ban",int(parts[0]),
+                lambda: ban_player(db,message.from_user.id,int(parts[0]),parts[1]),parts[1],
+            )
             await message.answer(f"⛔ Player <code>{parts[0]}</code> has been suspended.")
-        except ModerationError as exc:
+        except (ModerationError, AdminError) as exc:
             await message.answer(escape(str(exc)))
         return
     if action=="unban":
@@ -2226,10 +2469,12 @@ async def admin_command(message: Message):
             await message.answer("Usage: /admin unban PLAYER_ID"); return
         target=int(args[2].strip())
         try:
-            await unban_player(db,message.from_user.id,target)
-            await record_admin_action(db,message.from_user.id,"player_unban",target)
+            await perform_audited_action(
+                db,message.from_user.id,"player_unban",target,
+                lambda: unban_player(db,message.from_user.id,target),
+            )
             await message.answer(f"✅ Player <code>{target}</code> has been reinstated.")
-        except ModerationError as exc:
+        except (ModerationError, AdminError) as exc:
             await message.answer(escape(str(exc)))
         return
     if action=="reports":
@@ -2247,10 +2492,13 @@ async def admin_command(message: Message):
         if len(parts)<2 or not parts[0].isdigit():
             await message.answer("Usage: /admin resolve REPORT_ID reviewed|dismissed [note]"); return
         try:
-            await resolve_player_report(db,int(parts[0]),message.from_user.id,parts[1].lower(),parts[2] if len(parts)>2 else "")
-            await record_admin_action(db,message.from_user.id,"report_"+parts[1].lower(),int(parts[0]),parts[2] if len(parts)>2 else "")
+            await perform_audited_action(
+                db,message.from_user.id,"report_"+parts[1].lower(),int(parts[0]),
+                lambda: resolve_player_report(db,int(parts[0]),message.from_user.id,parts[1].lower(),parts[2] if len(parts)>2 else ""),
+                parts[2] if len(parts)>2 else "",
+            )
             await message.answer("✅ Report resolved.")
-        except ReportError as exc:
+        except (ReportError, AdminError) as exc:
             await message.answer(escape(str(exc)))
         return
     if action=="security":
@@ -3012,48 +3260,87 @@ async def cb_shop(call: CallbackQuery):
     await call.message.answer("🛒 <b>Adventurer's Shop</b>\nChoose an item to buy:", reply_markup=shop_keyboard())
 
 
+async def buy_shop_item(user_id: int, item_id: str):
+    """Purchase a coin-shop item atomically, including its inventory effect."""
+    assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise ShopError("Invalid player account.")
+    item=SHOP_ITEMS.get(item_id) if isinstance(item_id,str) else None
+    if not item:
+        raise ShopError("That shop item does not exist.")
+    nested=db.in_transaction
+    savepoint="coin_shop_purchase"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        player=await get_player(user_id)
+        if not player["class_selected"]:
+            raise ShopError("Choose your hero class first.")
+        cur=await db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
+        if await cur.fetchone():
+            raise ShopError("Finish or escape your current battle before shopping.")
+        if player["level"]<item["level"]:
+            raise ShopError(f"You need level {item['level']} to buy {item['name']}.")
+        if player["coins"]<item["cost"]:
+            raise ShopError(f"You need {item['cost']} coins for {item['name']}.")
+        if item["type"]=="weapon" and item["bonus"]<=player["weapon_attack"]:
+            raise ShopError("Your current weapon is already as strong or stronger.")
+        if item["type"]=="armor" and item["bonus"]<=player["armor_defense"]:
+            raise ShopError("Your current armor is already as strong or stronger.")
+        debit=await db.execute(
+            "UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?",
+            (item["cost"],user_id,item["cost"]),
+        )
+        if debit.rowcount!=1:
+            raise ShopError("You no longer have enough coins for this purchase.")
+        if item["type"]=="weapon":
+            effect=await db.execute(
+                "UPDATE players SET weapon=?,weapon_attack=? WHERE user_id=?",
+                (item["name"],item["bonus"],user_id),
+            )
+        elif item["type"]=="armor":
+            effect=await db.execute(
+                "UPDATE players SET armor=?,armor_defense=? WHERE user_id=?",
+                (item["name"],item["bonus"],user_id),
+            )
+        else:
+            effect=await db.execute(
+                "UPDATE players SET potions=potions+? WHERE user_id=?",
+                (item["bonus"],user_id),
+            )
+        if effect.rowcount!=1:
+            raise ShopError("The item could not be added to your inventory. No coins were deducted.")
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+        return item
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
+
+
+class ShopError(ValueError):
+    pass
+
+
 @dp.callback_query(F.data.startswith("buy:"))
 async def cb_buy_item(call: CallbackQuery):
     await call.answer()
     user_id = call.from_user.id
     item_id = call.data.split(":", 1)[1]
-    item = SHOP_ITEMS.get(item_id)
-    if not item:
-        await call.message.answer("That shop item does not exist.")
+    try:
+        item = await buy_shop_item(user_id, item_id)
+    except ShopError as exc:
+        await call.message.answer(str(exc))
         return
-    p = await get_player(user_id, call.from_user.username)
-    if not p["class_selected"]:
-        await call.message.answer("Choose your hero class first.")
-        return
-    active = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
-    if await active.fetchone():
-        await call.message.answer("Finish or escape your current battle before shopping.")
-        return
-    if p["level"] < item["level"]:
-        await call.message.answer(f"🔒 You need level {item['level']} to buy {item['name']}.")
-        return
-    if p["coins"] < item["cost"]:
-        await call.message.answer(f"🪙 You need {item['cost']} coins for {item['name']}.")
-        return
-    if item["type"] == "weapon" and item["bonus"] <= p["weapon_attack"]:
-        await call.message.answer("Your current weapon is already as strong or stronger.")
-        return
-    if item["type"] == "armor" and item["bonus"] <= p["armor_defense"]:
-        await call.message.answer("Your current armor is already as strong or stronger.")
-        return
-    debit = await db.execute("UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?", (item["cost"], user_id, item["cost"]))
-    if debit.rowcount == 0:
-        await call.message.answer("🪙 You no longer have enough coins for this purchase.")
-        return
-    if item["type"] == "weapon":
-        await db.execute("UPDATE players SET weapon=?, weapon_attack=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
-    elif item["type"] == "armor":
-        await db.execute("UPDATE players SET armor=?, armor_defense=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
-    else:
-        await db.execute("UPDATE players SET potions=potions+? WHERE user_id=?", (item["bonus"], user_id))
-    await db.commit()
     await call.message.answer(f"✅ Purchased <b>{item['name']}</b> for {item['cost']} coins.")
-
 
 @dp.callback_query(F.data == "profile")
 async def cb_profile(call: CallbackQuery):
@@ -3156,7 +3443,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
                 await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
                 return
             try:
-                await consume_mana(db, user_id, SKILL_MANA_COST)
+                await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
             except ManaError as exc:
                 await call.message.answer("🔮 " + escape(str(exc)))
                 return
@@ -3191,9 +3478,8 @@ async def _battle_action_unlocked(call: CallbackQuery):
         regen = max(1, m["hp"] // 50)
         new_enemy_hp = min(m["hp"], new_enemy_hp + regen)
     if new_enemy_hp == 0:
-        await restore_mana(db, user_id, TURN_MANA_REGEN)
+        await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
-        await db.commit()
         result = await finish_battle(user_id, True)
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
@@ -3231,12 +3517,12 @@ async def _battle_action_unlocked(call: CallbackQuery):
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
-    await db.commit()
-    await restore_mana(db, user_id, TURN_MANA_REGEN)
+    await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
+    await db.commit()
     enemy_action = (
         f"💨 You evade {m['name']}'s attack with your {p['hero_class']} speed!"
         if evaded else (
@@ -3559,26 +3845,31 @@ async def api_explore(request: web.Request):
             battle_monster = scale_evolved_monster(monster) if evolved else monster
             if elite:
                 battle_monster = scale_elite_monster(battle_monster)
-            # The Mini App must pay the same exploration cost as Telegram /explore.
+            # Keep stamina debit, battle creation, and discovery in one transaction.
             # Existing battles are checked above, so refreshing the active battle is free.
             try:
-                await consume_stamina(db, user_id, EXPLORE_COST)
+                await db.execute("BEGIN IMMEDIATE")
+                await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
+                await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
+                await db.execute(
+                    "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
+                )
+                await db.execute(
+                    "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+                    (user_id, monster_level),
+                )
+                await db.commit()
             except StaminaError as exc:
+                await db.rollback()
                 stamina_state = await get_stamina(db, user_id)
                 return web.json_response(
                     {"error": str(exc), "stamina": stamina_state},
                     status=409,
                 )
-            await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
-            await db.execute(
-                "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
-                (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
-            )
-            await db.execute(
-                "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
-                (user_id, monster_level),
-            )
-            await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
     return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
 
 
@@ -3789,19 +4080,35 @@ async def api_premium_shop(request: web.Request):
 
 
 async def expire_stale_trades():
-    """Expire abandoned invitations and open offers after 24 hours."""
+    """Expire abandoned trades without committing a transaction owned by the caller."""
     if db is None:
         return 0
-    cur = await db.execute(
-        """UPDATE trades
-           SET status='expired',initiator_confirmed=0,partner_confirmed=0
-           WHERE status IN ('pending','open')
-             AND datetime(created_at) <= datetime('now','-24 hours')"""
-    )
-    expired_count = cur.rowcount
-    if expired_count:
-        await db.commit()
-    return expired_count
+    nested = db.in_transaction
+    savepoint = "expire_stale_trades"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            """UPDATE trades
+               SET status='expired',initiator_confirmed=0,partner_confirmed=0
+               WHERE status IN ('pending','open')
+                 AND datetime(created_at) <= datetime('now','-24 hours')"""
+        )
+        expired_count = cur.rowcount
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+        return expired_count
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
 
 
 async def api_social(request: web.Request):
@@ -4025,26 +4332,11 @@ async def api_social(request: web.Request):
                             return web.json_response({
                                 "error": "Trade paused because an offered item or balance changed. Update offers and confirm again."
                             }, status=409)
-                        initiator_weapon = (trade["partner_weapon"],trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"],initiator["weapon_attack"])
-                        partner_weapon = (trade["initiator_weapon"],trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"],partner["weapon_attack"])
-                        initiator_armor = (trade["partner_armor"],trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"],initiator["armor_defense"])
-                        partner_armor = (trade["initiator_armor"],trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"],partner["armor_defense"])
-                        await db.execute(
-                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
-                            (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
-                             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
-                        )
-                        await db.execute(
-                            """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-                               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
-                            (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
-                             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
-                        )
-                        await db.execute(
-                            "UPDATE trades SET status='completed' WHERE trade_id=? AND status='open'",
-                            (payload["trade_id"],),
-                        )
+                        if not await settle_trade_assets(db, trade, initiator, partner):
+                            await db.commit()
+                            return web.json_response({
+                                "error": "Trade settlement was interrupted safely. No items or currency were transferred; both players must confirm again."
+                            }, status=409)
                         result = {"trade_id":payload["trade_id"],"status":"completed"}
                     else:
                         result = {"trade_id":payload["trade_id"],"status":"open","waiting_for_other_player":True}
@@ -4160,136 +4452,140 @@ async def api_action(request: web.Request):
         return web.json_response({"error": "Unknown battle action."}, status=400)
     user_id = user["id"]
     async with db_lock:
-      async with player_locks[user_id]:
-        cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
-        battle = await cur.fetchone()
-        if not battle:
-            return web.json_response({"error": "There is no active battle."}, status=409)
-        p = await get_player(user_id, user.get("username"))
-        monster = build_battle_monster(battle)
-        class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
-        if action == "flee":
-            message = await finish_battle(user_id, False, escaped=True)
-            return web.json_response({"message": message, "state": await miniapp_state(user)})
-        if action == "potion":
-            if p["potions"] <= 0:
-                return web.json_response({"error": "You have no health potions."}, status=409)
-            heal_amount = min(80, p["max_hp"] - p["hp"])
-            if heal_amount <= 0:
-                return web.json_response({"error": "Your HP is already full."}, status=409)
-            await db.execute(
-                "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
-                (heal_amount, user_id),
-            )
-            damage = 0
-            action_line = f"You recover {heal_amount} HP."
-        else:
-            if action == "skill":
-                if p["skill_cd"] > 0:
-                    return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
-                try:
-                    await consume_mana(db, user_id, SKILL_MANA_COST)
-                except ManaError as exc:
-                    return web.json_response({"error": str(exc)}, status=409)
-                await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-            damage, damage_effects = resolve_player_attack(
-                action,
-                player_level=p["level"],
-                class_attack=class_stats["attack"],
-                weapon_attack=p["weapon_attack"],
-                monster_defense=monster["defense"],
-                class_element=class_stats["element"],
-                monster_element=monster["element"],
-                monster_weakness=monster["weakness"],
-                trait_effect=monster["trait_effect"],
-                next_turn=battle["turn_count"] + 1,
-                random_bonus=random.randint(5, 18) if action == "attack" else 0,
-            )
-            if action == "skill":
-                action_line = f"{class_stats['skill']} deals {damage} damage."
-            else:
-                action_line = f"You strike for {damage} damage."
-            for effect in damage_effects:
-                action_line += {
-                    "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
-                    "resisted": f" {monster['element']} resists your matching element.",
-                    "armored": " Its armor absorbs part of the hit.",
-                    "shield": " Its shield blocks part of this strike.",
-                }[effect]
-        new_enemy_hp = max(0, battle["monster_hp"] - damage)
-        turn_count = battle["turn_count"] + 1
-        if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
-        if new_enemy_hp == 0:
-            await restore_mana(db, user_id, TURN_MANA_REGEN)
-            await db.execute(
-                "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-                (user_id,),
-            )
-            await db.commit()
-            message = await finish_battle(user_id, True)
-            return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
-        p = await get_player(user_id)
-        combat_result = resolve_enemy_turn(
-            trait_effect=monster["trait_effect"],
-            turn_count=turn_count,
-            monster_hp_before=battle["monster_hp"],
-            monster_hp_after_action=new_enemy_hp,
-            monster_max_hp=monster["hp"],
-            monster_attack_power=monster["attack_power"],
-            monster_speed=monster["speed"],
-            player_hp=p["hp"],
-            player_max_hp=p["max_hp"],
-            player_level=p["level"],
-            armor_defense=p["armor_defense"],
-            class_defense=class_stats["defense"],
-            class_speed=class_stats["speed"],
-            player_damage=damage,
-            action=action,
-            random_bonus=random.randint(-3, 6),
-            dodge_roll=random.randint(1, 100),
-            is_boss=monster["boss"],
-            boss_name=monster["name"],
-            hero_class=p["hero_class"],
-        )
-        new_enemy_hp = combat_result["monster_hp"]
-        enemy_damage = combat_result["enemy_damage"]
-        evaded = combat_result["evaded"]
-        special_turn = combat_result["special_turn"]
-        reflect_damage = combat_result["reflect_damage"]
-        poison_damage = combat_result["poison_damage"]
-        new_hp = combat_result["player_hp"]
-        effect_notes = combat_result["effect_notes"]
-        effect_text = " " + " ".join(effect_notes) if effect_notes else ""
-        await db.execute(
-            "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
-            (new_enemy_hp, turn_count, user_id),
-        )
-        await db.execute(
-            "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-            (new_hp, user_id),
-        )
-        await db.commit()
-        await restore_mana(db, user_id, TURN_MANA_REGEN)
-        if new_hp == 0:
-            message = await finish_battle(user_id, False)
-            return web.json_response({
-                "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
-                "state": await miniapp_state(user),
-            })
-        enemy_text = (
-            f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
-            if evaded else (
-                f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
-                if special_turn else f"{monster['name']} hits you for {enemy_damage}."
-            )
-        )
-        enemy_text += effect_text
-        return web.json_response({
-            "message": f"{action_line} {enemy_text}",
-            "state": await miniapp_state(user),
-        })
+      try:
+        async with player_locks[user_id]:
+          cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
+          battle = await cur.fetchone()
+          if not battle:
+              return web.json_response({"error": "There is no active battle."}, status=409)
+          p = await get_player(user_id, user.get("username"))
+          monster = build_battle_monster(battle)
+          class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
+          if action == "flee":
+              message = await finish_battle(user_id, False, escaped=True)
+              return web.json_response({"message": message, "state": await miniapp_state(user)})
+          if action == "potion":
+              if p["potions"] <= 0:
+                  return web.json_response({"error": "You have no health potions."}, status=409)
+              heal_amount = min(80, p["max_hp"] - p["hp"])
+              if heal_amount <= 0:
+                  return web.json_response({"error": "Your HP is already full."}, status=409)
+              await db.execute(
+                  "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
+                  (heal_amount, user_id),
+              )
+              damage = 0
+              action_line = f"You recover {heal_amount} HP."
+          else:
+              if action == "skill":
+                  if p["skill_cd"] > 0:
+                      return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+                  try:
+                      await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
+                  except ManaError as exc:
+                      return web.json_response({"error": str(exc)}, status=409)
+                  await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+              damage, damage_effects = resolve_player_attack(
+                  action,
+                  player_level=p["level"],
+                  class_attack=class_stats["attack"],
+                  weapon_attack=p["weapon_attack"],
+                  monster_defense=monster["defense"],
+                  class_element=class_stats["element"],
+                  monster_element=monster["element"],
+                  monster_weakness=monster["weakness"],
+                  trait_effect=monster["trait_effect"],
+                  next_turn=battle["turn_count"] + 1,
+                  random_bonus=random.randint(5, 18) if action == "attack" else 0,
+              )
+              if action == "skill":
+                  action_line = f"{class_stats['skill']} deals {damage} damage."
+              else:
+                  action_line = f"You strike for {damage} damage."
+              for effect in damage_effects:
+                  action_line += {
+                      "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
+                      "resisted": f" {monster['element']} resists your matching element.",
+                      "armored": " Its armor absorbs part of the hit.",
+                      "shield": " Its shield blocks part of this strike.",
+                  }[effect]
+          new_enemy_hp = max(0, battle["monster_hp"] - damage)
+          turn_count = battle["turn_count"] + 1
+          if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
+              new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
+          if new_enemy_hp == 0:
+              await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
+              await db.execute(
+                  "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+                  (user_id,),
+              )
+              message = await finish_battle(user_id, True)
+              return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
+          p = await get_player(user_id)
+          combat_result = resolve_enemy_turn(
+              trait_effect=monster["trait_effect"],
+              turn_count=turn_count,
+              monster_hp_before=battle["monster_hp"],
+              monster_hp_after_action=new_enemy_hp,
+              monster_max_hp=monster["hp"],
+              monster_attack_power=monster["attack_power"],
+              monster_speed=monster["speed"],
+              player_hp=p["hp"],
+              player_max_hp=p["max_hp"],
+              player_level=p["level"],
+              armor_defense=p["armor_defense"],
+              class_defense=class_stats["defense"],
+              class_speed=class_stats["speed"],
+              player_damage=damage,
+              action=action,
+              random_bonus=random.randint(-3, 6),
+              dodge_roll=random.randint(1, 100),
+              is_boss=monster["boss"],
+              boss_name=monster["name"],
+              hero_class=p["hero_class"],
+          )
+          new_enemy_hp = combat_result["monster_hp"]
+          enemy_damage = combat_result["enemy_damage"]
+          evaded = combat_result["evaded"]
+          special_turn = combat_result["special_turn"]
+          reflect_damage = combat_result["reflect_damage"]
+          poison_damage = combat_result["poison_damage"]
+          new_hp = combat_result["player_hp"]
+          effect_notes = combat_result["effect_notes"]
+          effect_text = " " + " ".join(effect_notes) if effect_notes else ""
+          await db.execute(
+              "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
+              (new_enemy_hp, turn_count, user_id),
+          )
+          await db.execute(
+              "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+              (new_hp, user_id),
+          )
+          await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
+          if new_hp == 0:
+              message = await finish_battle(user_id, False)
+              return web.json_response({
+                  "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
+                  "state": await miniapp_state(user),
+              })
+          await db.commit()
+          enemy_text = (
+              f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
+              if evaded else (
+                  f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
+                  if special_turn else f"{monster['name']} hits you for {enemy_damage}."
+              )
+          )
+          enemy_text += effect_text
+          return web.json_response({
+              "message": f"{action_line} {enemy_text}",
+              "state": await miniapp_state(user),
+          })
 
+      except Exception:
+        if db.in_transaction:
+          await db.rollback()
+        raise
 
 async def database_backup_loop():
     """Take a verified SQLite snapshot on startup and every configured interval."""

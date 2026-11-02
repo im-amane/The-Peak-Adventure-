@@ -65,5 +65,30 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
             await get_evolution_state(self.db, 101, 101)
 
 
+    async def test_record_defeat_preserves_outer_transaction(self):
+        await self.db.execute("INSERT INTO player_monster_mastery(user_id,monster_level,defeats) VALUES(303,9,2)")
+        await self.db.commit()
+        await self.db.execute("UPDATE player_monster_mastery SET defeats=defeats WHERE user_id=303")
+        state = await record_monster_defeat(self.db, 303, 9)
+        self.assertEqual(state["defeats"], 3)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        state = await get_evolution_state(self.db, 303, 9)
+        self.assertEqual(state["defeats"], 2)
+
+    async def test_failed_defeat_record_rolls_back_only_its_savepoint(self):
+        await self.db.execute("CREATE TRIGGER reject_mastery_update BEFORE UPDATE ON player_monster_mastery BEGIN SELECT RAISE(ABORT, 'blocked'); END")
+        await self.db.execute("INSERT INTO player_monster_mastery(user_id,monster_level,defeats) VALUES(404,9,2)")
+        await self.db.commit()
+        await self.db.execute("BEGIN")
+        with self.assertRaises(Exception):
+            await record_monster_defeat(self.db, 404, 9)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.execute("INSERT INTO player_monster_mastery(user_id,monster_level,defeats) VALUES(405,10,1)")
+        await self.db.commit()
+        state = await get_evolution_state(self.db, 404, 9)
+        self.assertEqual(state["defeats"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

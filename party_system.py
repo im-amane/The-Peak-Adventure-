@@ -11,6 +11,7 @@ _DB_WRITE_LOCKS: dict[tuple[int, int], asyncio.Lock] = {}
 
 
 def _serialize_db_write(function):
+    """Serialize writes and give each party operation an atomic boundary."""
     @wraps(function)
     async def wrapped(db, *args, **kwargs):
         key = (id(db), id(asyncio.get_running_loop()))
@@ -19,7 +20,26 @@ def _serialize_db_write(function):
             lock = asyncio.Lock()
             _DB_WRITE_LOCKS[key] = lock
         async with lock:
-            return await function(db, *args, **kwargs)
+            savepoint = "party_" + function.__name__
+            nested = db.in_transaction
+            if nested:
+                await db.execute(f"SAVEPOINT {savepoint}")
+            else:
+                await db.execute("BEGIN IMMEDIATE")
+            try:
+                result = await function(db, *args, **kwargs)
+                if nested:
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await db.commit()
+                return result
+            except Exception:
+                if nested:
+                    await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await db.rollback()
+                raise
     return wrapped
 
 
@@ -34,55 +54,53 @@ def _valid_id(value: int) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
+@_serialize_db_write
 async def init_party_tables(db: aiosqlite.Connection) -> None:
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS parties (
-      party_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      leader_id INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_members (
-      user_id INTEGER PRIMARY KEY,
-      party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
-      joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_invites (
-      invite_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
-      inviter_id INTEGER NOT NULL,
-      target_id INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(status IN ('pending','accepted','declined','cancelled')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      responded_at TEXT
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_party_pending_target
-      ON party_invites(target_id) WHERE status='pending';
-    CREATE INDEX IF NOT EXISTS idx_party_members_party
-      ON party_members(party_id, joined_at);
-    """)
-
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS party_battles(
-      battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
-      monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_contributions(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_cooldowns(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_rewards(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    """)
-    await db.commit()
+    """Create party storage without committing a caller-owned transaction."""
+    statements = (
+        """CREATE TABLE IF NOT EXISTS parties (
+          party_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          leader_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_members (
+          user_id INTEGER PRIMARY KEY,
+          party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
+          joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_invites (
+          invite_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
+          inviter_id INTEGER NOT NULL,
+          target_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','accepted','declined','cancelled')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          responded_at TEXT
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_party_pending_target ON party_invites(target_id) WHERE status='pending'",
+        "CREATE INDEX IF NOT EXISTS idx_party_members_party ON party_members(party_id, joined_at)",
+        """CREATE TABLE IF NOT EXISTS party_battles(
+          battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
+          monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_contributions(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_cooldowns(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_rewards(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+    )
+    for statement in statements:
+        await db.execute(statement)
 
 
 @_serialize_db_write
@@ -95,7 +113,6 @@ async def create_party(db: aiosqlite.Connection, leader_id: int) -> int:
     cur = await db.execute("INSERT INTO parties(leader_id) VALUES(?)", (leader_id,))
     party_id = int(cur.lastrowid)
     await db.execute("INSERT INTO party_members(user_id,party_id) VALUES(?,?)", (leader_id, party_id))
-    await db.commit()
     return party_id
 
 
@@ -130,9 +147,7 @@ async def invite_to_party(
             "INSERT INTO party_invites(party_id,inviter_id,target_id) VALUES(?,?,?)",
             (party_id, inviter_id, target_id),
         )
-        await db.commit()
     except aiosqlite.IntegrityError as exc:
-        await db.rollback()
         raise PartyError("That player already has a pending party invitation.") from exc
     return int(cur.lastrowid)
 
@@ -141,7 +156,7 @@ async def invite_to_party(
 async def respond_to_party_invite(
     db: aiosqlite.Connection, invite_id: int, target_id: int, accept: bool
 ) -> None:
-    if not _valid_id(invite_id) or not _valid_id(target_id):
+    if not _valid_id(invite_id) or not _valid_id(target_id) or type(accept) is not bool:
         raise PartyError("Invalid party invitation.")
     cur = await db.execute(
         "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?",
@@ -158,12 +173,7 @@ async def respond_to_party_invite(
             raise PartyError("You are already in a party.")
         cur = await db.execute("SELECT COUNT(*) AS total FROM party_members WHERE party_id=?", (invite["party_id"],))
         if (await cur.fetchone())["total"] >= MAX_PARTY_SIZE:
-            await db.execute(
-                "UPDATE party_invites SET status='cancelled',responded_at=CURRENT_TIMESTAMP WHERE invite_id=?",
-                (invite_id,),
-            )
-            await db.commit()
-            raise PartyError("That party is already full.")
+            raise PartyError("That party is already full. The invitation remains pending until it is declined or space opens.")
         await db.execute(
             "INSERT INTO party_members(user_id,party_id) VALUES(?,?)",
             (target_id, invite["party_id"]),
@@ -171,11 +181,12 @@ async def respond_to_party_invite(
         status = "accepted"
     else:
         status = "declined"
-    await db.execute(
+    cur = await db.execute(
         "UPDATE party_invites SET status=?,responded_at=CURRENT_TIMESTAMP WHERE invite_id=? AND status='pending'",
         (status, invite_id),
     )
-    await db.commit()
+    if cur.rowcount != 1:
+        raise PartyError("That party invitation was already handled.")
 
 
 
@@ -190,25 +201,18 @@ async def start_party_battle(db, party_id, user_id, monster_level, monster_name,
     clean_name = " ".join(str(monster_name or "").split())[:80]
     if not clean_name:
         raise PartyError("A monster name is required.")
-    try:
-        await db.execute("BEGIN IMMEDIATE")
-        cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
-        party = await cur.fetchone()
-        if not party or party["leader_id"] != user_id:
-            raise PartyError("Only the party leader can start a co-op battle.")
-        cur = await db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
-        if await cur.fetchone():
-            raise PartyError("Your party already has an active co-op battle.")
-        cur = await db.execute(
-            "INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp) VALUES(?,?,?,?,?)",
-            (party_id, monster_level, clean_name, monster_hp, monster_hp),
-        )
-        battle_id = int(cur.lastrowid)
-        await db.commit()
-        return battle_id
-    except Exception:
-        await db.rollback()
-        raise
+    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    party = await cur.fetchone()
+    if not party or party["leader_id"] != user_id:
+        raise PartyError("Only the party leader can start a co-op battle.")
+    cur = await db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+    if await cur.fetchone():
+        raise PartyError("Your party already has an active co-op battle.")
+    cur = await db.execute(
+        "INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp) VALUES(?,?,?,?,?)",
+        (party_id, monster_level, clean_name, monster_hp, monster_hp),
+    )
+    return int(cur.lastrowid)
 
 @_serialize_db_write
 async def attack_party_battle(db, party_id, user_id, damage):
@@ -216,61 +220,57 @@ async def attack_party_battle(db, party_id, user_id, damage):
         raise PartyError("Invalid party or player account.")
     if not isinstance(damage, int) or isinstance(damage, bool) or not 1 <= damage <= 10000:
         raise PartyError("Invalid co-op attack damage.")
-    try:
-        await db.execute("BEGIN IMMEDIATE")
-        cur = await db.execute(
-            "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
-            (party_id, user_id),
-        )
-        if not await cur.fetchone():
-            raise PartyError("Only party members can attack this monster.")
-        cur = await db.execute(
-            "SELECT * FROM party_battles WHERE party_id=? AND status='active' ORDER BY battle_id DESC LIMIT 1",
-            (party_id,),
-        )
-        battle = await cur.fetchone()
-        if not battle:
-            raise PartyError("There is no active co-op battle.")
-        cur = await db.execute(
-            """SELECT 1 FROM party_battle_cooldowns
-               WHERE battle_id=? AND user_id=?
-               AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)""",
-            (battle["battle_id"], user_id),
-        )
-        if await cur.fetchone():
-            raise PartyError("Co-op attack cooldown: wait 5 seconds.")
-        hp = max(0, battle["hp"] - damage)
-        dealt = battle["hp"] - hp
-        status = "won" if hp == 0 else "active"
-        await db.execute(
-            "UPDATE party_battles SET hp=?,status=? WHERE battle_id=? AND status='active'",
-            (hp, status, battle["battle_id"]),
-        )
-        await db.execute(
-            """INSERT INTO party_battle_cooldowns(battle_id,user_id,last_attack_at)
-               VALUES(?,?,CURRENT_TIMESTAMP)
-               ON CONFLICT(battle_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP""",
-            (battle["battle_id"], user_id),
-        )
-        await db.execute(
-            """INSERT INTO party_battle_contributions(battle_id,user_id,damage) VALUES(?,?,?)
-               ON CONFLICT(battle_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",
-            (battle["battle_id"], user_id, dealt),
-        )
-        cur = await db.execute(
-            "SELECT user_id FROM party_members WHERE party_id=? ORDER BY joined_at",
-            (party_id,),
-        )
-        members = [row["user_id"] for row in await cur.fetchall()]
-        await db.commit()
-        return {
-            "battle_id": battle["battle_id"], "monster_name": battle["monster_name"],
-            "hp": hp, "max_hp": battle["max_hp"], "damage": dealt,
-            "status": status, "members": members,
-        }
-    except Exception:
-        await db.rollback()
-        raise
+    cur = await db.execute(
+        "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
+        (party_id, user_id),
+    )
+    if not await cur.fetchone():
+        raise PartyError("Only party members can attack this monster.")
+    cur = await db.execute(
+        "SELECT * FROM party_battles WHERE party_id=? AND status='active' ORDER BY battle_id DESC LIMIT 1",
+        (party_id,),
+    )
+    battle = await cur.fetchone()
+    if not battle:
+        raise PartyError("There is no active co-op battle.")
+    cur = await db.execute(
+        """SELECT 1 FROM party_battle_cooldowns
+           WHERE battle_id=? AND user_id=?
+           AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)""",
+        (battle["battle_id"], user_id),
+    )
+    if await cur.fetchone():
+        raise PartyError("Co-op attack cooldown: wait 5 seconds.")
+    hp = max(0, battle["hp"] - damage)
+    dealt = battle["hp"] - hp
+    status = "won" if hp == 0 else "active"
+    cur = await db.execute(
+        "UPDATE party_battles SET hp=?,status=? WHERE battle_id=? AND status='active' AND hp=?",
+        (hp, status, battle["battle_id"], battle["hp"]),
+    )
+    if cur.rowcount != 1:
+        raise PartyError("The co-op battle changed; retry your attack.")
+    await db.execute(
+        """INSERT INTO party_battle_cooldowns(battle_id,user_id,last_attack_at)
+           VALUES(?,?,CURRENT_TIMESTAMP)
+           ON CONFLICT(battle_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP""",
+        (battle["battle_id"], user_id),
+    )
+    await db.execute(
+        """INSERT INTO party_battle_contributions(battle_id,user_id,damage) VALUES(?,?,?)
+           ON CONFLICT(battle_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",
+        (battle["battle_id"], user_id, dealt),
+    )
+    cur = await db.execute(
+        "SELECT user_id FROM party_members WHERE party_id=? ORDER BY joined_at",
+        (party_id,),
+    )
+    members = [row["user_id"] for row in await cur.fetchall()]
+    return {
+        "battle_id": battle["battle_id"], "monster_name": battle["monster_name"],
+        "hp": hp, "max_hp": battle["max_hp"], "damage": dealt,
+        "status": status, "members": members,
+    }
 
 async def get_party_battle(db,party_id):
     cur=await db.execute("SELECT * FROM party_battles WHERE party_id=? ORDER BY battle_id DESC LIMIT 1",(party_id,))
@@ -284,7 +284,6 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
     if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in (coins, xp)):
         raise PartyError("Invalid co-op reward.")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         cur = await db.execute(
             "SELECT party_id,status FROM party_battles WHERE battle_id=?",
             (battle_id,),
@@ -311,18 +310,15 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         while level < 100 and xp_total >= xp_required(level):
             xp_total -= xp_required(level)
             level += 1
-        await db.execute(
+        cur = await db.execute(
             "UPDATE players SET coins=coins+?,level=?,xp=? WHERE user_id=?",
             (coins, level, xp_total, user_id),
         )
-        await db.commit()
+        if cur.rowcount != 1:
+            raise PartyError("Player reward could not be recorded.")
         return {"coins": coins, "xp": xp, "level": level}
     except aiosqlite.IntegrityError as exc:
-        await db.rollback()
         raise PartyError("Co-op reward already claimed.") from exc
-    except Exception:
-        await db.rollback()
-        raise
 
 @_serialize_db_write
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
@@ -338,7 +334,7 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     await db.execute("DELETE FROM party_members WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_contributions WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_cooldowns WHERE user_id=?", (user_id,))
-    await db.execute("DELETE FROM party_battle_rewards WHERE user_id=?", (user_id,))
+    # Preserve reward claims when a member leaves; otherwise rejoining lets them farm old battles.
     new_leader = None
     if party and party["leader_id"] == user_id:
         cur = await db.execute(
@@ -356,7 +352,6 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
             await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
             await db.execute("DELETE FROM party_battles WHERE party_id=?", (party_id,))
             await db.execute("DELETE FROM parties WHERE party_id=?", (party_id,))
-    await db.commit()
     return new_leader
 
 
@@ -377,7 +372,7 @@ async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -
     await db.execute("DELETE FROM party_battle_rewards WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
     await db.execute("DELETE FROM party_battles WHERE party_id=?", (party_id,))
     await db.execute("DELETE FROM parties WHERE party_id=?", (party_id,))
-    await db.commit()
+ 
 
 
 async def get_party_info(db: aiosqlite.Connection, user_id: int):

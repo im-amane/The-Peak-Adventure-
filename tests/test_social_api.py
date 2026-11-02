@@ -18,6 +18,26 @@ class FakeRequest:
         return self._payload
 
 
+class FakeCallbackMessage:
+    def __init__(self):
+        self.text = None
+
+    async def edit_text(self, text):
+        self.text = text
+
+
+class FakeCallback:
+    def __init__(self, user_id, data):
+        from types import SimpleNamespace
+        self.from_user = SimpleNamespace(id=user_id)
+        self.data = data
+        self.message = FakeCallbackMessage()
+        self.answer_args = None
+
+    async def answer(self, *args, **kwargs):
+        self.answer_args = (args, kwargs)
+
+
 class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -67,6 +87,47 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses[stale_pending.lastrowid], "expired")
         self.assertEqual(statuses[stale_open.lastrowid], "expired")
         self.assertEqual(statuses[recent.lastrowid], "pending")
+
+    async def test_expiry_preserves_caller_owned_transaction(self):
+        initiator_id = 987654952
+        partner_id = 987654953
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        cur = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'pending',datetime('now','-2 days'))""",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+        await main.db.execute("UPDATE players SET coins=coins WHERE user_id=?", (initiator_id,))
+
+        self.assertEqual(await main.expire_stale_trades(), 1)
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "pending")
+
+    async def test_telegram_trade_callback_cannot_accept_expired_invitation(self):
+        initiator_id = 987654954
+        partner_id = 987654955
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        cur = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(?,?,?,'pending',datetime('now','-2 days'))""",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        callback = FakeCallback(partner_id, f"trade_accept:{trade_id}")
+        await main.accept_trade(callback)
+
+        self.assertIsNotNone(callback.answer_args)
+        self.assertTrue(callback.answer_args[1].get("show_alert"))
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "expired")
 
     async def test_expired_trade_invitation_cannot_be_accepted(self):
         initiator_id = 987654942
@@ -243,6 +304,51 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         partner = await cur.fetchone()
         self.assertEqual((initiator["coins"],initiator["potions"]), (110,5))
         self.assertEqual((partner["coins"],partner["potions"]), (40,2))
+
+    async def test_trade_settlement_rolls_back_both_players_if_second_update_fails(self):
+        initiator_id = 987654950
+        partner_id = 987654951
+        await main.get_player(initiator_id, "TradeInitiator")
+        await main.get_player(partner_id, "TradePartner")
+        await main.db.execute(
+            "UPDATE players SET coins=100,potions=5 WHERE user_id=?", (initiator_id,)
+        )
+        await main.db.execute(
+            "UPDATE players SET coins=50,potions=2 WHERE user_id=?", (partner_id,)
+        )
+        cur = await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,
+               initiator_coins,initiator_potions,partner_coins,partner_potions)
+               VALUES(?,?,?,'open',10,1,20,1)""",
+            (-100123, initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+        await main.db.execute(
+            f"""CREATE TRIGGER reject_partner_trade_update
+                BEFORE UPDATE OF coins,potions,weapon,weapon_attack,armor,armor_defense ON players
+                WHEN OLD.user_id={partner_id}
+                BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "TradeInitiator"}):
+            first = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "TradePartner"}):
+            second = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+
+        self.assertEqual(first.status, 200)
+        self.assertEqual(second.status, 409)
+        cur = await main.db.execute(
+            "SELECT status,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
+            (trade_id,),
+        )
+        trade = await cur.fetchone()
+        self.assertEqual((trade["status"],trade["initiator_confirmed"],trade["partner_confirmed"]), ("open",0,0))
+        cur = await main.db.execute("SELECT coins,potions FROM players WHERE user_id=?", (initiator_id,))
+        self.assertEqual(tuple(await cur.fetchone()), (100,5))
+        cur = await main.db.execute("SELECT coins,potions FROM players WHERE user_id=?", (partner_id,))
+        self.assertEqual(tuple(await cur.fetchone()), (50,2))
 
     async def test_simultaneous_trade_confirmations_settle_exactly_once(self):
         initiator_id = 987654930

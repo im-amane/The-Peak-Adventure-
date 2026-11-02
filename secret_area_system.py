@@ -23,14 +23,30 @@ SECRET_AREAS = (
 
 
 async def init_secret_area_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_secret_areas(
-      user_id INTEGER NOT NULL,
-      world_id INTEGER NOT NULL CHECK(world_id BETWEEN 1 AND 10),
-      area_id TEXT NOT NULL,
-      discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,world_id)
-    )""")
-    await db.commit()
+    nested = db.in_transaction
+    if nested:
+        await db.execute("SAVEPOINT init_secret_area_tables")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_secret_areas(
+          user_id INTEGER NOT NULL,
+          world_id INTEGER NOT NULL CHECK(world_id BETWEEN 1 AND 10),
+          area_id TEXT NOT NULL,
+          discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,world_id)
+        )""")
+        if nested:
+            await db.execute("RELEASE SAVEPOINT init_secret_area_tables")
+        else:
+            await db.commit()
+    except Exception:
+        if nested:
+            await db.execute("ROLLBACK TO SAVEPOINT init_secret_area_tables")
+            await db.execute("RELEASE SAVEPOINT init_secret_area_tables")
+        else:
+            await db.rollback()
+        raise
 
 
 async def get_secret_area_state(db, user_id, player_level, world_id):

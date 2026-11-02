@@ -39,6 +39,34 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM security_events")
         self.assertEqual((await cur.fetchone())["total"], 2)
 
+    async def test_table_initialization_preserves_outer_transaction(self):
+        await self.db.execute("CREATE TABLE transaction_marker(value TEXT)")
+        await self.db.commit()
+        await self.db.execute("BEGIN")
+        await self.db.execute("INSERT INTO transaction_marker VALUES('keep caller ownership')")
+        await init_security_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM transaction_marker")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
+    async def test_record_event_preserves_outer_transaction(self):
+        await self.db.execute("CREATE TABLE transaction_marker(value TEXT)")
+        await self.db.commit()
+        await self.db.execute("BEGIN")
+        await self.db.execute("INSERT INTO transaction_marker VALUES('caller owns this')")
+        await record_security_event(self.db, 303, "invalid_battle_action", "rolled back with caller")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM security_events WHERE user_id=303")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM transaction_marker")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
+    async def test_unhashable_event_type_is_rejected_cleanly(self):
+        with self.assertRaises(SecurityEventError):
+            await record_security_event(self.db, 101, [], "malformed event")
+
     async def test_invalid_event_and_limits_are_rejected(self):
         with self.assertRaises(SecurityEventError):
             await record_security_event(self.db, 101, "not_allowed")

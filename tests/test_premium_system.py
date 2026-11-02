@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 import aiosqlite
 from unittest.mock import patch
 
@@ -17,10 +18,25 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute("CREATE TABLE player_stamina(user_id INTEGER PRIMARY KEY,stamina INTEGER NOT NULL,updated_at INTEGER NOT NULL)")
         await self.db.execute("INSERT INTO players(user_id,potions) VALUES(101,2)")
         await self.db.execute("INSERT INTO player_stamina VALUES(101,30,1800000000)")
+        await self.db.commit()
         await init_premium_tables(self.db)
 
     async def asyncTearDown(self):
         await self.db.close()
+
+    async def test_table_initialization_preserves_outer_transaction(self):
+        await self.db.execute("DROP TABLE premium_shop_purchases")
+        await self.db.commit()
+        await self.db.execute("UPDATE players SET potions=potions+1 WHERE user_id=101")
+        await init_premium_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        cur = await self.db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='premium_shop_purchases'"
+        )
+        self.assertIsNone(await cur.fetchone())
 
     async def test_invoice_payload_is_bound_to_player_and_package(self):
         payload = make_invoice_payload("spark", 101)
@@ -77,6 +93,24 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
         self.assertEqual((await cur.fetchone())["potions"], 2)
 
+    async def test_shop_purchase_rolls_back_effect_if_wallet_debit_is_ignored(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await self.db.commit()
+        await self.db.execute(
+            """CREATE TRIGGER ignore_premium_wallet_debit
+               BEFORE UPDATE OF balance ON premium_wallets
+               WHEN NEW.balance < OLD.balance
+               BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(PremiumError, "balance changed"):
+            await buy_premium_item(self.db, 101, "potion_bundle")
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, 101), 100)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_shop_purchases")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_shop_rejects_insufficient_balance_without_partial_effect(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,10)")
         await self.db.commit()
@@ -101,6 +135,40 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.rollback()
         self.assertEqual(await get_premium_balance(self.db, 101), 0)
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
+    async def test_failed_stars_wallet_credit_rolls_back_ledger_and_preserves_outer_transaction(self):
+        await self.db.execute("UPDATE players SET potions=potions WHERE user_id=101")
+        await self.db.execute(
+            """CREATE TRIGGER reject_premium_wallet_credit
+               BEFORE UPDATE OF balance ON premium_wallets
+               WHEN NEW.balance > OLD.balance
+               BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        package = get_premium_packages()["spark"]
+        with self.assertRaisesRegex(PremiumError, "wallet could not be credited"):
+            await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-rollback")
+        self.assertTrue(self.db.in_transaction)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+        self.assertEqual(await get_premium_balance(self.db, 101), 0)
+        await self.db.rollback()
+
+    async def test_failed_shop_log_rolls_back_item_effect_and_gem_debit(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await self.db.commit()
+        await self.db.execute(
+            """CREATE TRIGGER reject_shop_purchase_log
+               BEFORE INSERT ON premium_shop_purchases
+               BEGIN SELECT RAISE(ABORT, 'purchase log unavailable'); END"""
+        )
+        await self.db.commit()
+        with self.assertRaises(sqlite3.IntegrityError):
+            await buy_premium_item(self.db, 101, "potion_bundle")
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, 101), 100)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_shop_purchases")
         self.assertEqual((await cur.fetchone())["total"], 0)
 
     async def test_charge_id_cannot_be_replayed_for_another_account(self):

@@ -14,6 +14,22 @@ class PresenceTests(unittest.IsolatedAsyncioTestCase):
   """)
   await init_presence_tables(self.db)
  async def asyncTearDown(self):await self.db.close()
+ async def test_presence_touch_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await touch_presence(self.db,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual(await count_online_players(self.db),0)
+ async def test_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:");db.row_factory=aiosqlite.Row
+  try:
+   await db.execute("BEGIN")
+   await init_presence_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='player_presence'")
+   self.assertIsNone(await cur.fetchone())
+  finally: await db.close()
  async def test_presence_touch_creates_online_record(self):
   await touch_presence(self.db,1)
   self.assertEqual(await count_online_players(self.db),1)

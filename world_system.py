@@ -64,15 +64,21 @@ def unlocked_world_count(player_level):
 
 
 async def init_world_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
-      user_id INTEGER PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )""")
-    await db.execute("""CREATE TABLE IF NOT EXISTS world_discoveries(
-      user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,world_id)
-    )""")
-    await db.commit()
+    """Initialize world storage without committing a caller-owned transaction."""
+    nested = await _begin_transaction(db, "init_world_tables")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
+          user_id INTEGER PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS world_discoveries(
+          user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,world_id)
+        )""")
+        await _commit_transaction(db, nested, "init_world_tables")
+    except Exception:
+        await _rollback_transaction(db, nested, "init_world_tables")
+        raise
 
 
 async def get_current_world(db,user_id,player_level):

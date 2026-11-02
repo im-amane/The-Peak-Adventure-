@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import main
@@ -43,6 +44,26 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         await main.get_player(987654322, "DailyHero")
         self.assertTrue(await main.claim_daily_reward(987654322))
         self.assertFalse(await main.claim_daily_reward(987654322))
+
+    async def test_get_player_preserves_caller_transaction(self):
+        await main.db.execute("BEGIN")
+        await main.get_player(987654329, "TransactionHero")
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        cur = await main.db.execute("SELECT 1 FROM players WHERE user_id=?", (987654329,))
+        self.assertIsNone(await cur.fetchone())
+        cur = await main.db.execute("SELECT 1 FROM player_presence WHERE user_id=?", (987654329,))
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_get_player_failure_rolls_back_only_its_savepoint(self):
+        await main.db.execute("BEGIN")
+        with patch("main.touch_presence", side_effect=RuntimeError("presence write failed")):
+            with self.assertRaisesRegex(RuntimeError, "presence write failed"):
+                await main.get_player(987654330, "RollbackHero")
+        self.assertTrue(main.db.in_transaction)
+        cur = await main.db.execute("SELECT 1 FROM players WHERE user_id=?", (987654330,))
+        self.assertIsNone(await cur.fetchone())
+        await main.db.rollback()
 
     async def test_new_gameplay_tables_and_elite_battle_flag_exist(self):
         for table in ("player_stamina", "player_mana", "player_weekly_quests", "player_reports", "player_bans", "player_daily_missions", "roaming_events", "roaming_event_participants", "player_monster_mastery", "dungeon_runs", "dungeon_rewards", "security_events", "premium_wallets", "premium_transactions", "premium_shop_purchases", "player_xp_boosts"):

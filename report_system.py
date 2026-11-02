@@ -1,5 +1,6 @@
 """Player reports with duplicate protection and an auditable review lifecycle."""
 import time
+from functools import wraps
 
 
 class ReportError(ValueError):
@@ -11,46 +12,94 @@ def _player_id(value, label):
         raise ReportError(f"Invalid {label} account.")
 
 
+async def _begin_atomic(db,savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Keep report mutations atomic and preserve caller-owned transactions."""
+    @wraps(function)
+    async def wrapped(db,*args,**kwargs):
+        savepoint="report_"+function.__name__
+        nested=await _begin_atomic(db,savepoint)
+        try:
+            result=await function(db,*args,**kwargs)
+            await _commit_atomic(db,nested,savepoint)
+            return result
+        except Exception:
+            await _rollback_atomic(db,nested,savepoint)
+            raise
+    return wrapped
+
+
+@_transactional
 async def init_report_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_reports(
-      report_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      reporter_id INTEGER NOT NULL,
-      target_id INTEGER NOT NULL,
-      reason TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','reviewed','dismissed')),
-      created_at INTEGER NOT NULL,
-      reviewed_by INTEGER,
-      review_note TEXT NOT NULL DEFAULT '',
-      reviewed_at INTEGER
-    )""")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_player_reports_status ON player_reports(status,created_at)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_player_reports_reporter ON player_reports(reporter_id,target_id,created_at)")
-    await db.commit()
+    statements=(
+        """CREATE TABLE IF NOT EXISTS player_reports(
+          report_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          reporter_id INTEGER NOT NULL,
+          target_id INTEGER NOT NULL,
+          reason TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','reviewed','dismissed')),
+          created_at INTEGER NOT NULL,
+          reviewed_by INTEGER,
+          review_note TEXT NOT NULL DEFAULT '',
+          reviewed_at INTEGER
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_player_reports_status ON player_reports(status,created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_player_reports_reporter ON player_reports(reporter_id,target_id,created_at)",
+    )
+    for statement in statements:
+        await db.execute(statement)
 
 
+@_transactional
 async def submit_player_report(db, reporter_id, target_id, reason, now=None):
     _player_id(reporter_id, "reporter")
     _player_id(target_id, "target")
     if reporter_id == target_id:
         raise ReportError("You cannot report your own account.")
-    clean = " ".join(str(reason or "").split())
+    if not isinstance(reason,str):
+        raise ReportError("Report reason must be text.")
+    clean = " ".join(reason.split())
     if not 10 <= len(clean) <= 500:
         raise ReportError("Report reason must be between 10 and 500 characters.")
+    stamp = int(time.time()) if now is None else now
+    if not isinstance(stamp,int) or isinstance(stamp,bool) or stamp<0:
+        raise ReportError("Invalid report timestamp.")
     cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (target_id,))
     if not await cur.fetchone():
         raise ReportError("That player account does not exist.")
-    now = int(time.time() if now is None else now)
     cur = await db.execute(
         "SELECT report_id FROM player_reports WHERE reporter_id=? AND target_id=? AND status='open' AND created_at>=? ORDER BY report_id DESC LIMIT 1",
-        (reporter_id, target_id, now - 86400),
+        (reporter_id, target_id, stamp - 86400),
     )
     if await cur.fetchone():
         raise ReportError("You already have an open report for this player.")
     cur = await db.execute(
         "INSERT INTO player_reports(reporter_id,target_id,reason,created_at) VALUES(?,?,?,?)",
-        (reporter_id, target_id, clean, now),
+        (reporter_id, target_id, clean, stamp),
     )
-    await db.commit()
     return cur.lastrowid
 
 
@@ -65,11 +114,12 @@ async def list_open_reports(db, limit=25):
     return await cur.fetchall()
 
 
+@_transactional
 async def resolve_player_report(db, report_id, admin_id, status, note=""):
     _player_id(admin_id, "administrator")
     if not isinstance(report_id, int) or isinstance(report_id, bool) or report_id <= 0:
         raise ReportError("Invalid report ID.")
-    if status not in {"reviewed", "dismissed"}:
+    if not isinstance(status,str) or status not in {"reviewed", "dismissed"}:
         raise ReportError("Report status must be reviewed or dismissed.")
     clean_note = " ".join(str(note or "").split())[:300]
     cur = await db.execute(
@@ -79,5 +129,4 @@ async def resolve_player_report(db, report_id, admin_id, status, note=""):
     )
     if cur.rowcount != 1:
         raise ReportError("Open report not found; it may already be resolved.")
-    await db.commit()
     return True

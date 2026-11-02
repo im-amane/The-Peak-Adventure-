@@ -1,26 +1,129 @@
 """Small, testable administrative operations for The Peak Adventure."""
 import aiosqlite
+from functools import wraps
 
 
 class AdminError(ValueError):
     pass
 
 
+async def _begin_atomic(db,savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Keep admin mutations atomic and preserve caller-owned transactions."""
+    @wraps(function)
+    async def wrapped(db,*args,**kwargs):
+        savepoint="admin_"+function.__name__
+        nested=await _begin_atomic(db,savepoint)
+        try:
+            result=await function(db,*args,**kwargs)
+            await _commit_atomic(db,nested,savepoint)
+            return result
+        except Exception:
+            await _rollback_atomic(db,nested,savepoint)
+            raise
+    return wrapped
+
+
+@_transactional
 async def init_admin_tables(db: aiosqlite.Connection):
     await db.execute("""CREATE TABLE IF NOT EXISTS admin_audit_log(
       log_id INTEGER PRIMARY KEY AUTOINCREMENT,actor_id INTEGER NOT NULL,
       action TEXT NOT NULL,target_id INTEGER,details TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )""")
-    await db.commit()
 
 
+@_transactional
 async def record_admin_action(db,actor_id,action,target_id=None,details=""):
     if not isinstance(actor_id,int) or isinstance(actor_id,bool) or actor_id<=0:
         raise AdminError("Invalid administrator ID.")
-    await db.execute("INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES(?,?,?,?)",
-      (actor_id,str(action)[:64],target_id," ".join(str(details or "").split())[:500]))
-    await db.commit()
+    if not isinstance(action,str) or not action.strip():
+        raise AdminError("Invalid administrative action.")
+    if target_id is not None and (not isinstance(target_id,int) or isinstance(target_id,bool) or target_id<=0):
+        raise AdminError("Invalid administrative target.")
+    if not isinstance(details,str):
+        raise AdminError("Invalid administrative details.")
+    try:
+        cur=await db.execute("INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES(?,?,?,?)",
+          (actor_id,action.strip()[:64],target_id," ".join(details.split())[:500]))
+    except Exception as exc:
+        raise AdminError("Administrative action could not be recorded; the change was rolled back.") from exc
+    if cur.rowcount != 1:
+        raise AdminError("Administrative action could not be recorded; the change was rolled back.")
+
+
+@_transactional
+async def perform_audited_action(db,actor_id,action,target_id,operation,details=""):
+    """Run an admin mutation and its audit record in one transaction."""
+    if not callable(operation):
+        raise AdminError("Invalid administrative operation.")
+    if not isinstance(actor_id,int) or isinstance(actor_id,bool) or actor_id<=0:
+        raise AdminError("Invalid administrator ID.")
+    if not isinstance(action,str) or not action.strip():
+        raise AdminError("Invalid administrative action.")
+    if target_id is not None and (not isinstance(target_id,int) or isinstance(target_id,bool) or target_id<=0):
+        raise AdminError("Invalid administrative target.")
+    if not isinstance(details,str):
+        raise AdminError("Invalid administrative details.")
+    result=operation()
+    if not hasattr(result,"__await__"):
+        raise AdminError("Administrative operation must be asynchronous.")
+    result=await result
+    await record_admin_action(db,actor_id,action,target_id,details)
+    return result
+
+
+@_transactional
+async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int, actor_id: int | None = None) -> int:
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise AdminError("Invalid player ID.")
+    if not isinstance(delta,int) or isinstance(delta,bool) or delta==0 or abs(delta)>100000:
+        raise AdminError("Coin adjustment must be between -100000 and 100000, excluding zero.")
+    if actor_id is not None and (not isinstance(actor_id,int) or isinstance(actor_id,bool) or actor_id<=0):
+        raise AdminError("Invalid administrator ID.")
+    cur=await db.execute("SELECT coins FROM players WHERE user_id=?",(user_id,))
+    player=await cur.fetchone()
+    if not player:
+        raise AdminError("Player account not found.")
+    new_balance=player["coins"]+delta
+    if new_balance<0:
+        raise AdminError("Adjustment would make the player's coin balance negative.")
+    cur=await db.execute(
+        "UPDATE players SET coins=? WHERE user_id=? AND coins=?",
+        (new_balance,user_id,player["coins"]),
+    )
+    if cur.rowcount != 1:
+        raise AdminError("Player coin balance changed; retry the adjustment.")
+    if actor_id is not None:
+        await record_admin_action(db,actor_id,"coin_adjustment",user_id,"delta="+str(delta))
+    cur=await db.execute("SELECT coins FROM players WHERE user_id=?",(user_id,))
+    row=await cur.fetchone()
+    if not row:
+        raise AdminError("Player account disappeared during coin adjustment.")
+    return row["coins"]
 
 
 async def recent_admin_actions(db,limit=20):
@@ -37,26 +140,6 @@ def parse_admin_ids(raw: str) -> set[int]:
         if value.isdecimal() and int(value)>0:
             result.add(int(value))
     return result
-
-
-async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int, actor_id: int | None = None) -> int:
-    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
-        raise AdminError("Invalid player ID.")
-    if not isinstance(delta,int) or isinstance(delta,bool) or delta==0 or abs(delta)>100000:
-        raise AdminError("Coin adjustment must be between -100000 and 100000, excluding zero.")
-    cur=await db.execute(
-        "UPDATE players SET coins=coins+? WHERE user_id=? AND coins+?>=0",
-        (delta,user_id,delta)
-    )
-    if cur.rowcount==0:
-        cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
-        if not await cur.fetchone(): raise AdminError("Player account not found.")
-        raise AdminError("Adjustment would make the player's coin balance negative.")
-    await db.commit()
-    if actor_id is not None:
-        await record_admin_action(db,actor_id,"coin_adjustment",user_id,"delta="+str(delta))
-    cur=await db.execute("SELECT coins FROM players WHERE user_id=?",(user_id,))
-    return (await cur.fetchone())["coins"]
 
 
 async def dashboard_stats(db: aiosqlite.Connection) -> dict:

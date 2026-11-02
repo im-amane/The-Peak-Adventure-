@@ -43,18 +43,22 @@ def _validate_user_id(user_id):
 
 
 async def init_dungeon_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS dungeon_runs(
-      user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
-      started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS dungeon_rewards(
-      user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,dungeon_id)
-    );
-    """)
-    await db.commit()
+    """Initialize dungeon storage without committing a caller-owned transaction."""
+    nested = await _begin_transaction(db, "init_dungeon_tables")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_runs(
+          user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
+          started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_rewards(
+          user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,dungeon_id)
+        )""")
+        await _commit_transaction(db, nested, "init_dungeon_tables")
+    except Exception:
+        await _rollback_transaction(db, nested, "init_dungeon_tables")
+        raise
 
 
 def available_dungeons(player_level):
@@ -75,6 +79,9 @@ async def enter_dungeon(db,user_id,player_level,dungeon_id):
         raise DungeonError(f"This dungeon unlocks at level {(dungeon['world']-1)*10+1}.")
     nested=await _begin_transaction(db,"enter_dungeon")
     try:
+        cur=await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+        if await cur.fetchone() is None:
+            raise DungeonError("Player account not found.")
         cur=await db.execute("SELECT dungeon_id,status FROM dungeon_runs WHERE user_id=?",(user_id,))
         run=await cur.fetchone()
         if run and run["status"]=="active":
@@ -174,6 +181,12 @@ async def claim_dungeon_reward(db,user_id):
         )
         if cur.rowcount!=1:
             raise DungeonError("Player account not found.")
+        cur = await db.execute(
+            "DELETE FROM dungeon_runs WHERE user_id=? AND dungeon_id=? AND status='completed' AND room=3",
+            (user_id, run["dungeon_id"]),
+        )
+        if cur.rowcount != 1:
+            raise DungeonError("Dungeon run changed before its reward could be finalized.")
         await _commit_transaction(db,nested,"claim_dungeon_reward")
         return dungeon["reward_coins"],dungeon["reward_potions"]
     except aiosqlite.IntegrityError as exc:

@@ -89,4 +89,35 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
 
  async def test_unknown_recipe_rejected(self):
   with self.assertRaises(CraftingError):await craft_item(self.db,1,1,"nope")
+
+ async def test_material_drop_preserves_caller_transaction(self):
+  class Fixed:
+   def __init__(self):self.values=iter([0.0,0.0])
+   def random(self):return next(self.values)
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  await self.db.execute("UPDATE players SET weapon='Pending Blade' WHERE user_id=1")
+  await award_material_drop(self.db,1,{"level":1,"boss":False},Fixed())
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual(await get_materials(self.db,1),{})
+  cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["weapon"],"Rusty Sword")
+
+ async def test_material_drop_rejects_invalid_player_and_monster(self):
+  for user_id,monster in ((True,{"level":1}),(0,{"level":1}),(1,{}),(1,{"level":101})):
+   with self.subTest(user_id=user_id,monster=monster),self.assertRaises(CraftingError):
+    await award_material_drop(self.db,user_id,monster)
+
+
+ async def test_table_initialization_preserves_outer_transaction(self):
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  await self.db.execute("UPDATE players SET weapon='Pending Blade' WHERE user_id=1")
+  await init_crafting_tables(self.db)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["weapon"],"Rusty Sword")
+
 if __name__=="__main__":unittest.main()

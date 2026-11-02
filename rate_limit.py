@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+import math
 from collections import deque
 
 
@@ -9,17 +10,24 @@ class SlidingWindowRateLimiter:
     """Track request timestamps per key without trusting client-supplied IP headers."""
 
     def __init__(self, window_seconds: int = 60, max_keys: int = 10000):
-        if window_seconds < 1 or max_keys < 1:
-            raise ValueError("window_seconds and max_keys must be positive")
+        if (
+            not isinstance(window_seconds, int) or isinstance(window_seconds, bool) or window_seconds < 1
+            or not isinstance(max_keys, int) or isinstance(max_keys, bool) or max_keys < 1
+        ):
+            raise ValueError("window_seconds and max_keys must be positive integers")
         self.window_seconds = window_seconds
         self.max_keys = max_keys
         self._events: dict[str, deque[float]] = {}
 
     def allow(self, key: str, limit: int, now: float | None = None) -> tuple[bool, int]:
         """Return (allowed, retry_after_seconds); limit is per key and window."""
-        if not key or limit < 1:
-            raise ValueError("key and limit must be valid")
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("key must be a non-empty string")
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise ValueError("limit must be a positive integer")
         current = time.monotonic() if now is None else now
+        if isinstance(current, bool) or not isinstance(current, (int, float)) or not math.isfinite(current):
+            raise ValueError("now must be a finite monotonic timestamp")
         events = self._events.setdefault(key, deque())
         cutoff = current - self.window_seconds
         while events and events[0] <= cutoff:

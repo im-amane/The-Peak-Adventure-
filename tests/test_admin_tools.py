@@ -1,6 +1,7 @@
 import unittest
+import sqlite3
 import aiosqlite
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 
 class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
@@ -60,4 +61,75 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(data["data"]["premium_transactions"],[])
   with self.assertRaises(AdminError): await export_player_data(self.db,202)
 
+ async def test_audited_admin_action_rolls_back_mutation_if_log_fails(self):
+  await self.db.execute("CREATE TRIGGER reject_admin_audit BEFORE INSERT ON admin_audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable'); END")
+  await self.db.commit()
+  async def mutation():
+   await self.db.execute("UPDATE players SET coins=coins+10 WHERE user_id=101")
+   return True
+  with self.assertRaisesRegex(AdminError,"could not be recorded; the change was rolled back"):
+   await perform_audited_action(self.db,999,"test_mutation",101,mutation,"test")
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
+
+ async def test_audited_admin_action_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  async def mutation():
+   await self.db.execute("UPDATE players SET coins=coins+10 WHERE user_id=101")
+   return True
+  self.assertTrue(await perform_audited_action(self.db,999,"test_mutation",101,mutation,"test"))
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
+ async def test_coin_adjustment_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  self.assertEqual(await adjust_player_coins(self.db,101,25,999),75)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
+
+ async def test_audit_failure_rolls_back_coin_adjustment(self):
+  await self.db.execute("CREATE TRIGGER reject_admin_audit BEFORE INSERT ON admin_audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable'); END")
+  await self.db.commit()
+  with self.assertRaisesRegex(AdminError,"could not be recorded; the change was rolled back"):
+   await adjust_player_coins(self.db,101,25,999)
+  self.assertFalse(self.db.in_transaction)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+  self.assertEqual(await recent_admin_actions(self.db),[])
+
+ async def test_ignored_coin_update_is_not_reported_as_success(self):
+  await self.db.execute("CREATE TRIGGER ignore_admin_coin_update BEFORE UPDATE OF coins ON players WHEN OLD.user_id=101 BEGIN SELECT RAISE(IGNORE); END")
+  await self.db.commit()
+  with self.assertRaisesRegex(AdminError,"balance changed"):
+   await adjust_player_coins(self.db,101,25)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+
+ async def test_invalid_audit_actor_does_not_change_balance(self):
+  with self.assertRaises(AdminError):
+   await adjust_player_coins(self.db,101,25,True)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())[0],50)
+
+ async def test_admin_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO marker VALUES(1)")
+   await init_admin_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_audit_log'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
 if __name__=="__main__": unittest.main()

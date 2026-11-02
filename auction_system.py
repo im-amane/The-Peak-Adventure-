@@ -23,30 +23,45 @@ def _positive_id(value, label):
 
 
 async def init_auction_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS auction_listings (
-      listing_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      seller_id INTEGER NOT NULL,
-      slot TEXT NOT NULL CHECK(slot IN ('weapon','armor')),
-      item_name TEXT NOT NULL,
-      item_stat INTEGER NOT NULL CHECK(item_stat >= 0),
-      start_price INTEGER NOT NULL CHECK(start_price > 0),
-      current_bid INTEGER NOT NULL DEFAULT 0,
-      highest_bidder INTEGER,
-      ends_at INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','sold','expired','cancelled')),
-      created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_auction_active ON auction_listings(status, ends_at);
-    CREATE INDEX IF NOT EXISTS idx_auction_seller ON auction_listings(seller_id, status);
-    CREATE TABLE IF NOT EXISTS auction_stash(
-      stash_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
-      slot TEXT NOT NULL CHECK(slot IN ('weapon','armor')),item_name TEXT NOT NULL,
-      item_stat INTEGER NOT NULL,source_listing_id INTEGER,created_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_auction_stash_user ON auction_stash(user_id,stash_id);
-    """)
-    await db.commit()
+    nested = db.in_transaction
+    savepoint = "init_auction_tables"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS auction_listings (
+          listing_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          seller_id INTEGER NOT NULL,
+          slot TEXT NOT NULL CHECK(slot IN ('weapon','armor')),
+          item_name TEXT NOT NULL,
+          item_stat INTEGER NOT NULL CHECK(item_stat >= 0),
+          start_price INTEGER NOT NULL CHECK(start_price > 0),
+          current_bid INTEGER NOT NULL DEFAULT 0,
+          highest_bidder INTEGER,
+          ends_at INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','sold','expired','cancelled')),
+          created_at INTEGER NOT NULL
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_auction_active ON auction_listings(status, ends_at)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_auction_seller ON auction_listings(seller_id, status)")
+        await db.execute("""CREATE TABLE IF NOT EXISTS auction_stash(
+          stash_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
+          slot TEXT NOT NULL CHECK(slot IN ('weapon','armor')),item_name TEXT NOT NULL,
+          item_stat INTEGER NOT NULL,source_listing_id INTEGER,created_at INTEGER NOT NULL
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_auction_stash_user ON auction_stash(user_id,stash_id)")
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
 
 async def _has_active_battle(db, user_id):
     cur = await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='battles'")

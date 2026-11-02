@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 import aiosqlite
 from story_system import *
 
@@ -41,4 +42,59 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
   await choose_story_path(self.db,1,1,1,"follow_mira")
   self.assertEqual(await claim_story_reward(self.db,1,1),80)
   with self.assertRaises(StoryError):await claim_story_reward(self.db,1,1)
+ async def test_story_choice_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await choose_story_path(self.db,1,1,1,"follow_mira")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM player_story WHERE user_id=1 AND chapter_id=1")
+  self.assertIsNone(await cur.fetchone())
+
+ async def test_story_reward_preserves_outer_transaction(self):
+  await choose_story_path(self.db,1,1,1,"follow_mira")
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  self.assertEqual(await claim_story_reward(self.db,1,1),80)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM story_reward_claims WHERE user_id=1 AND chapter_id=1")
+  self.assertIsNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_failed_story_coin_credit_rolls_back_reward_claim(self):
+  await choose_story_path(self.db,1,1,1,"follow_mira")
+  await self.db.execute("CREATE TRIGGER reject_story_coins BEFORE UPDATE OF coins ON players BEGIN SELECT RAISE(ABORT,'coin credit unavailable'); END")
+  await self.db.commit()
+  with self.assertRaisesRegex(sqlite3.IntegrityError,"coin credit unavailable"):
+   await claim_story_reward(self.db,1,1)
+  self.assertFalse(self.db.in_transaction)
+  cur=await self.db.execute("SELECT 1 FROM story_reward_claims WHERE user_id=1 AND chapter_id=1")
+  self.assertIsNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_story_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO marker VALUES(1)")
+   await init_story_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='player_story'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
+ async def test_unhashable_story_choice_returns_story_error(self):
+  with self.assertRaises(StoryError):
+   await choose_story_path(self.db,1,1,1,[])
+
+ async def test_invalid_story_user_is_rejected(self):
+  with self.assertRaises(StoryError):
+   await choose_story_path(self.db,0,1,1,"follow_mira")
 if __name__=="__main__":unittest.main()

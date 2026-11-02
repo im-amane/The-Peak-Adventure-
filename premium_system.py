@@ -78,31 +78,40 @@ def parse_invoice_payload(payload):
 
 
 async def init_premium_tables(db):
-    await db.executescript("""CREATE TABLE IF NOT EXISTS premium_wallets(
-      user_id INTEGER PRIMARY KEY,balance INTEGER NOT NULL DEFAULT 0 CHECK(balance>=0),
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS premium_transactions(
-      transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      telegram_charge_id TEXT NOT NULL UNIQUE,
-      provider_charge_id TEXT NOT NULL DEFAULT '',
-      user_id INTEGER NOT NULL,
-      package_id TEXT NOT NULL,
-      stars INTEGER NOT NULL CHECK(stars>0),
-      gems INTEGER NOT NULL CHECK(gems>0),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_premium_transactions_user
-      ON premium_transactions(user_id,transaction_id DESC);
-    CREATE TABLE IF NOT EXISTS player_xp_boosts(
-      user_id INTEGER PRIMARY KEY,remaining_wins INTEGER NOT NULL DEFAULT 0 CHECK(remaining_wins>=0)
-    );
-    CREATE TABLE IF NOT EXISTS premium_shop_purchases(
-      purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
-      item_id TEXT NOT NULL,gems_spent INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    await db.commit()
+    """Create premium tables without committing a caller-owned transaction."""
+    nested = await _begin_atomic(db, "init_premium_tables")
+    try:
+        statements = (
+            """CREATE TABLE IF NOT EXISTS premium_wallets(
+              user_id INTEGER PRIMARY KEY,balance INTEGER NOT NULL DEFAULT 0 CHECK(balance>=0),
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS premium_transactions(
+              transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+              telegram_charge_id TEXT NOT NULL UNIQUE,
+              provider_charge_id TEXT NOT NULL DEFAULT '',
+              user_id INTEGER NOT NULL,
+              package_id TEXT NOT NULL,
+              stars INTEGER NOT NULL CHECK(stars>0),
+              gems INTEGER NOT NULL CHECK(gems>0),
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_premium_transactions_user
+              ON premium_transactions(user_id,transaction_id DESC)""",
+            """CREATE TABLE IF NOT EXISTS player_xp_boosts(
+              user_id INTEGER PRIMARY KEY,remaining_wins INTEGER NOT NULL DEFAULT 0 CHECK(remaining_wins>=0)
+            )""",
+            """CREATE TABLE IF NOT EXISTS premium_shop_purchases(
+              purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
+              item_id TEXT NOT NULL,gems_spent INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+        )
+        for statement in statements:
+            await db.execute(statement)
+        await _commit_atomic(db, nested, "init_premium_tables")
+    except Exception:
+        await _rollback_atomic(db, nested, "init_premium_tables")
+        raise
 
 
 async def get_premium_balance(db, user_id):
@@ -151,10 +160,12 @@ async def credit_premium_purchase(db, user_id, package_id, stars, telegram_charg
                ) VALUES(?,?,?,?,?,?)""",
             (telegram_charge_id, provider_charge_id, user_id, package_id, stars, package["gems"]),
         )
-        await db.execute(
+        cur = await db.execute(
             "UPDATE premium_wallets SET balance=balance+?,updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
             (package["gems"], user_id),
         )
+        if cur.rowcount != 1:
+            raise PremiumError("The premium wallet could not be credited. The purchase remains uncommitted.")
         await _commit_atomic(db, nested, "premium_credit")
         return {"credited": True, "balance": await get_premium_balance(db, user_id), "gems": package["gems"]}
     except Exception:
@@ -204,7 +215,12 @@ async def buy_premium_item(db, user_id, item_id):
                    ON CONFLICT(user_id) DO UPDATE SET remaining_wins=remaining_wins+3""",
                 (user_id,),
             )
-        await db.execute("UPDATE premium_wallets SET balance=balance-? WHERE user_id=?", (item["cost"], user_id))
+        cur = await db.execute(
+            "UPDATE premium_wallets SET balance=balance-? WHERE user_id=? AND balance>=?",
+            (item["cost"], user_id, item["cost"]),
+        )
+        if cur.rowcount != 1:
+            raise PremiumError("Your gem balance changed before purchase. Please try again.")
         await db.execute(
             "INSERT INTO premium_shop_purchases(user_id,item_id,gems_spent) VALUES(?,?,?)",
             (user_id, item_id, item["cost"]),

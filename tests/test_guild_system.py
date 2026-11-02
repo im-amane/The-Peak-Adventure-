@@ -1,5 +1,7 @@
 import unittest
+import asyncio
 import aiosqlite
+from datetime import datetime, timezone
 from guild_system import *
 
 class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
@@ -16,8 +18,52 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO players VALUES(?,?,?,?)",(4,"other",4,0))
   await self.db.execute("INSERT INTO guilds VALUES(?,?,?,?,?)",(20,"Other",4,1,0))
   await self.db.execute("INSERT INTO guild_members VALUES(?,?,?,CURRENT_TIMESTAMP)",(4,20,"leader"))
+  await self.db.execute("ALTER TABLE players ADD COLUMN coins INTEGER NOT NULL DEFAULT 1000")
+  await self.db.commit()
   await init_guild_features(self.db)
  async def asyncTearDown(self): await self.db.close()
+
+ async def test_create_guild_debits_coins_and_assigns_leader(self):
+  guild_id=await create_guild(self.db,3,"New Peak")
+  self.assertGreater(guild_id,20)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=3")
+  self.assertEqual((await cur.fetchone())["coins"],900)
+  self.assertEqual(await guild_role(self.db,guild_id,3),"leader")
+
+ async def test_failed_guild_membership_insert_rolls_back_creation_fee(self):
+  await self.db.execute("CREATE TRIGGER reject_new_guild_member BEFORE INSERT ON guild_members WHEN NEW.user_id=3 BEGIN SELECT RAISE(ABORT,'membership unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await create_guild(self.db,3,"New Peak")
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=3")
+  self.assertEqual((await cur.fetchone())["coins"],1000)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE name='New Peak'")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_join_guild_checks_membership_and_capacity(self):
+  self.assertEqual(await join_guild(self.db,3,10),"Peak")
+  self.assertEqual(await guild_role(self.db,10,3),"member")
+  with self.assertRaises(GuildFeatureError):
+   await join_guild(self.db,3,20)
+
+ async def test_member_leave_removes_only_membership(self):
+  self.assertFalse(await leave_guild(self.db,2))
+  self.assertIsNone(await guild_role(self.db,10,2))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_leader_cannot_leave_while_members_remain(self):
+  with self.assertRaises(GuildFeatureError):
+   await leave_guild(self.db,1)
+  self.assertEqual(await guild_role(self.db,10,1),"leader")
+
+ async def test_last_leader_leave_disbands_guild(self):
+  await self.db.execute("DELETE FROM guild_members WHERE user_id=2")
+  await self.db.commit()
+  self.assertTrue(await leave_guild(self.db,1))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+
  async def test_pending_guild_invites_are_listed_for_target_only(self):
   invite_id=await create_guild_invite(self.db,10,1,3)
   rows=await list_pending_guild_invites(self.db,3)
@@ -48,6 +94,20 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await get_guild_announcement(self.db,10))["message"],"Rally at dawn")
  async def test_member_cannot_post_announcement(self):
   with self.assertRaises(GuildFeatureError): await set_guild_announcement(self.db,10,2,"Hello")
+ async def test_get_guild_missions_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await get_guild_missions(self.db,10,"2026-11-02")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM guild_missions WHERE guild_id=10 AND mission_date='2026-11-02'")
+  self.assertIsNone(await cur.fetchone())
+ async def test_record_guild_activity_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await record_guild_activity(self.db,10,2,"battle",2)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM guild_missions WHERE guild_id=10 AND mission_id='battles' AND progress=2")
+  self.assertIsNone(await cur.fetchone())
  async def test_guild_mission_progress_and_reward(self):
   await record_guild_activity(self.db,10,2,"battle",5)
   with self.assertRaises(GuildFeatureError): await claim_guild_mission(self.db,10,2,"battles")
@@ -75,6 +135,52 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
  async def test_only_target_leader_can_accept_war(self):
   war=await declare_guild_war(self.db,10,1,20)
   with self.assertRaises(GuildFeatureError): await respond_guild_war(self.db,war,2,True)
+ async def test_repeated_guild_war_callback_scores_one_duel_only(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  first=await record_guild_war_duel(self.db,1,4,1,duel_id=7001)
+  duplicate=await record_guild_war_duel(self.db,1,4,1,duel_id=7001)
+  self.assertEqual(first["challenger_score"],1)
+  self.assertIsNone(duplicate)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE duel_id=7001")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT challenger_score,target_score FROM guild_wars WHERE war_id=?",(war,))
+  scores=await cur.fetchone()
+  self.assertEqual((scores["challenger_score"],scores["target_score"]),(1,0))
+ async def test_failed_guild_war_settlement_rolls_back_duel_idempotency_key(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  await record_guild_war_duel(self.db,1,4,1,duel_id=7101)
+  await record_guild_war_duel(self.db,1,4,1,duel_id=7102)
+  await self.db.execute("CREATE TRIGGER reject_guild_war_xp BEFORE UPDATE OF guild_xp ON guilds BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await record_guild_war_duel(self.db,1,4,1,duel_id=7103)
+  cur=await self.db.execute("SELECT challenger_score,status FROM guild_wars WHERE war_id=?",(war,))
+  state=await cur.fetchone()
+  self.assertEqual((state["challenger_score"],state["status"]),(2,"active"))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE duel_id=7103")
+  self.assertEqual((await cur.fetchone())[0],0)
+  await self.db.execute("DROP TRIGGER reject_guild_war_xp")
+  await record_guild_war_duel(self.db,1,4,1,duel_id=7103)
+  cur=await self.db.execute("SELECT challenger_score,status,winner_guild FROM guild_wars WHERE war_id=?",(war,))
+  state=await cur.fetchone()
+  self.assertEqual((state["challenger_score"],state["status"],state["winner_guild"]),(3,"completed",10))
+
+ async def test_concurrent_duplicate_guild_war_callback_scores_once(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  results=await asyncio.gather(
+   record_guild_war_duel(self.db,1,4,1,duel_id=7201),
+   record_guild_war_duel(self.db,1,4,1,duel_id=7201),
+  )
+  self.assertEqual(sum(result is not None for result in results),1)
+  cur=await self.db.execute("SELECT challenger_score,target_score FROM guild_wars WHERE war_id=?",(war,))
+  scores=await cur.fetchone()
+  self.assertEqual((scores["challenger_score"],scores["target_score"]),(1,0))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE duel_id=7201")
+  self.assertEqual((await cur.fetchone())[0],1)
+
  async def test_guild_war_completes_after_three_wins(self):
   war=await declare_guild_war(self.db,10,1,20)
   await respond_guild_war(self.db,war,4,True)
@@ -99,5 +205,108 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
  async def test_guild_chat_message_length_is_limited(self):
   with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2," ")
   with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2,"x"*501)
+
+ async def test_guild_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_guild_features(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='guild_invites'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
+ async def test_role_update_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await set_guild_role(self.db,10,1,2,"officer")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual(await guild_role(self.db,10,2),"member")
+
+ async def test_mission_claim_preserves_outer_transaction(self):
+  await record_guild_activity(self.db,10,2,"battle",5)
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  mission_date=datetime.now(timezone.utc).date().isoformat()
+  await claim_guild_mission(self.db,10,1,"battles",mission_date)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT claimed FROM guild_missions WHERE guild_id=10 AND mission_date=? AND mission_id='battles'", (mission_date,))
+  self.assertEqual((await cur.fetchone())["claimed"],0)
+  cur=await self.db.execute("SELECT guild_xp FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())["guild_xp"],0)
+
+ async def test_raid_reward_failure_rolls_back_attack(self):
+  await start_guild_raid(self.db,10,1,10,"Root Warden",100)
+  await self.db.execute("CREATE TRIGGER reject_guild_raid_xp BEFORE UPDATE OF guild_xp ON guilds BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await attack_guild_raid(self.db,10,2,100)
+  cur=await self.db.execute("SELECT hp,status FROM guild_raids WHERE guild_id=10")
+  raid=await cur.fetchone()
+  self.assertEqual((raid["hp"],raid["status"]),(100,"active"))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_contributions")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_cooldowns")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+
+ async def test_disband_removes_all_guild_owned_records_and_preserves_other_guild(self):
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(10,1,3)")
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(20,4,2)")
+  await self.db.execute("INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(10,'Peak notice',1)")
+  await self.db.execute("INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(20,'Other notice',4)")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(10,2,'old message')")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(20,4,'keep message')")
+  await self.db.execute("INSERT INTO guild_missions VALUES(10,'2026-11-02','battles',2,0)")
+  await self.db.execute("INSERT INTO guild_missions VALUES(20,'2026-11-02','battles',1,0)")
+  await self.db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(10,10,'Peak Boss',100,50)")
+  await self.db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(20,10,'Other Boss',100,50)")
+  await self.db.execute("INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(1,2,50)")
+  await self.db.execute("INSERT INTO guild_raid_cooldowns(raid_id,user_id) VALUES(1,2)")
+  await self.db.execute("INSERT INTO guild_wars(war_id,challenger_guild,target_guild,status) VALUES(100,10,20,'completed')")
+  await self.db.execute("INSERT INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(700,100,1)")
+  await self.db.commit()
+
+  self.assertTrue(await disband_guild(self.db,10,1))
+  for table in ("guild_invites","guild_announcements","guild_chat_messages","guild_missions","guild_raids","guild_raid_contributions","guild_raid_cooldowns"):
+   cur=await self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE guild_id=10" if table not in {"guild_raid_contributions","guild_raid_cooldowns"} else
+     f"SELECT COUNT(*) FROM {table} WHERE raid_id=1")
+   self.assertEqual((await cur.fetchone())[0],0,table)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_wars WHERE challenger_guild=10 OR target_guild=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE war_id=100")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_members WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  for table in ("guild_invites","guild_announcements","guild_chat_messages","guild_missions","guild_raids"):
+   cur=await self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE guild_id=20")
+   self.assertEqual((await cur.fetchone())[0],1,table)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=20")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_non_leader_cannot_disband_guild(self):
+  with self.assertRaises(GuildFeatureError):
+   await disband_guild(self.db,10,2)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_disband_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await disband_guild(self.db,10,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_members WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],2)
 
 if __name__=="__main__": unittest.main()

@@ -109,4 +109,39 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(DungeonError): await get_dungeon_state(self.db,True)
   with self.assertRaises(DungeonError): await abandon_dungeon(self.db,0)
 
+ async def test_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_dungeon_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='dungeon_runs'")
+   self.assertIsNone(await cur.fetchone())
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='dungeon_rewards'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
+ async def test_claimed_dungeon_can_be_followed_by_another_dungeon(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  for _ in range(3):
+   state=await get_dungeon_state(self.db,1)
+   await advance_dungeon(self.db,1,state["target_level"])
+  await claim_dungeon_reward(self.db,1)
+  self.assertIsNone(await get_dungeon_state(self.db,1))
+  next_state=await enter_dungeon(self.db,1,11,2)
+  self.assertEqual(next_state["dungeon_id"],2)
+  with self.assertRaises(DungeonError):
+   await enter_dungeon(self.db,1,11,1)
+
+ async def test_enter_requires_existing_player_account(self):
+  with self.assertRaisesRegex(DungeonError,"Player account not found"):
+   await enter_dungeon(self.db,999,1,1)
+  self.assertIsNone(await get_dungeon_state(self.db,999))
+
 if __name__=="__main__":unittest.main()
