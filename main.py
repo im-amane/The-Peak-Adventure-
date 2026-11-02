@@ -52,6 +52,7 @@ from security_system import get_security_events, get_suspicious_players, init_se
 from premium_system import PREMIUM_SHOP_ITEMS, PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase, get_premium_balance, get_premium_packages, init_premium_tables, make_invoice_payload, parse_invoice_payload
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
+from runtime_monitor import RuntimeMonitor
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -114,6 +115,7 @@ ACHIEVEMENTS = [
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("peak-adventure")
+runtime_monitor = RuntimeMonitor()
 dp = Dispatcher()
 
 @dp.errors()
@@ -4803,22 +4805,96 @@ async def database_backup_loop():
             backup_path = await asyncio.to_thread(
                 create_backup, DB_PATH, BACKUP_DIR, BACKUP_RETENTION
             )
+            runtime_monitor.record_backup_success(str(backup_path))
             log.info("Verified database backup created: %s", backup_path)
-        except Exception:
+        except Exception as exc:
+            runtime_monitor.record_backup_failure(f"{type(exc).__name__}: {exc}")
             log.exception("Database backup failed; live game database remains untouched")
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
 
 
 async def database_healthcheck() -> bool:
     if db is None:
+        runtime_monitor.record_database_probe(False, "Database connection is not initialized")
         return False
     try:
         async with db_lock:
             cur = await db.execute("SELECT 1")
-            return await cur.fetchone() is not None
-    except Exception:
+            healthy = await cur.fetchone() is not None
+        runtime_monitor.record_database_probe(healthy, None if healthy else "Database probe returned no row")
+        return healthy
+    except Exception as exc:
+        runtime_monitor.record_database_probe(False, f"{type(exc).__name__}: {exc}")
         log.exception("Health check database probe failed")
         return False
+
+
+@web.middleware
+async def observability_middleware(request: web.Request, handler):
+    started = time.monotonic()
+    try:
+        response = await handler(request)
+    except web.HTTPException as exc:
+        runtime_monitor.record_request(request.path, exc.status, time.monotonic() - started)
+        raise
+    except Exception:
+        runtime_monitor.record_request(request.path, 500, time.monotonic() - started)
+        raise
+    runtime_monitor.record_request(request.path, response.status, time.monotonic() - started)
+    return response
+
+
+async def operations_alert_loop(bot: Bot):
+    """Notify admins once per health-state transition; recoveries are also reported."""
+    active_alerts = {}
+    while True:
+        await database_healthcheck()
+        conditions = runtime_monitor.alert_conditions(BACKUP_INTERVAL_SECONDS)
+        for alert_name, active in conditions.items():
+            if active == active_alerts.get(alert_name, False):
+                continue
+            active_alerts[alert_name] = active
+            if alert_name == "database_unavailable":
+                message = (
+                    "🚨 The Peak Adventure database is unavailable."
+                    if active else "✅ The Peak Adventure database connection recovered."
+                )
+            else:
+                message = (
+                    "🚨 The Peak Adventure database backup is failing or stale."
+                    if active else "✅ The Peak Adventure database backup recovered."
+                )
+            if not ADMIN_IDS:
+                log.error("Operations alert could not be delivered: ADMIN_IDS is empty (%s)", alert_name)
+                continue
+            for admin_id in ADMIN_IDS:
+                try:
+                    await bot.send_message(admin_id, message)
+                except Exception:
+                    log.exception("Unable to deliver operations alert to configured admin")
+        await asyncio.sleep(60)
+
+
+async def operations_metrics(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if user["id"] not in ADMIN_IDS:
+        return web.json_response({"error": "Admin access required."}, status=403)
+    allowed, retry_after = api_route_rate_limiter.allow(
+        f"ops-metrics:{user['id']}", 20
+    )
+    if not allowed:
+        return web.json_response(
+            {"error": "Metrics rate limit exceeded."},
+            status=429,
+            headers={"Retry-After": str(retry_after)},
+        )
+    return web.json_response(
+        runtime_monitor.snapshot(BACKUP_INTERVAL_SECONDS),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
@@ -4909,13 +4985,20 @@ def create_web_app():
 
     async def healthz(request: web.Request):
         if not await database_healthcheck():
-            return web.json_response({"ok": False, "database": "unavailable"}, status=503)
+            return web.json_response(
+                {"ok": False, "database": "unavailable"},
+                status=503,
+                headers={"Cache-Control": "no-store"},
+            )
         return web.json_response(
             {"ok": True, "service": "peak-adventure", "database": "ok"},
             headers={"Cache-Control": "no-store"},
         )
 
-    app = web.Application(client_max_size=4096, middlewares=[miniapp_rate_limit])
+    app = web.Application(
+        client_max_size=4096,
+        middlewares=[observability_middleware, miniapp_rate_limit],
+    )
     app.router.add_get("/", serve_index)
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
@@ -4934,6 +5017,7 @@ def create_web_app():
     app.router.add_post("/api/matchmaking", api_matchmaking)
     app.router.add_post("/api/premium-shop", api_premium_shop)
     app.router.add_get("/healthz", healthz)
+    app.router.add_get("/ops/metrics", operations_metrics)
     return app
 
 
@@ -4954,17 +5038,19 @@ async def main():
     await init_db()
     bot = Bot(TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     backup_task = asyncio.create_task(database_backup_loop(), name="database-backups")
+    monitor_task = asyncio.create_task(operations_alert_loop(bot), name="operations-alerts")
     runner = None
     try:
         runner = await start_web_server()
         log.info("Starting The Peak Adventure bot")
         await dp.start_polling(bot)
     finally:
-        backup_task.cancel()
-        try:
-            await backup_task
-        except asyncio.CancelledError:
-            pass
+        for task in (backup_task, monitor_task):
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         if runner is not None:
             await runner.cleanup()
         await bot.session.close()
