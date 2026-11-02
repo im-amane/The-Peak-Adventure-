@@ -7,7 +7,7 @@ for a staged PostgreSQL migration.
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 import psycopg
@@ -189,6 +189,29 @@ class PostgresConnection:
         if is_write and not self.in_transaction:
             await self._connection.execute("BEGIN")
         return await self._connection.execute(statement, parameters)
+
+    async def executemany(
+        self, sql: str, parameters: Iterable[Sequence[Any]]
+    ):
+        statement = qmark_to_pyformat(sql)
+        keyword = _first_keyword(statement)
+        write_keywords = {
+            "INSERT", "UPDATE", "DELETE", "MERGE",
+            "CREATE", "ALTER", "DROP", "TRUNCATE",
+            "GRANT", "REVOKE", "COMMENT",
+        }
+        is_write = keyword in write_keywords
+        if keyword == "WITH":
+            is_write = re.search(
+                r"\\b(INSERT|UPDATE|DELETE|MERGE)\\b",
+                statement,
+                re.IGNORECASE,
+            ) is not None
+        if is_write and not self.in_transaction:
+            await self._connection.execute("BEGIN")
+        cursor = self._connection.cursor()
+        await cursor.executemany(statement, parameters)
+        return cursor
 
     async def commit(self) -> None:
         await self._connection.commit()
