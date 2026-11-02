@@ -250,7 +250,7 @@ test("uses local obstacle candidates without missing edge or long-segment collis
     { x: 320, y: 192, width: 48, height: 48 },
     { x: 160, y: 64, width: 24, height: 24 },
     { x: 480, y: 320, width: 30, height: 30 },
-    { x: 8, y: 190, width: 12, height: 70 },
+    { x: 8, y: 320, width: 12, height: 70 },
     ...Array.from({ length: 180 }, (_, index) => ({
       x: 1200 + index * 30,
       y: 900 + index * 17,
