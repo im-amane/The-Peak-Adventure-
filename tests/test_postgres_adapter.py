@@ -1572,3 +1572,16 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(first)
         self.assertIsNone(duplicate)
+
+    async def test_raid_cooldown_uses_postgres_timestamp_arithmetic(self):
+        guild_id = await create_guild(self.db, self.user_id, "Cooldown Crew")
+        invite_id = await create_guild_invite(
+            self.db, guild_id, self.user_id, self.member_id
+        )
+        await respond_guild_invite(self.db, invite_id, self.member_id, True)
+        await start_guild_raid(
+            self.db, guild_id, self.user_id, 10, "Root Warden", 1000
+        )
+        await attack_guild_raid(self.db, guild_id, self.member_id, 10)
+        with self.assertRaisesRegex(GuildFeatureError, "cooldown"):
+            await attack_guild_raid(self.db, guild_id, self.member_id, 10)
