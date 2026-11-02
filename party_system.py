@@ -52,6 +52,11 @@ def _lock_party_sql(db):
     return " FOR UPDATE" if _is_postgres(db) else ""
 
 
+def _lock_player_sql(db):
+    """Lock a player row while applying read-modify-write progression updates."""
+    return " FOR UPDATE" if _is_postgres(db) else ""
+
+
 def _is_integrity_error(exc):
     sqlstate = getattr(exc, "sqlstate", None)
     return isinstance(exc, aiosqlite.IntegrityError) or (
@@ -359,7 +364,7 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
             "INSERT INTO party_battle_rewards(battle_id,user_id) VALUES(?,?)",
             (battle_id, user_id),
         )
-        cur = await db.execute("SELECT level,xp FROM players WHERE user_id=?", (user_id,))
+        cur = await db.execute("SELECT level,xp FROM players WHERE user_id=?" + _lock_player_sql(db), (user_id,))
         player = await cur.fetchone()
         if not player:
             raise PartyError("Player account not found.")
