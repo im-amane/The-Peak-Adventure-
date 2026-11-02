@@ -250,6 +250,32 @@ class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 main.db = previous_db
 
+    async def test_player_lock_releases_postgres_advisory_lock_after_handler_error(self):
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.acquired = []
+                self.released = []
+
+            async def acquire_player_lock(self, user_id):
+                self.acquired.append(user_id)
+
+            async def release_player_lock(self, user_id):
+                self.released.append(user_id)
+
+        connection = FakePostgresConnection()
+        previous_db = main.db
+        try:
+            main.db = connection
+            with self.assertRaisesRegex(RuntimeError, "handler failed"):
+                async with main.player_lock(9_400_000_001):
+                    self.assertEqual(connection.acquired, [9_400_000_001])
+                    raise RuntimeError("handler failed")
+            self.assertEqual(connection.released, [9_400_000_001])
+        finally:
+            main.db = previous_db
+
     async def test_postgres_backup_loop_never_runs_sqlite_file_backup(self):
         class FakePostgresConnection:
             dialect = "postgres"

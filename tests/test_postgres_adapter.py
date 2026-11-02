@@ -238,6 +238,54 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row["value"] for row in rows], ["alpha", "beta"])
         await self.db.commit()
 
+    async def test_player_advisory_lock_serializes_separate_connections(self):
+        other = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        user_id = 9_800_000_001
+        started = asyncio.Event()
+
+        async def acquire_from_other_connection():
+            started.set()
+            await other.acquire_player_lock(user_id)
+
+        try:
+            await self.db.acquire_player_lock(user_id)
+            waiting = asyncio.create_task(acquire_from_other_connection())
+            await started.wait()
+            await asyncio.sleep(0.05)
+            self.assertFalse(waiting.done(), "second connection bypassed the player lock")
+
+            await self.db.release_player_lock(user_id)
+            await asyncio.wait_for(waiting, timeout=2)
+            await other.release_player_lock(user_id)
+        finally:
+            if other.in_transaction:
+                await other.rollback()
+            await other.close()
+
+    async def test_player_advisory_lock_survives_gameplay_transaction_rollback(self):
+        user_id = 9_800_000_002
+        await self.db.acquire_player_lock(user_id)
+        await self.db.execute("BEGIN")
+        await self.db.execute(
+            "INSERT INTO adapter_probe(value) VALUES (?)",
+            ("lock-rollback-probe",),
+        )
+        with self.assertRaises(UniqueViolation):
+            await self.db.execute(
+                "INSERT INTO adapter_probe(value) VALUES (?)",
+                ("lock-rollback-probe",),
+            )
+
+        # The gameplay connection is now in an aborted transaction. Releasing the
+        # dedicated advisory session must still work before the caller rolls back.
+        await self.db.release_player_lock(user_id)
+        await self.db.rollback()
+
+    async def test_player_advisory_lock_rejects_invalid_keys(self):
+        for user_id in (0, -1, True, 9_223_372_036_854_775_808):
+            with self.assertRaisesRegex(ValueError, "positive signed 64-bit"):
+                await self.db.acquire_player_lock(user_id)
+
     async def test_outer_rollback_discards_all_writes(self):
         await self.db.execute("BEGIN IMMEDIATE")
         await self.db.execute(

@@ -8,6 +8,7 @@ import os
 import random
 import re
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -133,9 +134,29 @@ async def handle_unhandled_error(event):
     return True
 
 
-db: aiosqlite.Connection | None = None
+db: aiosqlite.Connection | PostgresConnection | None = None
 db_lock = asyncio.Lock()
 player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+@asynccontextmanager
+async def player_lock(user_id: int):
+    """Serialize one player's actions locally and across PostgreSQL processes."""
+    async with player_locks[user_id]:
+        connection = db
+        advisory_locked = False
+        if getattr(connection, "dialect", "sqlite") == "postgres":
+            await connection.acquire_player_lock(user_id)
+            advisory_locked = True
+        try:
+            yield
+        finally:
+            if advisory_locked:
+                try:
+                    await connection.release_player_lock(user_id)
+                except Exception:
+                    # A dropped PostgreSQL session releases its advisory locks itself.
+                    log.exception("Unable to explicitly release PostgreSQL player lock")
 
 
 async def _insert_generated_id(connection, sql: str, parameters, id_column: str) -> int:
@@ -643,7 +664,7 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
 
 
 async def start_battle(user_id: int, username: str | None, send_target):
-    async with player_locks[user_id]:
+    async with player_lock(user_id):
         await _start_battle_unlocked(user_id, username, send_target)
 
 
@@ -660,7 +681,7 @@ async def claim_daily_reward(user_id: int, now: int | None = None) -> bool:
             await db.execute("SAVEPOINT claim_daily_reward")
         else:
             await db.execute("BEGIN IMMEDIATE")
-        async with player_locks[user_id]:
+        async with player_lock(user_id):
             cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
             previous = await cur.fetchone()
             if previous and stamp - previous["claimed_at"] < 86400:
@@ -758,7 +779,7 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> str:
             await db.execute("SAVEPOINT claim_quest_reward")
         else:
             await db.execute("BEGIN IMMEDIATE")
-        async with player_locks[user_id]:
+        async with player_lock(user_id):
             await refresh_quest_progress(user_id, commit=False)
             cur = await db.execute(
                 "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
@@ -875,7 +896,7 @@ async def claim_achievement_reward(user_id: int, achievement_id: str) -> str:
             await db.execute("SAVEPOINT claim_achievement_reward")
         else:
             await db.execute("BEGIN IMMEDIATE")
-        async with player_locks[user_id]:
+        async with player_lock(user_id):
             await refresh_achievement_progress(user_id, commit=False)
             cur = await db.execute(
                 "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
@@ -3236,7 +3257,7 @@ async def premium_command(message: Message):
             return
         try:
             async with db_lock:
-                async with player_locks[user_id]:
+                async with player_lock(user_id):
                     purchase = await buy_premium_item(db, user_id, args[2].strip().lower())
                     balance = await get_premium_balance(db, user_id)
             await message.answer(
@@ -3711,7 +3732,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("battle:"))
 async def battle_action(call: CallbackQuery):
-    async with player_locks[call.from_user.id]:
+    async with player_lock(call.from_user.id):
         await _battle_action_unlocked(call)
 
 
@@ -3952,7 +3973,7 @@ async def api_dungeon(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
-            async with player_locks[user_id]:
+            async with player_lock(user_id):
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "enter":
                     if not player["class_selected"]:
@@ -3998,7 +4019,7 @@ async def api_explore(request: web.Request):
         return web.json_response({"error": "Invalid monster level."}, status=400)
     user_id = user["id"]
     async with db_lock:
-      async with player_locks[user_id]:
+      async with player_lock(user_id):
         p = await get_player(user_id, user.get("username") or user.get("first_name"))
         if not p["class_selected"]:
             return web.json_response({"error": "Choose a hero class in the Telegram chat first."}, status=409)
@@ -4103,7 +4124,7 @@ async def api_daily_mission_claim(request: web.Request):
         return web.json_response({"error": "Invalid daily mission ID."}, status=400)
     try:
         async with db_lock:
-            async with player_locks[user["id"]]:
+            async with player_lock(user["id"]):
                 reward = await claim_daily_mission(db, user["id"], mission_id)
                 state = await miniapp_state(user)
     except DailyMissionError as exc:
@@ -4136,7 +4157,7 @@ async def api_weekly_quest_claim(request: web.Request):
         return web.json_response({"error": "Invalid weekly quest ID."}, status=400)
     try:
         async with db_lock:
-            async with player_locks[user["id"]]:
+            async with player_lock(user["id"]):
                 reward = await claim_weekly_reward(db, user["id"], quest_id)
                 state = await miniapp_state(user)
     except WeeklyQuestError as exc:
@@ -4168,7 +4189,7 @@ async def api_world(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
-            async with player_locks[user_id]:
+            async with player_lock(user_id):
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "travel":
                     if set(payload) != {"action", "world_id"}:
@@ -4258,7 +4279,7 @@ async def api_premium_shop(request: web.Request):
         return web.json_response({"error": "A valid premium item_id is required."}, status=400)
     try:
         async with db_lock:
-            async with player_locks[user["id"]]:
+            async with player_lock(user["id"]):
                 purchase = await buy_premium_item(db, user["id"], payload["item_id"])
                 state = await miniapp_state(user)
     except PremiumError as exc:
@@ -4317,7 +4338,7 @@ async def api_social(request: web.Request):
     try:
         async with db_lock:
             await expire_stale_trades()
-            async with player_locks[user_id]:
+            async with player_lock(user_id):
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "friend_search":
                     if set(payload) != {"action", "query"} or not isinstance(payload["query"], str):
@@ -4613,7 +4634,7 @@ async def api_matchmaking(request: web.Request):
     user_id = user["id"]
     try:
         async with db_lock:
-            async with player_locks[user_id]:
+            async with player_lock(user_id):
                 player = await get_player(
                     user_id, user.get("username") or user.get("first_name") or "Adventurer"
                 )
@@ -4719,7 +4740,7 @@ async def api_action(request: web.Request):
     user_id = user["id"]
     async with db_lock:
       try:
-        async with player_locks[user_id]:
+        async with player_lock(user_id):
           cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
           battle = await cur.fetchone()
           if not battle:
