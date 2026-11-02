@@ -4243,6 +4243,12 @@ async def api_social(request: web.Request):
         return web.json_response({"error": "A social action is required."}, status=400)
     action = payload["action"]
     user_id = user["id"]
+
+    async def log_invalid_trade_action(action, reason, severity=2):
+        await record_security_event(
+            db, user_id, "invalid_economy_action", f"{action}: {reason}", severity
+        )
+
     try:
         async with db_lock:
             await expire_stale_trades()
@@ -4318,9 +4324,11 @@ async def api_social(request: web.Request):
                     result = {"accepted": action == "guild_accept"}
                 elif action == "trade_create":
                     if set(payload) != {"action", "target_id"} or type(payload["target_id"]) is not int or payload["target_id"] <= 0:
+                        await log_invalid_trade_action(action, "malformed target_id")
                         return web.json_response({"error": "A valid target_id is required."}, status=400)
                     target_id = payload["target_id"]
                     if target_id == user_id:
+                        await log_invalid_trade_action(action, "self-trade attempt")
                         return web.json_response({"error": "You cannot trade with yourself."}, status=400)
                     low_id, high_id = sorted((user_id, target_id))
                     friend_cur = await db.execute(
@@ -4351,6 +4359,7 @@ async def api_social(request: web.Request):
                     result = {"trade_id": trade_id, "status": "pending"}
                 elif action in {"trade_accept", "trade_decline"}:
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        await log_invalid_trade_action(action, "malformed trade_id")
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
                     trade_status = "open" if action == "trade_accept" else "declined"
                     trade_cur = await db.execute(
@@ -4368,12 +4377,14 @@ async def api_social(request: web.Request):
                             or type(payload["potions"]) is not int or payload["potions"] < 0
                             or type(payload["offer_weapon"]) is not bool
                             or type(payload["offer_armor"]) is not bool):
+                        await log_invalid_trade_action(action, "malformed offer payload")
                         return web.json_response({"error": "A valid trade_id, non-negative balances and equipment choices are required."}, status=400)
                     trade_cur = await db.execute(
                         "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
                     )
                     trade = await trade_cur.fetchone()
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
                     if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
                         return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
@@ -4399,12 +4410,14 @@ async def api_social(request: web.Request):
                     result = {"trade_id":payload["trade_id"],"status":"open","offer_updated":True}
                 elif action == "trade_confirm":
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        await log_invalid_trade_action(action, "malformed trade_id")
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
                     trade_cur = await db.execute(
                         "SELECT * FROM trades WHERE trade_id=? AND status='open'", (payload["trade_id"],)
                     )
                     trade = await trade_cur.fetchone()
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                        await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
                     if user_id == trade["initiator_id"]:
                         await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
@@ -4461,6 +4474,7 @@ async def api_social(request: web.Request):
                     await db.commit()
                 elif action == "trade_cancel":
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
+                        await log_invalid_trade_action(action, "malformed trade_id")
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
                     trade_cur = await db.execute(
                         """UPDATE trades SET status='cancelled',initiator_confirmed=0,partner_confirmed=0
@@ -4468,6 +4482,7 @@ async def api_social(request: web.Request):
                         (payload["trade_id"],user_id,user_id),
                     )
                     if trade_cur.rowcount != 1:
+                        await log_invalid_trade_action(action, "trade cancellation rejected", 3)
                         return web.json_response({"error": "This trade cannot be cancelled by you."}, status=409)
                     result = {"trade_id":payload["trade_id"],"status":"cancelled"}
                 elif action in {"guild_chat", "guild_send"}:

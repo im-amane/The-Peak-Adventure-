@@ -252,6 +252,11 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved.status, 200)
         self.assertEqual(too_much.status, 409)
         self.assertEqual(denied.status, 409)
+        events = await main.get_security_events(main.db, outsider_id)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0]["event_type"], "invalid_economy_action")
+        self.assertEqual(events[0]["severity"], 4)
+        self.assertIn("trade access by non-participant", events[0]["details"])
         cur = await main.db.execute(
             "SELECT initiator_coins,initiator_potions,initiator_weapon,initiator_armor,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
             (trade_id,),
