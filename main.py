@@ -2634,7 +2634,7 @@ async def admin_command(message: Message):
             rows=await get_suspicious_players(db,1440,20)
             lines=["🛡️ <b>Suspicious Activity · Last 24 Hours</b>"]
             for row in rows:
-                lines.append(f"Player <code>{row['user_id']}</code> · {row['event_count']} events · risk {row['risk_score']} · max severity {row['max_severity']} · last {row['last_seen']}")
+                lines.append(f"Player <code>{row['user_id']}</code> · {row['event_count']} events · risk {row['risk_score']} · high severity {row['high_severity_count']} · event types {row['event_type_count']} · max severity {row['max_severity']} · last {row['last_seen']}")
             await message.answer("\\n".join(lines) if len(lines)>1 else "No suspicious activity recorded.")
         return
     if action=="logs":
