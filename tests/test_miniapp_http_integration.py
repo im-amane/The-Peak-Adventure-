@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -36,8 +37,12 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.previous_path = main.DB_PATH
         self.previous_db = main.db
         self.previous_token = main.TOKEN
+        self.previous_admin_ids = main.ADMIN_IDS
+        self.previous_monitor = main.runtime_monitor
         main.DB_PATH = str(Path(self.temp_dir.name) / "miniapp-http.db")
         main.TOKEN = self.token
+        main.ADMIN_IDS = set()
+        main.runtime_monitor = main.RuntimeMonitor()
         main.db = None
         await main.init_db()
         await main.get_player(self.user_id, "HttpHero")
@@ -60,6 +65,8 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         main.db = self.previous_db
         main.DB_PATH = self.previous_path
         main.TOKEN = self.previous_token
+        main.ADMIN_IDS = self.previous_admin_ids
+        main.runtime_monitor = self.previous_monitor
         self.temp_dir.cleanup()
 
     async def test_http_routes_enforce_telegram_auth_and_healthcheck_database(self):
@@ -80,6 +87,54 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["class_selected"])
         self.assertEqual(payload["hero_class"], "Knight")
         self.assertFalse(payload["battle_active"])
+
+    async def test_operations_metrics_require_admin_init_data_and_return_aggregate_health(self):
+        unauthorized = await self.client.get("/ops/metrics")
+        self.assertEqual(unauthorized.status, 401)
+
+        forbidden = await self.client.get("/ops/metrics", headers=self.headers)
+        self.assertEqual(forbidden.status, 403)
+
+        health = await self.client.get("/healthz")
+        self.assertEqual(health.status, 200)
+        main.ADMIN_IDS = {self.user_id}
+        response = await self.client.get("/ops/metrics", headers=self.headers)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.headers.get("Cache-Control"), "no-store")
+        payload = await response.json()
+        self.assertGreaterEqual(payload["requests_total"], 3)
+        self.assertEqual(payload["routes"]["/healthz"]["requests"], 1)
+        self.assertIsNotNone(payload["database"]["last_success_at"])
+        self.assertNotIn(str(self.user_id), json.dumps(payload))
+
+    async def test_operations_alert_loop_notifies_admin_on_failure_and_recovery(self):
+        from unittest.mock import AsyncMock
+
+        main.ADMIN_IDS = {self.user_id}
+        calls = 0
+
+        async def fake_healthcheck():
+            nonlocal calls
+            calls += 1
+            main.runtime_monitor.record_database_probe(
+                calls > 1,
+                None if calls > 1 else "test outage",
+            )
+            return calls > 1
+
+        bot = type("FakeBot", (), {})()
+        bot.send_message = AsyncMock()
+        sleep = AsyncMock(side_effect=[None, asyncio.CancelledError()])
+        with patch("main.database_healthcheck", new=fake_healthcheck), patch(
+            "main.asyncio.sleep", new=sleep
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await main.operations_alert_loop(bot)
+
+        self.assertEqual(bot.send_message.await_count, 2)
+        messages = [call.args[1] for call in bot.send_message.await_args_list]
+        self.assertIn("database is unavailable", messages[0])
+        self.assertIn("database connection recovered", messages[1])
 
     async def test_authenticated_http_exploration_persists_active_battle(self):
         response = await self.client.post(

@@ -72,6 +72,14 @@ Required before a public launch:
 - Security and load testing are completed against a representative environment.
 - Cloudflare-to-Heroku routing and health checks are verified.
 
+## Runtime monitoring implemented in the application
+
+- `/healthz` performs a live database probe and returns HTTP 503 when the database is unavailable.
+- `/ops/metrics` requires valid Telegram initData from an ID in `ADMIN_IDS`. It exposes aggregate request/status counts, bounded route latency summaries, database probe state, and backup freshness/error state. It does not retain Telegram IDs or request payloads.
+- The runtime monitor sends Telegram admin alerts when database availability or backup health changes, and sends recovery notices when those conditions clear.
+- These counters and alert-transition states are in memory and reset when the process restarts. They are operational signals, not a durable monitoring history or an external alerting integration.
+- Configure `ADMIN_IDS` to receive alerts. Before public production launch, connect Heroku log drains/metrics or an external monitoring provider and verify alert delivery with a controlled failure drill.
+
 ## Intended deployment shape
 
 | Component | Target | Current status |
