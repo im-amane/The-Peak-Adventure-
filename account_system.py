@@ -139,6 +139,15 @@ async def _delete_player_account_unlocked(db,user_id):
     await db.execute("DELETE FROM group_bans WHERE user_id=? OR actor_id=?",(user_id,user_id))
     await db.execute("DELETE FROM group_raid_contributions WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_raid_cooldowns WHERE user_id=?",(user_id,))
+    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='guild_war_duel_events'")
+    if await cur.fetchone():
+        await db.execute(
+            """DELETE FROM guild_war_duel_events
+               WHERE winner_id=? OR duel_id IN (
+                 SELECT duel_id FROM duels WHERE challenger_id=? OR opponent_id=?
+               )""",
+            (user_id,user_id,user_id),
+        )
     await db.execute("DELETE FROM duels WHERE challenger_id=? OR opponent_id=?",(user_id,user_id))
     # Return escrow and close/reopen auctions before deleting the player's account.
     cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auction_listings'")
