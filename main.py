@@ -2033,11 +2033,11 @@ async def create_duel(message: Message):
         return
     cur = await db.execute(
         "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
-        "VALUES (?, ?, ?, ?, ?, 'pending')",
+        "VALUES (?, ?, ?, ?, ?, 'pending') RETURNING duel_id",
         (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
     )
+    duel_id = (await cur.fetchone())["duel_id"]
     await db.commit()
-    duel_id = cur.lastrowid
     await message.answer(
         f"⚔️ <b>Duel Challenge #{duel_id}</b>\n"
         f"{escape(challenger['username'] or 'Challenger')} challenges "
