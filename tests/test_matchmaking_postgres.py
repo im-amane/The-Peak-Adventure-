@@ -79,6 +79,7 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         result = await perform_matchmaking_battle_action(
             self.db_two, 9_100_000_001, match_id, "attack", main.HERO_CLASSES,
             rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+            now=2_000_000_302,
         )
         self.assertEqual(result["damage"], 86)
 
