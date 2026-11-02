@@ -4,6 +4,44 @@ import "../webapp/pathfinding.js";
 
 const { findPath } = globalThis.PeakPathfinding;
 
+function segmentIntersectsExpandedRect(from, to, obstacle, margin) {
+  const halfWidth = obstacle.width / 2 + margin;
+  const halfHeight = obstacle.height / 2 + margin;
+  const left = obstacle.x - halfWidth;
+  const right = obstacle.x + halfWidth;
+  const top = obstacle.y - halfHeight;
+  const bottom = obstacle.y + halfHeight;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  let enter = 0;
+  let leave = 1;
+  const p = [-dx, dx, -dy, dy];
+  const q = [from.x - left, right - from.x, from.y - top, bottom - from.y];
+  for (let index = 0; index < 4; index++) {
+    if (p[index] === 0) {
+      if (q[index] < 0) return false;
+      continue;
+    }
+    const ratio = q[index] / p[index];
+    if (p[index] < 0) enter = Math.max(enter, ratio);
+    else leave = Math.min(leave, ratio);
+    if (enter > leave) return false;
+  }
+  return true;
+}
+
+test("smooths unobstructed A-star routes to a single destination waypoint", () => {
+  const destination = { x: 272, y: 272 };
+  const path = findPath(
+    { x: 16, y: 16 },
+    destination,
+    [],
+    { width: 320, height: 320, cellSize: 16 },
+  );
+
+  assert.deepEqual(path, [destination]);
+});
+
 test("finds a route around an obstacle without entering its clearance area", () => {
   const obstacle = { x: 96, y: 80, width: 60, height: 60 };
   const path = findPath(
@@ -134,4 +172,27 @@ test("checks direct movement when start and goal share a grid cell", () => {
   );
 
   assert.deepEqual(path, []);
+});
+
+
+test("smoothed obstacle routes keep every movement segment outside clearance", () => {
+  const start = { x: 16, y: 80 };
+  const obstacle = { x: 96, y: 80, width: 60, height: 60 };
+  const path = findPath(
+    start,
+    { x: 176, y: 80 },
+    [obstacle],
+    { width: 224, height: 160, cellSize: 32, margin: 8 },
+  );
+  const points = [start, ...path];
+
+  assert.ok(path.length >= 2, "the obstacle should require a detour");
+  assert.ok(path.length < 6, "line-of-sight smoothing should remove grid zigzags");
+  for (let index = 1; index < points.length; index++) {
+    assert.equal(
+      segmentIntersectsExpandedRect(points[index - 1], points[index], obstacle, 8),
+      false,
+      "smoothed movement segments must not cross the obstacle clearance area",
+    );
+  }
 });
