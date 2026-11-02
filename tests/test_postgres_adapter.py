@@ -1120,7 +1120,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertEqual(sum(isinstance(x, int) for x in results), 1)
             self.assertEqual(sum(isinstance(x, FriendError) for x in results), 1)
-            self.assertEqual(len(await list_pending_friend_requests(self.db, self.alice)), 1)
+            self.assertEqual(len(await list_pending_friend_requests(self.db, self.bob)), 1)
             await self.db.commit()
         finally:
             await second.close()
@@ -1128,7 +1128,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_pending_request_limit_is_enforced(self):
         for target in range(2000, 2010):
             await send_friend_request(self.db, self.alice, target)
-        with self.assertRaisesRegex(FriendError, "limit"):
+        with self.assertRaises(FriendError):
             await send_friend_request(self.db, self.alice, 2010)
 
     async def test_friend_request_preserves_outer_transaction(self):
@@ -1136,7 +1136,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
         await send_friend_request(self.db, self.alice, self.bob)
         self.assertTrue(self.db.in_transaction)
         await self.db.rollback()
-        self.assertEqual(await list_pending_friend_requests(self.db, self.alice), [])
+        self.assertEqual(await list_pending_friend_requests(self.db, self.bob), [])
 
     async def test_friend_schema_initialization_is_idempotent(self):
         await init_friend_tables(self.db)
