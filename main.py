@@ -3692,26 +3692,31 @@ async def api_explore(request: web.Request):
             battle_monster = scale_evolved_monster(monster) if evolved else monster
             if elite:
                 battle_monster = scale_elite_monster(battle_monster)
-            # The Mini App must pay the same exploration cost as Telegram /explore.
+            # Keep stamina debit, battle creation, and discovery in one transaction.
             # Existing battles are checked above, so refreshing the active battle is free.
             try:
-                await consume_stamina(db, user_id, EXPLORE_COST)
+                await db.execute("BEGIN IMMEDIATE")
+                await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
+                await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
+                await db.execute(
+                    "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
+                    (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
+                )
+                await db.execute(
+                    "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+                    (user_id, monster_level),
+                )
+                await db.commit()
             except StaminaError as exc:
+                await db.rollback()
                 stamina_state = await get_stamina(db, user_id)
                 return web.json_response(
                     {"error": str(exc), "stamina": stamina_state},
                     status=409,
                 )
-            await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
-            await db.execute(
-                "INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
-                (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
-            )
-            await db.execute(
-                "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
-                (user_id, monster_level),
-            )
-            await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
     return web.json_response({"message": "A monster approaches!", "state": await miniapp_state(user)})
 
 
