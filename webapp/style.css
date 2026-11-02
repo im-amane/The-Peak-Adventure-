@@ -245,3 +245,9 @@ button:disabled{opacity:.55}
   .social-tabs [role="tab"]{min-height:42px;font-size:11px}
   .social-card-grid{grid-template-columns:1fr}
 }
+
+.guild-management-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;margin:12px 0}
+.guild-management-tools form{min-width:0}
+.guild-management-tools>button{align-self:end;min-height:42px}
+.guild-management-tools [hidden]{display:none!important}
+.guild-management-tools [role=status]{grid-column:1/-1;margin:0}
