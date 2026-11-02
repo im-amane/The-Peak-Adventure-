@@ -112,6 +112,54 @@ async def init_guild_features(db):
     for statement in statements:
         await db.execute(statement)
 
+
+@_transactional
+async def disband_guild(db,guild_id,actor_id):
+    """Delete a guild and every guild-owned record atomically."""
+    if not valid_id(guild_id) or not valid_id(actor_id):
+        raise GuildFeatureError("Invalid guild disband request.")
+    cur=await db.execute(
+        "SELECT g.guild_id,m.role FROM guilds g "
+        "JOIN guild_members m ON m.guild_id=g.guild_id "
+        "WHERE g.guild_id=? AND m.user_id=?",
+        (guild_id,actor_id),
+    )
+    membership=await cur.fetchone()
+    if not membership or membership["role"]!="leader":
+        raise GuildFeatureError("Only the guild leader can disband this guild.")
+
+    await db.execute(
+        "DELETE FROM guild_war_duel_events WHERE war_id IN "
+        "(SELECT war_id FROM guild_wars WHERE challenger_guild=? OR target_guild=?)",
+        (guild_id,guild_id),
+    )
+    await db.execute(
+        "DELETE FROM guild_raid_contributions WHERE raid_id IN "
+        "(SELECT raid_id FROM guild_raids WHERE guild_id=?)",
+        (guild_id,),
+    )
+    await db.execute(
+        "DELETE FROM guild_raid_cooldowns WHERE raid_id IN "
+        "(SELECT raid_id FROM guild_raids WHERE guild_id=?)",
+        (guild_id,),
+    )
+    for table in (
+        "guild_invites","guild_announcements","guild_chat_messages",
+        "guild_missions","guild_raids","guild_wars",
+    ):
+        if table=="guild_wars":
+            await db.execute(
+                "DELETE FROM guild_wars WHERE challenger_guild=? OR target_guild=?",
+                (guild_id,guild_id),
+            )
+        else:
+            await db.execute(f"DELETE FROM {table} WHERE guild_id=?",(guild_id,))
+    await db.execute("DELETE FROM guild_members WHERE guild_id=?",(guild_id,))
+    cur=await db.execute("DELETE FROM guilds WHERE guild_id=?",(guild_id,))
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild changed while it was being disbanded.")
+    return True
+
 async def guild_role(db,guild_id,user_id):
     cur=await db.execute("SELECT role FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
     row=await cur.fetchone()
