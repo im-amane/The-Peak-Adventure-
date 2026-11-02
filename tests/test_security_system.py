@@ -63,6 +63,10 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM transaction_marker")
         self.assertEqual((await cur.fetchone())["total"], 0)
 
+    async def test_unhashable_event_type_is_rejected_cleanly(self):
+        with self.assertRaises(SecurityEventError):
+            await record_security_event(self.db, 101, [], "malformed event")
+
     async def test_invalid_event_and_limits_are_rejected(self):
         with self.assertRaises(SecurityEventError):
             await record_security_event(self.db, 101, "not_allowed")
