@@ -32,6 +32,14 @@ class MatchmakingApiTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.commit()
         self.user = {"id": self.user_id, "username": "QueueApiHero"}
+        self.other_user_id = 9_200_000_002
+        await main.get_player(self.other_user_id, "QueueApiOpponent")
+        await self.db.execute(
+            "UPDATE players SET class_selected=1 WHERE user_id=?",
+            (self.other_user_id,),
+        )
+        await self.db.commit()
+        self.other_user = {"id": self.other_user_id, "username": "QueueApiOpponent"}
 
     async def asyncTearDown(self):
         main.db = self.previous_db
@@ -53,6 +61,35 @@ class MatchmakingApiTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(cancelled.body.decode())
         self.assertTrue(body["result"]["cancelled"])
         self.assertEqual(body["state"]["matchmaking"]["status"], "cancelled")
+
+    async def test_matched_players_can_take_authenticated_pvp_turns(self):
+        first = await self.call_api({"action": "join", "mode": "casual"})
+        self.assertEqual(first.status, 200)
+        with patch("main.validate_init_data", return_value=self.other_user):
+            second = await main.api_matchmaking(FakeRequest({"action": "join", "mode": "casual"}))
+        self.assertEqual(second.status, 200)
+        match_id = json.loads(second.body.decode())["result"]["match_id"]
+
+        attack = await self.call_api({"action": "attack", "match_id": match_id})
+        self.assertEqual(attack.status, 200)
+        body = json.loads(attack.body.decode())
+        self.assertEqual(body["result"]["status"], "active")
+        self.assertEqual(body["state"]["matchmaking"]["battle"]["turn_user_id"], self.other_user_id)
+        self.assertFalse(body["state"]["matchmaking"]["battle"]["is_my_turn"])
+
+    async def test_pvp_action_rejects_unexpected_fields_and_non_participants(self):
+        invalid = await self.call_api({"action": "attack", "match_id": 1, "damage": 99999})
+        self.assertEqual(invalid.status, 400)
+        await self.call_api({"action": "join", "mode": "casual"})
+        with patch("main.validate_init_data", return_value=self.other_user):
+            second = await main.api_matchmaking(FakeRequest({"action": "join", "mode": "casual"}))
+        match_id = json.loads(second.body.decode())["result"]["match_id"]
+        outsider_id = 9_200_000_003
+        await main.get_player(outsider_id, "QueueApiOutsider")
+        outsider = {"id": outsider_id, "username": "QueueApiOutsider"}
+        with patch("main.validate_init_data", return_value=outsider):
+            response = await main.api_matchmaking(FakeRequest({"action": "attack", "match_id": match_id}))
+        self.assertEqual(response.status, 409)
 
     async def test_unselected_class_cannot_join(self):
         await self.db.execute(

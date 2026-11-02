@@ -2,6 +2,7 @@ import unittest
 
 import aiosqlite
 
+from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
 from matchmaking_system import (
     MatchmakingError,
     cancel_matchmaking,
@@ -20,9 +21,14 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute(
             """CREATE TABLE players(
                  user_id INTEGER PRIMARY KEY,
+                 username TEXT,
                  level INTEGER NOT NULL DEFAULT 1,
                  pvp_wins INTEGER NOT NULL DEFAULT 0,
-                 pvp_losses INTEGER NOT NULL DEFAULT 0
+                 pvp_losses INTEGER NOT NULL DEFAULT 0,
+                 max_hp INTEGER NOT NULL DEFAULT 100,
+                 hero_class TEXT NOT NULL DEFAULT 'Knight',
+                 weapon_attack INTEGER NOT NULL DEFAULT 0,
+                 armor_defense INTEGER NOT NULL DEFAULT 0
                )"""
         )
         await self.db.executemany(
@@ -63,6 +69,56 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["winner_id"], 2)
         self.assertEqual((await get_matchmaking_status(self.db, 1, now=1010))["status"], "completed")
+        closed_battle = await get_matchmaking_battle(self.db, 1, second["match_id"])
+        self.assertEqual(closed_battle["status"], "finished")
+        self.assertEqual(closed_battle["winner_id"], 2)
+
+    async def test_matchmaking_match_creates_live_battle_and_turns_are_server_authoritative(self):
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+        battle = await get_matchmaking_battle(self.db, 1, match_id)
+        self.assertEqual(battle["status"], "active")
+        self.assertTrue(battle["is_my_turn"])
+        self.assertEqual(battle["my_hp"], 100)
+        self.assertEqual(battle["opponent_hp"], 100)
+
+        classes = {
+            "Knight": {"attack": 8, "defense": 12},
+            "Mage": {"attack": 18, "defense": 0},
+            "Archer": {"attack": 12, "defense": 4},
+            "Berserker": {"attack": 22, "defense": -3},
+        }
+        with self.assertRaisesRegex(MatchmakingBattleError, "Wait for your opponent"):
+            await perform_matchmaking_battle_action(self.db, 2, match_id, "attack", classes)
+
+        turn = await perform_matchmaking_battle_action(
+            self.db, 1, match_id, "attack", classes,
+            rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+        )
+        self.assertEqual(turn["status"], "active")
+        self.assertEqual(turn["turn_user_id"], 2)
+        self.assertEqual(turn["turn_count"], 1)
+        self.assertLess(turn["opponent_hp"], 100)
+
+    async def test_matchmaking_pvp_surrender_settles_stats_once(self):
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+        classes = {"Knight": {"attack": 8, "defense": 12}}
+        result = await perform_matchmaking_battle_action(self.db, 1, match_id, "surrender", classes)
+        self.assertEqual(result["status"], "finished")
+        self.assertEqual(result["winner_id"], 2)
+        self.assertEqual(result["turn_count"], 1)
+        cursor = await self.db.execute(
+            "SELECT user_id,pvp_wins,pvp_losses FROM players WHERE user_id IN (1,2) ORDER BY user_id"
+        )
+        rows = await cursor.fetchall()
+        self.assertEqual([(row["pvp_wins"], row["pvp_losses"]) for row in rows], [(0, 1), (1, 0)])
+        cursor = await self.db.execute(
+            "SELECT status FROM matchmaking_queue WHERE user_id IN (1,2) ORDER BY user_id"
+        )
+        self.assertEqual([row["status"] for row in await cursor.fetchall()], ["completed", "completed"])
 
     async def test_join_is_idempotent_and_cancelled_users_are_rate_limited(self):
         first = await join_matchmaking(self.db, 1, now=1000)
