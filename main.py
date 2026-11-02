@@ -4732,6 +4732,12 @@ API_ROUTE_LIMITS = {
     "/api/premium-shop": 6,
     "/api/world": 15,
     "/api/dungeon": 15,
+    # Character, story and reward mutations get endpoint-specific ceilings too.
+    "/api/appearance": 10,
+    "/api/story": 15,
+    "/api/quest/claim": 10,
+    "/api/daily-mission/claim": 10,
+    "/api/weekly-quest/claim": 10,
 }
 
 
