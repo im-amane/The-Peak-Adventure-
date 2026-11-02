@@ -2120,6 +2120,24 @@ class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
         await self.db.close()
 
+    async def test_database_rate_limiter_serializes_same_connection_burst(self):
+        limiter = DatabaseSlidingWindowRateLimiter(window_seconds=60)
+        try:
+            await limiter.init(self.db)
+            results = await asyncio.gather(*(
+                limiter.allow(self.db, "postgres-same-connection-burst", 12, now=600)
+                for _ in range(120)
+            ))
+            self.assertEqual(sum(allowed for allowed, _ in results), 12)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM api_rate_limit_events WHERE rate_key=?",
+                ("postgres-same-connection-burst",),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 12)
+        finally:
+            await self.db.execute("DROP TABLE IF EXISTS api_rate_limit_events")
+            await self.db.commit()
+
     async def test_database_rate_limit_is_shared_across_postgres_connections(self):
         other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
         limiter = DatabaseSlidingWindowRateLimiter(window_seconds=10)
