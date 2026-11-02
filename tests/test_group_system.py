@@ -109,4 +109,22 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT COUNT(*) FROM group_raid_cooldowns")
   self.assertEqual((await cur.fetchone())[0],0)
 
+ async def test_group_xp_award_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await award_group_xp(self.db,-1001,500)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT group_level,group_xp FROM group_profiles WHERE chat_id=-1001")
+  row=await cur.fetchone()
+  self.assertEqual((row["group_level"],row["group_xp"]),(1,0))
+
+ async def test_group_xp_award_rolls_back_failed_update(self):
+  await self.db.execute("CREATE TRIGGER reject_group_xp BEFORE UPDATE OF group_xp ON group_profiles BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await award_group_xp(self.db,-1001,500)
+  self.assertFalse(self.db.in_transaction)
+  cur=await self.db.execute("SELECT group_level,group_xp FROM group_profiles WHERE chat_id=-1001")
+  row=await cur.fetchone()
+  self.assertEqual((row["group_level"],row["group_xp"]),(1,0))
 if __name__=="__main__": unittest.main()
