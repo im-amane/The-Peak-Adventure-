@@ -228,6 +228,33 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         cur=await main.db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
         self.assertIsNone(await cur.fetchone())
 
+    async def test_miniapp_exploration_rolls_back_stamina_when_battle_insert_fails(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.get_stamina(main.db, user_id)
+        await main.db.execute(
+            """CREATE TRIGGER reject_miniapp_battle
+               BEFORE INSERT ON battles
+               BEGIN SELECT RAISE(ABORT,'battle unavailable'); END"""
+        )
+        await main.db.commit()
+
+        with patch("main.get_current_world", return_value=1):
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "battle unavailable"):
+                await self._call(main.api_explore, {})
+
+        self.assertFalse(main.db.in_transaction)
+        stamina = await main.get_stamina(main.db, user_id)
+        self.assertEqual(stamina["stamina"], 100)
+        cur = await main.db.execute(
+            "SELECT COUNT(*) FROM battles WHERE user_id=?",
+            (user_id,),
+        )
+        self.assertEqual((await cur.fetchone())[0], 0)
+
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
         self.assertEqual(response.status, 400)
