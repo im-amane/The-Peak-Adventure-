@@ -193,7 +193,7 @@ async def dashboard_stats(db) -> dict:
     return result
 
 
-async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
+async def export_player_data(db, user_id: int) -> dict:
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
         raise AdminError("Invalid player ID.")
     tables={
@@ -247,8 +247,7 @@ async def export_player_data(db: aiosqlite.Connection, user_id: int) -> dict:
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
         if key in optional_tables:
-            cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(optional_tables[key],))
-            if not await cur.fetchone():
+            if not await _table_exists(db, optional_tables[key]):
                 result["data"][key]=[]
                 continue
         cur=await db.execute(query,params)
