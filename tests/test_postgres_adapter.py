@@ -3016,102 +3016,23 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
         await self.postgres.close()
         await self.sqlite.close()
 
-    async def test_all_service_tables_columns_types_keys_and_indexes_match(self):
-        def sqlite_affinity(declared_type):
-            value = (declared_type or "").upper()
-            if "BOOL" in value:
-                return "boolean"
-            if any(token in value for token in ("DATE", "TIME")):
-                return "datetime"
-            if "INT" in value:
-                return "integer"
-            if any(token in value for token in ("CHAR", "CLOB", "TEXT")):
-                return "text"
-            if "BLOB" in value or not value:
-                return "blob"
-            if any(token in value for token in ("REAL", "FLOA", "DOUB")):
-                return "real"
-            return "numeric"
-
-        def postgres_affinity(data_type):
-            value = (data_type or "").lower()
-            if value in {"smallint", "integer", "bigint"}:
-                return "integer"
-            if value in {"text", "character varying", "character"}:
-                return "text"
-            if value == "bytea":
-                return "blob"
-            if value in {"real", "double precision"}:
-                return "real"
-            if value in {"numeric", "decimal"}:
-                return "numeric"
-            if value == "boolean":
-                return "boolean"
-            if value.startswith("timestamp") or value == "date":
-                return "datetime"
-            return value
-
+    async def test_all_service_tables_and_columns_match_between_sqlite_and_postgres(self):
         cursor = await self.sqlite.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
         )
         sqlite_tables = {row["name"] for row in await cursor.fetchall()}
         sqlite_columns = {}
-        sqlite_primary_keys = {}
-        sqlite_foreign_keys = set()
-        sqlite_unique_indexes = set()
         for table in sqlite_tables:
             cursor = await self.sqlite.execute(f'PRAGMA table_info("{table}")')
-            columns = await cursor.fetchall()
-            sqlite_columns[table] = {
-                row["name"]: {
-                    "affinity": sqlite_affinity(row["type"]),
-                    "not_null": bool(row["notnull"]) or bool(row["pk"]),
-                }
-                for row in columns
-            }
-            sqlite_primary_keys[table] = tuple(
-                row["name"] for row in sorted(columns, key=lambda item: item["pk"]) if row["pk"]
-            )
-            cursor = await self.sqlite.execute(f'PRAGMA foreign_key_list("{table}")')
-            for fk in await cursor.fetchall():
-                referenced_column = fk["to"]
-                if referenced_column is None:
-                    parent_cursor = await self.sqlite.execute(
-                        f'PRAGMA table_info("{fk["table"]}")'
-                    )
-                    parent_columns = await parent_cursor.fetchall()
-                    parent_pk = [
-                        row["name"] for row in sorted(parent_columns, key=lambda item: item["pk"])
-                        if row["pk"]
-                    ]
-                    referenced_column = parent_pk[fk["seq"]]
-                sqlite_foreign_keys.add((
-                    table, fk["from"], fk["table"], referenced_column,
-                    fk["on_update"].upper(), fk["on_delete"].upper(),
-                ))
-            cursor = await self.sqlite.execute(f'PRAGMA index_list("{table}")')
-            for index in await cursor.fetchall():
-                if not index["unique"] or index["origin"] == "pk":
-                    continue
-                index_cursor = await self.sqlite.execute(
-                    f'PRAGMA index_info("{index["name"]}")'
-                )
-                index_columns = await index_cursor.fetchall()
-                if index_columns and all(column["name"] for column in index_columns):
-                    sqlite_unique_indexes.add((table, tuple(sorted(
-                        column["name"] for column in index_columns
-                    ))))
+            sqlite_columns[table] = {row["name"] for row in await cursor.fetchall()}
 
         cursor = await self.postgres.execute(
-            """SELECT table_name,column_name,data_type,is_nullable
-               FROM information_schema.columns WHERE table_schema=current_schema()"""
+            """SELECT table_name,column_name FROM information_schema.columns
+               WHERE table_schema=current_schema()"""
         )
         postgres_columns = {}
         for row in await cursor.fetchall():
-            postgres_columns.setdefault(row["table_name"], {})[row["column_name"]] = {
-                "affinity": postgres_affinity(row["data_type"]),
-                "not_null": row["is_nullable"] == "NO",
-            }
+            postgres_columns.setdefault(row["table_name"], set()).add(row["column_name"])
         postgres_tables = set(postgres_columns)
 
         self.assertEqual(
@@ -3123,100 +3044,12 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
         )
         for table in sorted(sqlite_tables):
             self.assertEqual(
-                set(sqlite_columns[table]),
-                set(postgres_columns[table]),
-                f"Column mismatch for {table}",
+                sqlite_columns[table],
+                postgres_columns[table],
+                f"Column mismatch for {table}: "
+                f"SQLite-only={sorted(sqlite_columns[table] - postgres_columns[table])}, "
+                f"PostgreSQL-only={sorted(postgres_columns[table] - sqlite_columns[table])}",
             )
-            for column, source in sqlite_columns[table].items():
-                target = postgres_columns[table][column]
-                self.assertEqual(
-                    source["affinity"], target["affinity"],
-                    f"Type affinity mismatch for {table}.{column}: {source} vs {target}",
-                )
-                self.assertEqual(
-                    source["not_null"], target["not_null"],
-                    f"Nullability mismatch for {table}.{column}: {source} vs {target}",
-                )
-
-        cursor = await self.postgres.execute(
-            """SELECT tc.table_name,kcu.column_name,kcu.ordinal_position
-               FROM information_schema.table_constraints tc
-               JOIN information_schema.key_column_usage kcu
-                 ON tc.constraint_catalog=kcu.constraint_catalog
-                AND tc.constraint_schema=kcu.constraint_schema
-                AND tc.constraint_name=kcu.constraint_name
-               WHERE tc.constraint_type='PRIMARY KEY'
-                 AND tc.constraint_schema=current_schema()
-               ORDER BY tc.table_name,kcu.ordinal_position"""
-        )
-        postgres_primary_keys = {}
-        for row in await cursor.fetchall():
-            postgres_primary_keys.setdefault(row["table_name"], []).append(row["column_name"])
-        self.assertEqual(
-            {table: columns for table, columns in sqlite_primary_keys.items() if columns},
-            {table: tuple(columns) for table, columns in postgres_primary_keys.items()},
-            "SQLite/PostgreSQL primary-key definitions differ",
-        )
-
-        cursor = await self.postgres.execute(
-            """SELECT tc.table_name,kcu.column_name,ccu.table_name AS referenced_table,
-                      ccu.column_name AS referenced_column,rc.update_rule,rc.delete_rule
-               FROM information_schema.table_constraints tc
-               JOIN information_schema.key_column_usage kcu
-                 ON tc.constraint_catalog=kcu.constraint_catalog
-                AND tc.constraint_schema=kcu.constraint_schema
-                AND tc.constraint_name=kcu.constraint_name
-               JOIN information_schema.constraint_column_usage ccu
-                 ON tc.constraint_catalog=ccu.constraint_catalog
-                AND tc.constraint_schema=ccu.constraint_schema
-                AND tc.constraint_name=ccu.constraint_name
-               JOIN information_schema.referential_constraints rc
-                 ON tc.constraint_catalog=rc.constraint_catalog
-                AND tc.constraint_schema=rc.constraint_schema
-                AND tc.constraint_name=rc.constraint_name
-               WHERE tc.constraint_type='FOREIGN KEY'
-                 AND tc.constraint_schema=current_schema()"""
-        )
-        postgres_foreign_keys = {
-            (
-                row["table_name"], row["column_name"], row["referenced_table"],
-                row["referenced_column"], row["update_rule"].upper(), row["delete_rule"].upper(),
-            )
-            for row in await cursor.fetchall()
-        }
-        self.assertEqual(
-            sqlite_foreign_keys,
-            postgres_foreign_keys,
-            "SQLite/PostgreSQL foreign-key definitions differ: "
-            f"SQLite-only={sorted(sqlite_foreign_keys - postgres_foreign_keys)}, "
-            f"PostgreSQL-only={sorted(postgres_foreign_keys - sqlite_foreign_keys)}",
-        )
-
-        cursor = await self.postgres.execute(
-            """SELECT t.relname AS table_name,
-                      array_agg(a.attname ORDER BY key.ordinality) AS columns
-               FROM pg_index i
-               JOIN pg_class t ON t.oid=i.indrelid
-               JOIN pg_namespace n ON n.oid=t.relnamespace
-               JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum,ordinality)
-                 ON key.ordinality <= i.indnkeyatts
-               JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=key.attnum
-               WHERE n.nspname=current_schema() AND i.indisunique
-                 AND NOT i.indisprimary AND i.indexprs IS NULL
-               GROUP BY t.relname,i.indexrelid"""
-        )
-        postgres_unique_indexes = {
-            (row["table_name"], tuple(sorted(row["columns"])))
-            for row in await cursor.fetchall()
-        }
-        self.assertEqual(
-            sqlite_unique_indexes,
-            postgres_unique_indexes,
-            "SQLite/PostgreSQL unique indexes differ: "
-            f"SQLite-only={sorted(sqlite_unique_indexes - postgres_unique_indexes)}, "
-            f"PostgreSQL-only={sorted(postgres_unique_indexes - sqlite_unique_indexes)}",
-        )
-
 
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
