@@ -6,6 +6,7 @@ for a staged PostgreSQL migration.
 """
 from __future__ import annotations
 
+import asyncio
 import re
 from collections.abc import Iterable, Sequence
 from typing import Any
@@ -279,8 +280,12 @@ class PostgresConnection:
 
     dialect = "postgres"
 
-    def __init__(self, connection: psycopg.AsyncConnection):
+    def __init__(self, connection: psycopg.AsyncConnection, conninfo: str):
         self._connection = connection
+        self._conninfo = conninfo
+        self._advisory_connection: psycopg.AsyncConnection | None = None
+        self._advisory_connect_lock = asyncio.Lock()
+        self._held_advisory_keys: dict[int, int] = {}
 
     @classmethod
     async def connect(cls, conninfo: str) -> "PostgresConnection":
@@ -291,7 +296,7 @@ class PostgresConnection:
             row_factory=dict_row,
             autocommit=True,
         )
-        return cls(connection)
+        return cls(connection, conninfo)
 
     @property
     def in_transaction(self) -> bool:
@@ -334,21 +339,54 @@ class PostgresConnection:
             raise ValueError("Advisory lock key must be a positive signed 64-bit integer.")
         return user_id
 
+    async def _get_advisory_connection(self) -> psycopg.AsyncConnection:
+        # Keep advisory locks on a dedicated idle session. A gameplay transaction may
+        # be rolled back or committed while the player lock must remain held.
+        if self._advisory_connection is None or self._advisory_connection.closed:
+            async with self._advisory_connect_lock:
+                if self._advisory_connection is None or self._advisory_connection.closed:
+                    self._advisory_connection = await psycopg.AsyncConnection.connect(
+                        self._conninfo,
+                        row_factory=dict_row,
+                        autocommit=True,
+                    )
+        return self._advisory_connection
+
     async def acquire_player_lock(self, user_id: int) -> None:
         """Acquire a session-scoped lock shared by every process using this database."""
         key = self._validate_advisory_lock_key(user_id)
-        await self.execute("SELECT pg_advisory_lock(?)", (key,))
+        connection = await self._get_advisory_connection()
+        await connection.execute("SELECT pg_advisory_lock(%s)", (key,))
+        self._held_advisory_keys[key] = self._held_advisory_keys.get(key, 0) + 1
 
     async def release_player_lock(self, user_id: int) -> None:
         """Release a previously acquired session-scoped player lock."""
         key = self._validate_advisory_lock_key(user_id)
-        cursor = await self.execute(
-            "SELECT pg_advisory_unlock(?) AS released",
-            (key,),
-        )
-        row = await cursor.fetchone()
-        if row is None or not row["released"]:
+        if not self._held_advisory_keys.get(key) or self._advisory_connection is None:
             raise RuntimeError("PostgreSQL player advisory lock was not held by this connection.")
+        try:
+            cursor = await self._advisory_connection.execute(
+                "SELECT pg_advisory_unlock(%s) AS released",
+                (key,),
+            )
+            row = await cursor.fetchone()
+            if row is None or not row["released"]:
+                raise RuntimeError("PostgreSQL player advisory lock was not held by this connection.")
+            remaining = self._held_advisory_keys[key] - 1
+            if remaining:
+                self._held_advisory_keys[key] = remaining
+            else:
+                del self._held_advisory_keys[key]
+        except Exception:
+            # Closing the dedicated session releases any locks still held by it.
+            await self._advisory_connection.close()
+            self._advisory_connection = None
+            self._held_advisory_keys.clear()
+            raise
 
     async def close(self) -> None:
+        if self._advisory_connection is not None:
+            await self._advisory_connection.close()
+            self._advisory_connection = None
+            self._held_advisory_keys.clear()
         await self._connection.close()
