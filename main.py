@@ -131,6 +131,23 @@ db_lock = asyncio.Lock()
 player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
+async def _insert_generated_id(connection, sql: str, parameters, id_column: str) -> int:
+    """Insert a row and return its generated ID across SQLite and PostgreSQL."""
+    if id_column not in {"trade_id", "duel_id"}:
+        raise ValueError("Unsupported generated ID column.")
+    if getattr(connection, "dialect", "sqlite") == "postgres":
+        statement = sql.rstrip().removesuffix(";") + f" RETURNING {id_column}"
+        cursor = await connection.execute(statement, parameters)
+        row = await cursor.fetchone()
+        if row is None or row[id_column] is None:
+            raise RuntimeError(f"Insert did not return {id_column}.")
+        return int(row[id_column])
+    cursor = await connection.execute(sql, parameters)
+    if cursor.lastrowid is None:
+        raise RuntimeError(f"Insert did not generate {id_column}.")
+    return int(cursor.lastrowid)
+
+
 class DatabaseLockMiddleware:
     async def __call__(self, handler, event, data):
         async with db_lock:
@@ -988,12 +1005,13 @@ async def create_trade(message: Message):
     if await cur.fetchone():
         await message.answer("One of these players already has a pending or open trade.")
         return
-    cur = await db.execute(
+    trade_id = await _insert_generated_id(
+        db,
         "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
         (message.chat.id, initiator_id, partner_id),
+        "trade_id",
     )
     await db.commit()
-    trade_id = cur.lastrowid
     await message.answer(
         f"🤝 <b>Trade invitation #{trade_id}</b>\n"
         f"{escape(initiator['username'] or 'Player 1')} wants to trade with "
@@ -1982,13 +2000,14 @@ async def create_duel(message: Message):
     if await cur.fetchone():
         await message.answer("One of these players is already in an active duel.")
         return
-    cur = await db.execute(
+    duel_id = await _insert_generated_id(
+        db,
         "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
         "VALUES (?, ?, ?, ?, ?, 'pending')",
         (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
+        "duel_id",
     )
     await db.commit()
-    duel_id = cur.lastrowid
     await message.answer(
         f"⚔️ <b>Duel Challenge #{duel_id}</b>\n"
         f"{escape(challenger['username'] or 'Challenger')} challenges "
@@ -4227,11 +4246,13 @@ async def api_social(request: web.Request):
                     )
                     if await active_cur.fetchone():
                         return web.json_response({"error": "One of these players already has an active trade."}, status=409)
-                    trade_cur = await db.execute(
+                    trade_id = await _insert_generated_id(
+                        db,
                         "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
                         (user_id,target_id),
+                        "trade_id",
                     )
-                    result = {"trade_id": trade_cur.lastrowid, "status": "pending"}
+                    result = {"trade_id": trade_id, "status": "pending"}
                 elif action in {"trade_accept", "trade_decline"}:
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
