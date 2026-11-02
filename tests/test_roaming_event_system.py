@@ -69,7 +69,7 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reward_preserves_outer_transaction(self):
         event = await get_or_create_roaming_event(self.db, 2, 4, "Stone Warden", 1, now=2000)
-        await attack_roaming_event(self.db, event["event_id"], 1, 20, now=2000)
+        await attack_roaming_event(self.db, event["event_id"], 1, 5, now=2000)
         await attack_roaming_event(self.db, event["event_id"], 2, 100, now=2000)
         await self.db.commit()
         await self.db.execute("BEGIN")
@@ -83,7 +83,7 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_ignored_reward_claim_update_does_not_credit_coins(self):
         event = await get_or_create_roaming_event(self.db, 2, 4, "Stone Warden", 1, now=2000)
-        await attack_roaming_event(self.db, event["event_id"], 1, 20, now=2000)
+        await attack_roaming_event(self.db, event["event_id"], 1, 5, now=2000)
         await attack_roaming_event(self.db, event["event_id"], 2, 100, now=2000)
         await self.db.execute("CREATE TRIGGER ignore_roaming_reward_claim BEFORE UPDATE OF reward_claimed ON roaming_event_participants BEGIN SELECT RAISE(IGNORE); END")
         await self.db.commit()
@@ -96,7 +96,7 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_player_credit_rolls_back_reward_claim(self):
         event = await get_or_create_roaming_event(self.db, 2, 4, "Stone Warden", 1, now=2000)
-        await attack_roaming_event(self.db, event["event_id"], 1, 20, now=2000)
+        await attack_roaming_event(self.db, event["event_id"], 1, 5, now=2000)
         await attack_roaming_event(self.db, event["event_id"], 2, 100, now=2000)
         await self.db.execute("CREATE TRIGGER reject_roaming_reward BEFORE UPDATE OF coins ON players WHEN OLD.user_id=1 BEGIN SELECT RAISE(ABORT,'wallet unavailable'); END")
         await self.db.commit()
