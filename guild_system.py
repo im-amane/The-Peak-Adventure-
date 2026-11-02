@@ -493,8 +493,13 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
     if cur.rowcount != 1:
         raise GuildFeatureError("The guild raid changed; retry your attack.")
     await db.execute("INSERT INTO guild_raid_cooldowns(raid_id,user_id,last_attack_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(raid_id,user_id) DO UPDATE SET last_attack_at=CURRENT_TIMESTAMP",(raid["raid_id"],user_id))
-    await db.execute("""INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
-      ON CONFLICT(raid_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(raid["raid_id"],user_id,dealt))
+    damage_expression = (
+        "guild_raid_contributions.damage+excluded.damage"
+        if _is_postgres(db)
+        else "damage+excluded.damage"
+    )
+    await db.execute(f"""INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
+      ON CONFLICT(raid_id,user_id) DO UPDATE SET damage={damage_expression}""",(raid["raid_id"],user_id,dealt))
     if status=="won":
         cur = await db.execute("UPDATE guilds SET guild_xp=guild_xp+100 WHERE guild_id=?", (guild_id,))
         if cur.rowcount != 1:
