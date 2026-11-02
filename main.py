@@ -5065,6 +5065,9 @@ def create_web_app():
     async def serve_js(request: web.Request):
         return web.FileResponse(WEB_DIR / "game.js")
 
+    async def serve_pathfinding(request: web.Request):
+        return web.FileResponse(WEB_DIR / "pathfinding.js")
+
     async def healthz(request: web.Request):
         if not await database_healthcheck():
             return web.json_response(
@@ -5084,6 +5087,7 @@ def create_web_app():
     app.router.add_get("/", serve_index)
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
+    app.router.add_get("/pathfinding.js", serve_pathfinding)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)

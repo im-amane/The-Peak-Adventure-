@@ -174,6 +174,11 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertIn("text/html", response.headers.get("Content-Type", ""))
 
+        pathfinding = await self.client.get("/pathfinding.js")
+        self.assertEqual(pathfinding.status, 200)
+        self.assertIn("javascript", pathfinding.headers.get("Content-Type", ""))
+        self.assertIn("PeakPathfinding", await pathfinding.text())
+
 
 if __name__ == "__main__":
     unittest.main()
