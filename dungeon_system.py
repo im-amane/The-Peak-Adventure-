@@ -1,6 +1,4 @@
 """Persistent multi-room dungeons tied to the ten unlocked worlds."""
-import aiosqlite
-
 DUNGEONS=[
  {"id":i+1,"world":i+1,"name":name,"rooms":[(i*10+3,"Scout"),(i*10+6,"Guardian"),((i+1)*10,"World Boss")],
   "reward_coins":150+(i*50),"reward_potions":2}
@@ -47,12 +45,12 @@ async def init_dungeon_tables(db):
     nested = await _begin_transaction(db, "init_dungeon_tables")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_runs(
-          user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
+          user_id BIGINT PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
-          started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
+          started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TIMESTAMPTZ
         )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_rewards(
-          user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id BIGINT NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,dungeon_id)
         )""")
         await _commit_transaction(db, nested, "init_dungeon_tables")
@@ -171,10 +169,13 @@ async def claim_dungeon_reward(db,user_id):
         if not isinstance(run["dungeon_id"],int) or not 1<=run["dungeon_id"]<=len(DUNGEONS):
             raise DungeonError("Stored dungeon run is invalid.")
         dungeon=DUNGEONS[run["dungeon_id"]-1]
-        await db.execute(
-            "INSERT INTO dungeon_rewards(user_id,dungeon_id) VALUES(?,?)",
+        cur=await db.execute(
+            """INSERT INTO dungeon_rewards(user_id,dungeon_id) VALUES(?,?)
+               ON CONFLICT(user_id,dungeon_id) DO NOTHING""",
             (user_id,run["dungeon_id"]),
         )
+        if cur.rowcount!=1:
+            raise DungeonError("This dungeon reward has already been claimed.")
         cur=await db.execute(
             "UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",
             (dungeon["reward_coins"],dungeon["reward_potions"],user_id),
@@ -189,9 +190,6 @@ async def claim_dungeon_reward(db,user_id):
             raise DungeonError("Dungeon run changed before its reward could be finalized.")
         await _commit_transaction(db,nested,"claim_dungeon_reward")
         return dungeon["reward_coins"],dungeon["reward_potions"]
-    except aiosqlite.IntegrityError as exc:
-        await _rollback_transaction(db,nested,"claim_dungeon_reward")
-        raise DungeonError("This dungeon reward has already been claimed.") from exc
     except Exception:
         await _rollback_transaction(db,nested,"claim_dungeon_reward")
         raise

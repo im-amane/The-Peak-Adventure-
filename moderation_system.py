@@ -55,8 +55,8 @@ def _transactional(function):
 async def init_moderation_tables(db):
     statements=(
         """CREATE TABLE IF NOT EXISTS player_bans(
-          user_id INTEGER PRIMARY KEY,
-          actor_id INTEGER NOT NULL,
+          user_id BIGINT PRIMARY KEY,
+          actor_id BIGINT NOT NULL,
           reason TEXT NOT NULL,
           active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
           created_at INTEGER NOT NULL,
