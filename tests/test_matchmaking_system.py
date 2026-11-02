@@ -35,6 +35,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         await init_matchmaking_tables(self.db)
+        await self.db.commit()
 
     async def asyncTearDown(self):
         await self.db.close()
