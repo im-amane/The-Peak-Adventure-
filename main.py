@@ -29,7 +29,7 @@ from group_system import GroupError, attack_group_raid_and_reward, claim_group_m
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, disband_guild, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
+from guild_system import GuildFeatureError, create_guild, disband_guild, join_guild, leave_guild, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
@@ -1692,9 +1692,6 @@ async def guild_command(message: Message):
     membership = await cur.fetchone()
 
     if action == "create":
-        if membership:
-            await message.answer("You are already in a guild. Leave it before creating another.")
-            return
         if len(args) < 3:
             await message.answer("Usage: <code>/guild create Guild Name</code> (3–20 characters).")
             return
@@ -1702,73 +1699,46 @@ async def guild_command(message: Message):
         if not 3 <= len(name) <= 20 or not re.fullmatch(r"[A-Za-z0-9 _-]+", name):
             await message.answer("Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.")
             return
-        debit = await db.execute("UPDATE players SET coins=coins-100 WHERE user_id=? AND coins>=100", (user_id,))
-        if debit.rowcount == 0:
-            await message.answer("Creating a guild costs 100 coins.")
-            return
         try:
-            cur = await db.execute("INSERT INTO guilds(name, leader_id) VALUES (?, ?)", (name, user_id))
-        except aiosqlite.IntegrityError:
-            await db.rollback()
-            await message.answer("That guild name is already taken.")
+            guild_id = await create_guild(db,user_id,name)
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        guild_id = cur.lastrowid
-        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'leader')", (user_id, guild_id))
-        await db.commit()
         await message.answer(f"🏰 Guild <b>{escape(name)}</b> created! Guild ID: <code>{guild_id}</code>.")
         return
 
     if action == "join":
-        if membership:
-            await message.answer("You are already in a guild.")
-            return
         if len(args) < 3 or not args[2].isdigit():
             await message.answer("Usage: <code>/guild join guild_id</code>.")
             return
-        guild_id = int(args[2])
-        cur = await db.execute("SELECT name FROM guilds WHERE guild_id=?", (guild_id,))
-        guild = await cur.fetchone()
-        if not guild:
-            await message.answer("Guild not found.")
+        try:
+            guild_name = await join_guild(db,user_id,int(args[2]))
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (guild_id,))
-        if (await cur.fetchone())["total"] >= 20:
-            await message.answer("This guild has reached its 20-member limit.")
-            return
-        await db.execute("INSERT INTO guild_members(user_id, guild_id, role) VALUES (?, ?, 'member')", (user_id, guild_id))
-        await db.commit()
-        await message.answer(f"✅ You joined <b>{escape(guild['name'])}</b>.")
+        await message.answer(f"✅ You joined <b>{escape(guild_name)}</b>.")
         return
 
     if action == "leave":
-        if not membership:
-            await message.answer("You are not in a guild.")
+        try:
+            disbanded = await leave_guild(db,user_id)
+        except GuildFeatureError as exc:
+            await message.answer(escape(str(exc)))
             return
-        if membership["role"] == "leader":
-            cur = await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?", (membership["guild_id"],))
-            if (await cur.fetchone())["total"] > 1:
-                await message.answer("Guild leaders cannot leave while members remain. Use /guild disband; leadership transfer is not available yet.")
-                return
-            await disband_guild(db,membership["guild_id"],user_id)
-            await message.answer("You left your guild; the empty guild was cleaned up.")
-            return
-        await db.execute("DELETE FROM guild_members WHERE user_id=?", (user_id,))
-        await db.commit()
-        await message.answer("You left your guild.")
+        await message.answer(
+            "You left your guild; the empty guild was cleaned up."
+            if disbanded else "You left your guild."
+        )
         return
 
     if action == "disband":
-        if not membership or membership["role"] != "leader":
-            await message.answer("Only a guild leader can disband a guild.")
-            return
         try:
-            await disband_guild(db,membership["guild_id"],user_id)
+            await disband_guild(db,membership["guild_id"] if membership else None,user_id)
         except GuildFeatureError as exc:
             await message.answer(escape(str(exc)))
             return
         await message.answer("🏰 Your guild has been disbanded.")
         return
-
 
     if action == "invite":
         if not membership or len(args) < 3 or not args[2].isdigit():
