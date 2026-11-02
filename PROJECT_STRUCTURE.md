@@ -222,7 +222,7 @@ The-Peak-Adventure-/
 - [ ] Live Telegram bot test
 - [~] Multiplayer concurrency testing
 - [~] Security and load testing
-- [x] Render/Docker deployment configuration
+- [~] Docker configuration present; Heroku deployment blocked on PostgreSQL persistence and durable backups
 - [~] Production hosting and HTTPS launch
 - [ ] Persistent production database verification
 
