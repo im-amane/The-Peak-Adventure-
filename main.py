@@ -574,7 +574,7 @@ async def claim_quest_reward(user_id: int, quest_id: str) -> str:
     return f"🎁 <b>{quest['title']}</b> reward claimed: +{quest['coins']} coins and +{quest['potions']} potions."
 
 
-async def refresh_achievement_progress(user_id: int):
+async def refresh_achievement_progress(user_id: int, commit: bool = True):
     assert db is not None
     p = await get_player(user_id)
     cur = await db.execute("SELECT COUNT(*) AS total FROM boss_defeats WHERE user_id=?", (user_id,))
@@ -599,7 +599,8 @@ async def refresh_achievement_progress(user_id: int):
             "completed=MAX(achievement_progress.completed, excluded.completed)",
             (user_id, achievement["id"], progress, int(progress >= achievement["target"])),
         )
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def achievement_view(user_id: int):
@@ -627,29 +628,65 @@ async def achievement_view(user_id: int):
 
 async def claim_achievement_reward(user_id: int, achievement_id: str) -> str:
     assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        return "Invalid player account."
+    if not isinstance(achievement_id,str):
+        return "That achievement does not exist."
     achievement = next((a for a in ACHIEVEMENTS if a["id"] == achievement_id), None)
     if not achievement:
         return "That achievement does not exist."
-    async with player_locks[user_id]:
-        await refresh_achievement_progress(user_id)
-        cur = await db.execute(
-            "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
-            (user_id, achievement_id),
-        )
-        state = await cur.fetchone()
-        if not state or not state["completed"]:
-            return "This achievement is not complete yet."
-        if state["claimed"]:
-            return "You have already claimed this achievement reward."
-        await db.execute(
-            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
-            (achievement["coins"], achievement["potions"], user_id),
-        )
-        await db.execute(
-            "UPDATE achievement_progress SET claimed=1 WHERE user_id=? AND achievement_id=?",
-            (user_id, achievement_id),
-        )
-        await db.commit()
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_achievement_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            await refresh_achievement_progress(user_id, commit=False)
+            cur = await db.execute(
+                "SELECT completed, claimed FROM achievement_progress WHERE user_id=? AND achievement_id=?",
+                (user_id, achievement_id),
+            )
+            state = await cur.fetchone()
+            if not state or not state["completed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+                else:
+                    await db.rollback()
+                return "This achievement is not complete yet."
+            if state["claimed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+                else:
+                    await db.rollback()
+                return "You have already claimed this achievement reward."
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+                (achievement["coins"], achievement["potions"], user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Achievement reward wallet update failed.")
+            cur = await db.execute(
+                """UPDATE achievement_progress SET claimed=1
+                   WHERE user_id=? AND achievement_id=? AND completed=1 AND claimed=0""",
+                (user_id, achievement_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Achievement reward was already claimed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+        else:
+            await db.commit()
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_achievement_reward")
+                await db.execute("RELEASE SAVEPOINT claim_achievement_reward")
+            else:
+                await db.rollback()
+        raise
     return f"🏅 <b>{achievement['title']}</b> reward claimed: +{achievement['coins']} coins and +{achievement['potions']} potions."
 
 
