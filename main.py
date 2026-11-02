@@ -1919,21 +1919,38 @@ async def create_duel(message: Message):
 
 @dp.callback_query(F.data.startswith("duel_accept:"))
 async def accept_duel(call: CallbackQuery):
-    duel_id = int(call.data.split(":", 1)[1])
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "pending":
-        await call.answer("This duel invitation is no longer active.", show_alert=True)
+    duel_id_text = call.data.split(":", 1)[1]
+    if not duel_id_text.isdigit():
+        await call.answer("Invalid duel invitation.", show_alert=True)
         return
-    if call.from_user.id != duel["opponent_id"]:
-        await call.answer("Only the challenged player can accept.", show_alert=True)
-        return
-    await call.answer()
-    await db.execute(
-        "UPDATE duels SET status='active', turn_user_id=challenger_id WHERE duel_id=? AND status='pending'",
-        (duel_id,),
-    )
-    await db.commit()
+    duel_id = int(duel_id_text)
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "pending":
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        if call.from_user.id != duel["opponent_id"]:
+            await db.rollback()
+            await call.answer("Only the challenged player can accept.", show_alert=True)
+            return
+        await call.answer()
+        cur = await db.execute(
+            """UPDATE duels SET status='active',turn_user_id=challenger_id
+               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+            (duel_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     await call.message.edit_text(await duel_text(duel), reply_markup=duel_keyboard(duel_id))
@@ -1941,18 +1958,38 @@ async def accept_duel(call: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("duel_decline:"))
 async def decline_duel(call: CallbackQuery):
-    duel_id = int(call.data.split(":", 1)[1])
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "pending":
-        await call.answer("This duel invitation is no longer active.", show_alert=True)
+    duel_id_text = call.data.split(":", 1)[1]
+    if not duel_id_text.isdigit():
+        await call.answer("Invalid duel invitation.", show_alert=True)
         return
-    if call.from_user.id != duel["opponent_id"]:
-        await call.answer("Only the challenged player can decline.", show_alert=True)
-        return
-    await call.answer()
-    await db.execute("UPDATE duels SET status='declined' WHERE duel_id=?", (duel_id,))
-    await db.commit()
+    duel_id = int(duel_id_text)
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "pending":
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        if call.from_user.id != duel["opponent_id"]:
+            await db.rollback()
+            await call.answer("Only the challenged player can decline.", show_alert=True)
+            return
+        await call.answer()
+        cur = await db.execute(
+            """UPDATE duels SET status='declined'
+               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+            (duel_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            await call.answer("This duel invitation is no longer active.", show_alert=True)
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     await call.message.edit_text("✋ Duel declined.")
 
 
