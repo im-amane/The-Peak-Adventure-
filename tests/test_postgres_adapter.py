@@ -1545,10 +1545,8 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.db, guild_id, self.user_id, 10, "Root Warden", 100
         )
         self.assertIsInstance(raid_id, int)
-        raid_result = await attack_guild_raid(
-            self.db, guild_id, self.member_id, 100
-        ) if await guild_role(self.db, guild_id, self.member_id) else None
-        self.assertIsNone(raid_result)
+        with self.assertRaises(GuildFeatureError):
+            await attack_guild_raid(self.db, guild_id, self.member_id, 100)
 
         # Add the member through the invitation flow before attacking.
         invite_id = await create_guild_invite(
