@@ -113,6 +113,11 @@ class QmarkTranslationTests(unittest.TestCase):
 
         self.assertTrue(_is_write_statement("SELECT * FROM players FOR UPDATE"))
 
+    def test_executemany_begin_immediate_is_normalized(self):
+        from postgres_adapter import _prepare_statement
+
+        self.assertEqual(_prepare_statement("BEGIN IMMEDIATE"), "BEGIN")
+
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
 class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
