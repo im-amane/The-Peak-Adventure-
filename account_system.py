@@ -87,9 +87,26 @@ async def _delete_player_account_unlocked(db,user_id):
               WHERE gm.guild_id=? AND gm.user_id!=? ORDER BY p.level DESC,p.xp DESC,gm.joined_at LIMIT 1""",(guild_id,user_id))
             successor=await cur.fetchone()
             if successor:
-                await db.execute("UPDATE guild_members SET role='member' WHERE guild_id=?",(guild_id,))
-                await db.execute("UPDATE guild_members SET role='leader' WHERE user_id=?",(successor["user_id"],))
-                await db.execute("UPDATE guilds SET leader_id=? WHERE guild_id=?",(successor["user_id"],guild_id))
+                # Demote only the departing leader. Existing officers must keep
+                # their permissions when leadership is transferred.
+                cur=await db.execute(
+                    "UPDATE guild_members SET role='member' WHERE guild_id=? AND user_id=? AND role='leader'",
+                    (guild_id,user_id),
+                )
+                if cur.rowcount!=1:
+                    raise AccountError("Guild leadership changed during account deletion.")
+                cur=await db.execute(
+                    "UPDATE guild_members SET role='leader' WHERE guild_id=? AND user_id=?",
+                    (guild_id,successor["user_id"]),
+                )
+                if cur.rowcount!=1:
+                    raise AccountError("Guild successor membership could not be updated.")
+                cur=await db.execute(
+                    "UPDATE guilds SET leader_id=? WHERE guild_id=? AND leader_id=?",
+                    (successor["user_id"],guild_id,user_id),
+                )
+                if cur.rowcount!=1:
+                    raise AccountError("Guild ownership changed during account deletion.")
             else:
                 await disband_guild(db,guild_id,user_id)
         await db.execute("DELETE FROM guild_members WHERE user_id=?",(user_id,))
