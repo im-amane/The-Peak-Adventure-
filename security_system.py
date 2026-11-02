@@ -143,6 +143,8 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
                   SUM(severity) AS risk_score,
                   SUM(CASE WHEN severity >= 4 THEN 1 ELSE 0 END) AS high_severity_count,
                   COUNT(DISTINCT event_type) AS event_type_count,
+                  SUM(CASE WHEN event_type='invalid_economy_action' THEN 1 ELSE 0 END) AS economy_abuse_count,
+                  SUM(CASE WHEN event_type='repeated_rate_limit' THEN 1 ELSE 0 END) AS rate_limit_count,
                   MAX(created_at) AS last_seen
            FROM security_events
            WHERE created_at >= {cutoff}
