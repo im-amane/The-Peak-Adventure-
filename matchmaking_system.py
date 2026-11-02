@@ -147,6 +147,15 @@ async def init_matchmaking_tables(db: Any) -> None:
           winner_id BIGINT,
           updated_at BIGINT NOT NULL
         )""",
+        """CREATE TABLE IF NOT EXISTS matchmaking_battle_stats(
+          match_id BIGINT NOT NULL REFERENCES matchmaking_matches(match_id),
+          user_id BIGINT NOT NULL REFERENCES players(user_id),
+          player_level INTEGER NOT NULL,
+          hero_class TEXT NOT NULL,
+          weapon_attack INTEGER NOT NULL DEFAULT 0,
+          armor_defense INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(match_id,user_id)
+        )""",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_search ON matchmaking_queue(mode,status,queued_at)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_rating ON matchmaking_queue(mode,status,rating,player_level)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_matches_players ON matchmaking_matches(player_one_id,player_two_id,status)",
@@ -160,6 +169,24 @@ async def init_matchmaking_tables(db: Any) -> None:
            JOIN players p2 ON p2.user_id=m.player_two_id
            WHERE m.status='matched'
            ON CONFLICT(match_id) DO NOTHING""",
+        """INSERT INTO matchmaking_battle_stats(
+             match_id,user_id,player_level,hero_class,weapon_attack,armor_defense
+           )
+           SELECT m.match_id,p.user_id,p.level,p.hero_class,
+                  COALESCE(p.weapon_attack,0),COALESCE(p.armor_defense,0)
+           FROM matchmaking_matches m
+           JOIN players p ON p.user_id=m.player_one_id
+           WHERE m.status='matched'
+           ON CONFLICT(match_id,user_id) DO NOTHING""",
+        """INSERT INTO matchmaking_battle_stats(
+             match_id,user_id,player_level,hero_class,weapon_attack,armor_defense
+           )
+           SELECT m.match_id,p.user_id,p.level,p.hero_class,
+                  COALESCE(p.weapon_attack,0),COALESCE(p.armor_defense,0)
+           FROM matchmaking_matches m
+           JOIN players p ON p.user_id=m.player_two_id
+           WHERE m.status='matched'
+           ON CONFLICT(match_id,user_id) DO NOTHING""",
     )
     nested = await _begin_atomic(db, "matchmaking_init")
     try:
@@ -350,13 +377,37 @@ async def join_matchmaking(
                  match_id=excluded.match_id""",
             (user_id, mode, level, rating, stamp, stamp, match_id),
         )
-        player_cursor = await db.execute(
-            "SELECT user_id,max_hp FROM players WHERE user_id IN (?,?)",
-            (opponent["user_id"], user_id),
+        player_query = (
+            "SELECT user_id,max_hp,level,hero_class,weapon_attack,armor_defense "
+            "FROM players WHERE user_id IN (?,?) ORDER BY user_id"
         )
-        hp_by_user = {row["user_id"]: max(1, int(row["max_hp"] or 1)) for row in await player_cursor.fetchall()}
-        if opponent["user_id"] not in hp_by_user or user_id not in hp_by_user:
+        if _is_postgres(db):
+            player_query += " FOR UPDATE"
+        player_cursor = await db.execute(
+            player_query, (opponent["user_id"], user_id)
+        )
+        player_rows = await player_cursor.fetchall()
+        player_by_user = {row["user_id"]: row for row in player_rows}
+        if opponent["user_id"] not in player_by_user or user_id not in player_by_user:
             raise MatchmakingError("A matched player's combat stats could not be loaded.")
+        hp_by_user = {
+            player_id: max(1, int(player["max_hp"] or 1))
+            for player_id, player in player_by_user.items()
+        }
+        await db.executemany(
+            """INSERT INTO matchmaking_battle_stats(
+                 match_id,user_id,player_level,hero_class,weapon_attack,armor_defense
+               ) VALUES(?,?,?,?,?,?)""",
+            (
+                (
+                    match_id, player_id, int(player["level"]),
+                    player["hero_class"] or "Knight",
+                    int(player["weapon_attack"] or 0),
+                    int(player["armor_defense"] or 0),
+                )
+                for player_id, player in player_by_user.items()
+            ),
+        )
         await db.execute(
             """INSERT INTO matchmaking_battles(
                  match_id,player_one_hp,player_one_max_hp,player_two_hp,player_two_max_hp,
