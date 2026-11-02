@@ -33,6 +33,8 @@ async def init_crafting_tables(db):
     await db.commit()
 
 async def get_materials(db,user_id):
+    if type(user_id) is not int or user_id <= 0:
+        raise CraftingError("Invalid player account.")
     cur=await db.execute("SELECT material_id,quantity FROM player_materials WHERE user_id=? ORDER BY material_id",(user_id,))
     rows=await cur.fetchall()
     return {row["material_id"]:row["quantity"] for row in rows}
@@ -124,4 +126,6 @@ async def craft_item(db,user_id,player_level,recipe_id):
         raise CraftingError("Crafting failed safely. No materials were consumed.") from exc
 
 async def list_recipes(player_level):
+    if type(player_level) is not int or not 1 <= player_level <= 100:
+        raise CraftingError("Invalid player level.")
     return [{"id":key,**value,"unlocked":player_level>=value["level"]} for key,value in RECIPES.items()]
