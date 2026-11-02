@@ -17,6 +17,7 @@ class DailyMissionTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.execute("INSERT INTO players(user_id) VALUES(101)")
         await init_daily_mission_tables(self.db)
+        await self.db.commit()
 
     async def asyncTearDown(self):
         await self.db.close()
