@@ -56,7 +56,12 @@ async def _has_active_battle(db, user_id):
     return await cur.fetchone() is not None
 
 async def _settle_due(db, now):
-    await db.execute("BEGIN IMMEDIATE")
+    nested = db.in_transaction
+    savepoint = "auction_expiry_settlement"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
     try:
         cur = await db.execute(
             "SELECT * FROM auction_listings WHERE status='active' AND ends_at<=?",
@@ -126,9 +131,16 @@ async def _settle_due(db, now):
                     "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
                     (row["listing_id"],),
                 )
-        await db.commit()
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
     except Exception:
-        await db.rollback()
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
         raise
 
 async def create_listing(db, seller_id, slot, start_price, duration_hours=24, now=None):
