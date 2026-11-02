@@ -21,6 +21,47 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         main.DB_PATH = self.previous_path
         self.temp_dir.cleanup()
 
+    async def test_generated_id_helper_uses_sqlite_lastrowid(self):
+        await main.db.execute("CREATE TABLE generated_id_probe(id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT)")
+        generated_id = await main._insert_generated_id(
+            main.db,
+            "INSERT INTO generated_id_probe(value) VALUES (?)",
+            ("sqlite",),
+            "trade_id",
+        )
+        self.assertEqual(generated_id, 1)
+
+    async def test_generated_id_helper_uses_postgres_returning(self):
+        class Cursor:
+            async def fetchone(self):
+                return {"duel_id": 73}
+
+        class PostgresStub:
+            dialect = "postgres"
+
+            async def execute(self, sql, parameters):
+                self.sql = sql
+                self.parameters = parameters
+                return Cursor()
+
+        connection = PostgresStub()
+        generated_id = await main._insert_generated_id(
+            connection,
+            "INSERT INTO duels(chat_id) VALUES (?)",
+            (123,),
+            "duel_id",
+        )
+        self.assertEqual(generated_id, 73)
+        self.assertEqual(
+            connection.sql,
+            "INSERT INTO duels(chat_id) VALUES (?) RETURNING duel_id",
+        )
+        self.assertEqual(connection.parameters, (123,))
+
+    async def test_generated_id_helper_rejects_unapproved_identifier(self):
+        with self.assertRaisesRegex(ValueError, "Unsupported generated ID column"):
+            await main._insert_generated_id(main.db, "INSERT INTO duels(chat_id) VALUES (?)", (1,), "chat_id")
+
     async def test_database_healthcheck_detects_unavailable_database(self):
         self.assertTrue(await main.database_healthcheck())
         active_db = main.db
