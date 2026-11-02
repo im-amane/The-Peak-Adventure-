@@ -62,6 +62,33 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
         blocked = await self.call_middleware("/api/world")
         self.assertEqual(blocked.status, 429)
 
+    async def test_character_story_and_reward_mutations_have_route_limits(self):
+        route_limits = {
+            "/api/appearance": 10,
+            "/api/story": 15,
+            "/api/quest/claim": 10,
+            "/api/daily-mission/claim": 10,
+            "/api/weekly-quest/claim": 10,
+        }
+        for path, limit in route_limits.items():
+            with self.subTest(path=path):
+                main.api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
+                main.api_route_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
+                for _ in range(limit):
+                    response = await self.call_middleware(path)
+                    self.assertEqual(response.status, 200)
+                blocked = await self.call_middleware(path)
+                self.assertEqual(blocked.status, 429)
+                self.assertIn("Retry-After", blocked.headers)
+
+    async def test_every_state_mutation_route_is_covered_by_route_limits(self):
+        expected = {
+            "/api/action", "/api/explore", "/api/social", "/api/premium-shop",
+            "/api/world", "/api/dungeon", "/api/appearance", "/api/story",
+            "/api/quest/claim", "/api/daily-mission/claim", "/api/weekly-quest/claim",
+        }
+        self.assertTrue(expected.issubset(main.API_ROUTE_LIMITS))
+
     async def test_repeated_blocked_requests_only_write_one_security_event_per_window(self):
         main.db = object()
         with patch("main.validate_init_data", return_value={"id": 987654321}):
