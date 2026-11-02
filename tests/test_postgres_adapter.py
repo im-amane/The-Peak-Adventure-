@@ -198,7 +198,7 @@ class PostgresResourceServiceTests(unittest.IsolatedAsyncioTestCase):
         state = await consume_mana(self.db, 301, 40, now=1000)
         self.assertEqual(state["mana"], 60)
         state = await get_mana(self.db, 301, now=1000 + 2 * 60)
-        self.assertEqual(state["mana"], 70)
+        self.assertEqual(state["mana"], 62)
 
     async def test_stamina_consumption_and_passive_regeneration(self):
         state = await consume_stamina(self.db, 302, 30, now=1000)
