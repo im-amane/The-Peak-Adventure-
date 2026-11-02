@@ -162,9 +162,40 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
                 await second.close()
                 await first.close()
 
+    async def test_no_bid_expiry_preserves_equipment_acquired_during_listing(self):
+        listing=await create_listing(self.db,1,"weapon",100,1,now=1000)
+        await self.db.execute(
+            "UPDATE players SET weapon='New Blade',weapon_attack=12 WHERE user_id=1"
+        )
+        await self.db.commit()
+
+        await list_active_auctions(self.db,now=4601)
+
+        cur=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await cur.fetchone()),("Stormblade",25))
+        stash=await list_stash(self.db,1)
+        self.assertEqual([(x["item_name"],x["item_stat"]) for x in stash],[("New Blade",12)])
+
+    async def test_cancel_preserves_equipment_acquired_during_listing(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await self.db.execute(
+            "UPDATE players SET weapon='New Blade',weapon_attack=12 WHERE user_id=1"
+        )
+        await self.db.commit()
+
+        await cancel_listing(self.db,1,listing,now=1001)
+
+        cur=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await cur.fetchone()),("Stormblade",25))
+        stash=await list_stash(self.db,1)
+        self.assertEqual([(x["item_name"],x["item_stat"]) for x in stash],[("New Blade",12)])
+
     async def test_missing_buyer_cannot_trigger_seller_payout(self):
         listing=await create_listing(self.db,1,"weapon",100,1,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
+        await self.db.execute(
+            "UPDATE players SET weapon='New Blade',weapon_attack=12 WHERE user_id=1"
+        )
         await self.db.execute("DELETE FROM players WHERE user_id=2")
         await self.db.commit()
 
@@ -174,6 +205,8 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await cur.fetchone())["coins"],100)
         cur=await self.db.execute("SELECT status FROM auction_listings WHERE listing_id=?",(listing,))
         self.assertEqual((await cur.fetchone())["status"],"expired")
+        stash=await list_stash(self.db,1)
+        self.assertEqual([(x["item_name"],x["item_stat"]) for x in stash],[("New Blade",12)])
 
     async def test_missing_seller_refunds_existing_buyer(self):
         listing=await create_listing(self.db,1,"weapon",100,1,now=1000)
