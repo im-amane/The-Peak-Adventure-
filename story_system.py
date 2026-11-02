@@ -67,14 +67,14 @@ async def init_story_tables(db):
     statements=(
         """CREATE TABLE IF NOT EXISTS player_story(
           user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,choice_id TEXT NOT NULL,
-          completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chapter_id)
+          completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chapter_id)
         )""",
         """CREATE TABLE IF NOT EXISTS story_flags(
           user_id INTEGER NOT NULL,flag TEXT NOT NULL,value TEXT NOT NULL,
           PRIMARY KEY(user_id,flag)
         )""",
         """CREATE TABLE IF NOT EXISTS story_reward_claims(
-          user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,claimed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,chapter_id)
         )""",
     )
