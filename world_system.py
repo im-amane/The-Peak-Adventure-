@@ -66,11 +66,11 @@ async def init_world_tables(db):
     nested = await _begin_transaction(db, "init_world_tables")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
-          user_id INTEGER PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
+          user_id BIGINT PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS world_discoveries(
-          user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id BIGINT NOT NULL,world_id INTEGER NOT NULL,discovered_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,world_id)
         )""")
         await _commit_transaction(db, nested, "init_world_tables")
