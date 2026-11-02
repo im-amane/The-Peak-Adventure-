@@ -3,6 +3,8 @@ import os
 import time
 import unittest
 import uuid
+import tempfile
+from pathlib import Path
 
 import aiosqlite
 
@@ -50,6 +52,7 @@ from party_system import (
 )
 from rate_limit import DatabaseSlidingWindowRateLimiter
 import main
+from scripts.migrate_sqlite_to_postgres import migrate_sqlite_to_postgres
 
 from account_system import (
     AccountError, delete_player_account, get_settings,
@@ -3099,3 +3102,95 @@ class PostgresMainRuntimeSmokeTests(unittest.IsolatedAsyncioTestCase):
         )
         player = await cursor.fetchone()
         self.assertEqual((player["coins"], player["potions"]), (100, 5))
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.sqlite_path = Path(self.tempdir.name) / "source.sqlite3"
+        sqlite_db = await aiosqlite.connect(str(self.sqlite_path))
+        sqlite_db.row_factory = aiosqlite.Row
+        await main.init_game_schema(sqlite_db)
+        self.user_id = 9_000_000_031
+        await sqlite_db.execute(
+            "INSERT INTO players(user_id,username,coins) VALUES (?,?,?)",
+            (self.user_id, "MigratedHero", 321),
+        )
+        await sqlite_db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status)
+               VALUES(0,?,?, 'pending')""",
+            (self.user_id, self.user_id + 1),
+        )
+        await sqlite_db.execute(
+            """INSERT INTO quest_progress(user_id,quest_id,progress,completed)
+               VALUES(?,?,?,?)""",
+            (self.user_id, "first_blood", 1, 0),
+        )
+        await sqlite_db.commit()
+        await sqlite_db.close()
+
+        self.postgres = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_migrate_" + uuid.uuid4().hex[:12]
+        await self.postgres.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.postgres.commit()
+        await self.postgres.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.postgres)
+
+    async def asyncTearDown(self):
+        if self.postgres.in_transaction:
+            await self.postgres.rollback()
+        await self.postgres.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.postgres.commit()
+        await self.postgres.close()
+        self.tempdir.cleanup()
+
+    async def test_dry_run_is_read_only_and_apply_copies_rows_and_resets_identity(self):
+        dry_run = await migrate_sqlite_to_postgres(self.sqlite_path, self.postgres)
+        self.assertTrue(dry_run["compatible"])
+        self.assertFalse(dry_run["applied"])
+        self.assertEqual(dry_run["total_target_rows_before"], 0)
+        cursor = await self.postgres.execute("SELECT COUNT(*) AS count FROM players")
+        self.assertEqual((await cursor.fetchone())["count"], 0)
+
+        applied = await migrate_sqlite_to_postgres(
+            self.sqlite_path,
+            self.postgres,
+            apply=True,
+            batch_size=2,
+        )
+        self.assertTrue(applied["applied"])
+        self.assertEqual(applied["total_source_rows"], applied["total_target_rows_after"])
+
+        cursor = await self.postgres.execute(
+            "SELECT username,coins FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        player = await cursor.fetchone()
+        self.assertEqual((player["username"], player["coins"]), ("MigratedHero", 321))
+
+        cursor = await self.postgres.execute(
+            "SELECT trade_id FROM trades WHERE initiator_id=?",
+            (self.user_id,),
+        )
+        original_trade_id = (await cursor.fetchone())["trade_id"]
+        next_trade_id = await main._insert_generated_id(
+            self.postgres,
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?, 'pending')",
+            (self.user_id, self.user_id + 2),
+            "trade_id",
+        )
+        self.assertGreater(next_trade_id, original_trade_id)
+
+    async def test_apply_refuses_a_nonempty_target(self):
+        await migrate_sqlite_to_postgres(
+            self.sqlite_path,
+            self.postgres,
+            apply=True,
+        )
+        with self.assertRaisesRegex(ValueError, "non-empty PostgreSQL target"):
+            await migrate_sqlite_to_postgres(
+                self.sqlite_path,
+                self.postgres,
+                apply=True,
+            )
