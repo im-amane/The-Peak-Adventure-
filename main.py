@@ -3987,6 +3987,27 @@ async def api_explore(request: web.Request):
             # Existing battles are checked above, so refreshing the active battle is free.
             try:
                 await db.execute("BEGIN IMMEDIATE")
+                if getattr(db, "dialect", "sqlite") == "postgres":
+                    await db.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                        (f"peak-adventure-matchmaking-player:{user_id}",),
+                    )
+                pvp_query = (
+                    """SELECT b.match_id FROM matchmaking_battles b
+                       JOIN matchmaking_matches m ON m.match_id=b.match_id
+                       WHERE b.status='active' AND m.status='matched'
+                         AND (m.player_one_id=? OR m.player_two_id=?)
+                       LIMIT 1"""
+                )
+                if getattr(db, "dialect", "sqlite") == "postgres":
+                    pvp_query += " FOR UPDATE OF b,m"
+                cur = await db.execute(pvp_query, (user_id, user_id))
+                if await cur.fetchone():
+                    await db.rollback()
+                    return web.json_response(
+                        {"error": "Finish your active PvP match before starting a monster encounter."},
+                        status=409,
+                    )
                 await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
                 await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
                 await db.execute(
