@@ -7,6 +7,21 @@ class AuctionError(ValueError):
 
 DEFAULTS = {"weapon": ("Rusty Sword", 0), "armor": ("Traveler Clothes", 0)}
 
+
+def _timestamp(value):
+    if value is None:
+        return int(time.time())
+    if type(value) is not int or value < 0:
+        raise AuctionError("Invalid auction timestamp.")
+    return value
+
+
+def _positive_id(value, label):
+    if type(value) is not int or value <= 0:
+        raise AuctionError(f"Invalid {label} account or ID.")
+    return value
+
+
 async def init_auction_tables(db):
     await db.executescript("""
     CREATE TABLE IF NOT EXISTS auction_listings (
@@ -75,14 +90,13 @@ async def _settle_due(db, now):
         await db.commit()
 
 async def create_listing(db, seller_id, slot, start_price, duration_hours=24, now=None):
-    now = int(time.time()) if now is None else int(now)
-    if not isinstance(seller_id, int) or isinstance(seller_id, bool) or seller_id <= 0:
-        raise AuctionError("Invalid seller account.")
+    now = _timestamp(now)
+    _positive_id(seller_id, "seller")
     if slot not in DEFAULTS:
         raise AuctionError("Only equipped weapons and armor can be listed.")
-    if not isinstance(start_price, int) or isinstance(start_price, bool) or not 1 <= start_price <= 10_000_000:
+    if type(start_price) is not int or not 1 <= start_price <= 10_000_000:
         raise AuctionError("Starting bid must be between 1 and 10,000,000 coins.")
-    if not isinstance(duration_hours, int) or isinstance(duration_hours, bool) or not 1 <= duration_hours <= 168:
+    if type(duration_hours) is not int or not 1 <= duration_hours <= 168:
         raise AuctionError("Auction duration must be between 1 and 168 hours.")
     await _settle_due(db, now)
     try:
@@ -115,12 +129,10 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
 
 async def place_bid(db, bidder_id, listing_id, amount, now=None):
     now = int(time.time()) if now is None else int(now)
-    if not isinstance(bidder_id,int) or isinstance(bidder_id,bool) or bidder_id <= 0:
-        raise AuctionError("Invalid bidder account.")
-    if not isinstance(listing_id,int) or isinstance(listing_id,bool) or listing_id <= 0:
-        raise AuctionError("Invalid auction ID.")
-    if not isinstance(amount,int) or isinstance(amount,bool) or amount <= 0:
-        raise AuctionError("Bid must be a positive whole number.")
+    _positive_id(bidder_id, "bidder")
+    _positive_id(listing_id, "auction")
+    if type(amount) is not int or not 1 <= amount <= 10_000_000:
+        raise AuctionError("Bid must be between 1 and 10,000,000 coins.")
     await _settle_due(db, now)
     try:
         await db.execute("BEGIN IMMEDIATE")
@@ -174,14 +186,18 @@ async def list_active_auctions(db, now=None, limit=20):
     return await cur.fetchall()
 
 async def get_auction(db, listing_id, now=None):
+    _positive_id(listing_id, "auction")
     rows = await list_active_auctions(db, now, 50)
     return next((row for row in rows if row["listing_id"] == listing_id), None)
 
 async def list_stash(db, user_id):
+    _positive_id(user_id, "player")
     cur = await db.execute("SELECT stash_id,slot,item_name,item_stat,created_at FROM auction_stash WHERE user_id=? ORDER BY stash_id", (user_id,))
     return await cur.fetchall()
 
 async def equip_stashed_item(db, user_id, stash_id):
+    _positive_id(user_id, "player")
+    _positive_id(stash_id, "stash")
     try:
         await db.execute("BEGIN IMMEDIATE")
         cur = await db.execute("SELECT * FROM auction_stash WHERE stash_id=? AND user_id=?", (stash_id,user_id))
