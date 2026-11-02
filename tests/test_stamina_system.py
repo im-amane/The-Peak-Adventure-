@@ -43,6 +43,57 @@ class StaminaSystemTests(unittest.IsolatedAsyncioTestCase):
         await consume_stamina(self.db, 101, 10, now=10000)
         self.assertEqual((await get_stamina(self.db, 101, now=10000))["stamina"], 90)
 
+    async def test_get_stamina_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN")
+        await get_stamina(self.db,201,now=1000)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT 1 FROM player_stamina WHERE user_id=201")
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_consume_stamina_can_defer_commit_to_exploration(self):
+        state=await consume_stamina(self.db,202,10,now=1000,commit=False)
+        self.assertEqual(state["stamina"],90)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT 1 FROM player_stamina WHERE user_id=202")
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_restore_stamina_preserves_outer_transaction(self):
+        await consume_stamina(self.db,203,20,now=1000)
+        await self.db.execute("UPDATE player_stamina SET stamina=stamina WHERE user_id=203")
+        state=await restore_stamina(self.db,203,10,now=1000)
+        self.assertEqual(state["stamina"],90)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT stamina FROM player_stamina WHERE user_id=203")
+        self.assertEqual((await cur.fetchone())["stamina"],80)
+
+    async def test_ignored_stamina_debit_does_not_allow_free_exploration(self):
+        await get_stamina(self.db,204,now=1000)
+        await self.db.execute(
+            """CREATE TRIGGER ignore_stamina_debit
+               BEFORE UPDATE OF stamina ON player_stamina
+               WHEN NEW.stamina<OLD.stamina
+               BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(StaminaError,"Stamina changed"):
+            await consume_stamina(self.db,204,10,now=1000)
+        self.assertEqual((await get_stamina(self.db,204,now=1000))["stamina"],100)
+
+    async def test_table_initialization_preserves_outer_transaction(self):
+        db=await aiosqlite.connect(":memory:")
+        try:
+            await db.execute("BEGIN")
+            await init_stamina_tables(db)
+            self.assertTrue(db.in_transaction)
+            await db.rollback()
+            cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='player_stamina'")
+            self.assertIsNone(await cur.fetchone())
+        finally:
+            await db.close()
+
     async def test_invalid_inputs_rejected(self):
         with self.assertRaises(StaminaError):
             await get_stamina(self.db, 0, now=1000)
