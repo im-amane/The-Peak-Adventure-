@@ -69,7 +69,7 @@ async def init_security_tables(db):
 async def record_security_event(db, user_id, event_type, details="", severity=1):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise SecurityEventError("Invalid player account.")
-    if event_type not in EVENT_TYPES:
+    if not isinstance(event_type, str) or event_type not in EVENT_TYPES:
         raise SecurityEventError("Unknown security event type.")
     if not isinstance(severity, int) or isinstance(severity, bool) or not 1 <= severity <= 5:
         raise SecurityEventError("Security severity must be between 1 and 5.")
