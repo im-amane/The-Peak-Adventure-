@@ -174,8 +174,18 @@ async def _delete_player_account_unlocked(db,user_id):
         cur=await db.execute("SELECT listing_id,current_bid,highest_bidder FROM auction_listings WHERE seller_id=? AND status='active'",(user_id,))
         for listing in await cur.fetchall():
             if listing["highest_bidder"] is not None:
-                await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(listing["current_bid"],listing["highest_bidder"]))
-            await db.execute("UPDATE auction_listings SET status='cancelled' WHERE listing_id=?",(listing["listing_id"],))
+                cur=await db.execute(
+                    "UPDATE players SET coins=coins+? WHERE user_id=?",
+                    (listing["current_bid"],listing["highest_bidder"]),
+                )
+                if cur.rowcount!=1:
+                    raise AccountError("Auction escrow could not be refunded; account deletion was rolled back.")
+            cur=await db.execute(
+                "UPDATE auction_listings SET status='cancelled' WHERE listing_id=? AND status='active'",
+                (listing["listing_id"],),
+            )
+            if cur.rowcount!=1:
+                raise AccountError("Auction changed during account deletion; the operation was rolled back.")
         await db.execute("UPDATE auction_listings SET highest_bidder=NULL,current_bid=0 WHERE highest_bidder=? AND status='active'",(user_id,))
         await db.execute("DELETE FROM auction_stash WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
