@@ -17,10 +17,25 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute("CREATE TABLE player_stamina(user_id INTEGER PRIMARY KEY,stamina INTEGER NOT NULL,updated_at INTEGER NOT NULL)")
         await self.db.execute("INSERT INTO players(user_id,potions) VALUES(101,2)")
         await self.db.execute("INSERT INTO player_stamina VALUES(101,30,1800000000)")
+        await self.db.commit()
         await init_premium_tables(self.db)
 
     async def asyncTearDown(self):
         await self.db.close()
+
+    async def test_table_initialization_preserves_outer_transaction(self):
+        await self.db.execute("DROP TABLE premium_shop_purchases")
+        await self.db.commit()
+        await self.db.execute("UPDATE players SET potions=potions+1 WHERE user_id=101")
+        await init_premium_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        cur = await self.db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='premium_shop_purchases'"
+        )
+        self.assertIsNone(await cur.fetchone())
 
     async def test_invoice_payload_is_bound_to_player_and_package(self):
         payload = make_invoice_payload("spark", 101)
