@@ -503,6 +503,70 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
             response = await main.api_social(FakeRequest({"action": "trade_decline", "trade_id": True}))
         self.assertEqual(response.status, 400)
 
+    async def test_miniapp_guild_create_invite_accept_and_leave_flow(self):
+        leader_id = 987654930
+        friend_id = 987654931
+        await main.get_player(leader_id, "GuildLeader")
+        await main.get_player(friend_id, "GuildFriend")
+        await main.db.execute(
+            "UPDATE players SET coins=1000,class_selected=1,hero_class='Knight' WHERE user_id IN (?,?)",
+            (leader_id, friend_id),
+        )
+        await main.db.commit()
+        request_id = await main.send_friend_request(main.db, leader_id, friend_id)
+        await main.respond_to_friend_request(main.db, request_id, friend_id, True)
+
+        with patch("main.validate_init_data", return_value={"id": leader_id, "first_name": "GuildLeader"}):
+            created = await main.api_social(FakeRequest({"action": "guild_create", "name": "Peak Guardians"}))
+        self.assertEqual(created.status, 200)
+        created_body = json.loads(created.text)
+        guild_id = created_body["result"]["guild_id"]
+        self.assertEqual(created_body["state"]["social"]["guild"]["role"], "leader")
+        self.assertEqual(created_body["state"]["coins"], 900)
+
+        with patch("main.validate_init_data", return_value={"id": leader_id, "first_name": "GuildLeader"}):
+            invited = await main.api_social(FakeRequest({"action": "guild_invite", "target_id": friend_id}))
+        self.assertEqual(invited.status, 200)
+        invite_id = json.loads(invited.text)["result"]["invite_id"]
+
+        with patch("main.validate_init_data", return_value={"id": friend_id, "first_name": "GuildFriend"}):
+            accepted = await main.api_social(FakeRequest({"action": "guild_accept", "invite_id": invite_id}))
+        self.assertEqual(accepted.status, 200)
+        self.assertEqual(json.loads(accepted.text)["state"]["social"]["guild"]["guild_id"], guild_id)
+
+        with patch("main.validate_init_data", return_value={"id": friend_id, "first_name": "GuildFriend"}):
+            left = await main.api_social(FakeRequest({"action": "guild_leave"}))
+        self.assertEqual(left.status, 200)
+        self.assertIsNone(json.loads(left.text)["state"]["social"]["guild"])
+        cur = await main.db.execute(
+            "SELECT 1 FROM guild_members WHERE user_id=?",
+            (friend_id,),
+        )
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_miniapp_guild_invites_are_limited_to_accepted_friends(self):
+        leader_id = 987654932
+        stranger_id = 987654933
+        await main.get_player(leader_id, "GuildLeader")
+        await main.get_player(stranger_id, "GuildStranger")
+        await main.db.execute(
+            "UPDATE players SET coins=1000,class_selected=1 WHERE user_id=?",
+            (leader_id,),
+        )
+        await main.db.execute(
+            "UPDATE players SET class_selected=1 WHERE user_id=?",
+            (stranger_id,),
+        )
+        await main.db.commit()
+        await main.create_guild(main.db, leader_id, "Friendly Peak")
+
+        with patch("main.validate_init_data", return_value={"id": leader_id, "first_name": "GuildLeader"}):
+            response = await main.api_social(FakeRequest({"action": "guild_invite", "target_id": stranger_id}))
+        self.assertEqual(response.status, 409)
+        self.assertIn("accepted friends", json.loads(response.text)["error"])
+        cur = await main.db.execute("SELECT COUNT(*) AS total FROM guild_invites")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_party_invite_does_not_create_unknown_player(self):
         leader_id = 987654901
         unknown_target_id = 987654902
