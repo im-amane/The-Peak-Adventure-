@@ -42,6 +42,18 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
         await self.db.close()
 
+    async def test_read_does_not_open_transaction_but_write_does(self):
+        cursor = await self.db.execute("SELECT 1 AS value")
+        self.assertEqual((await cursor.fetchone())["value"], 1)
+        self.assertFalse(self.db.in_transaction)
+
+        await self.db.execute(
+            "INSERT INTO adapter_probe(value) VALUES (?)", ("implicit-write",)
+        )
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertFalse(self.db.in_transaction)
+
     async def test_qmark_insert_returning_and_dict_rows(self):
         cursor = await self.db.execute(
             "INSERT INTO adapter_probe(value) VALUES (?) RETURNING id,value",
