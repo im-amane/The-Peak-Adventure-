@@ -39,8 +39,6 @@ async def _rollback_transaction(db, nested, savepoint):
         await db.rollback()
 
 
-def current_week_key(
-
 def current_week_key(now=None):
     stamp = datetime.fromtimestamp(time.time() if now is None else now, timezone.utc)
     iso = stamp.isocalendar()
