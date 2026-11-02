@@ -4277,10 +4277,10 @@ async def api_social(request: web.Request):
                     if await active_cur.fetchone():
                         return web.json_response({"error": "One of these players already has an active trade."}, status=409)
                     trade_cur = await db.execute(
-                        "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
+                        "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending') RETURNING trade_id",
                         (user_id,target_id),
                     )
-                    result = {"trade_id": trade_cur.lastrowid, "status": "pending"}
+                    result = {"trade_id": (await trade_cur.fetchone())["trade_id"], "status": "pending"}
                 elif action in {"trade_accept", "trade_decline"}:
                     if set(payload) != {"action", "trade_id"} or type(payload["trade_id"]) is not int or payload["trade_id"] <= 0:
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
