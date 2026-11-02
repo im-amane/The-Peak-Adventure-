@@ -26,6 +26,7 @@ from friend_system import FriendError, init_friend_tables, list_friends, list_pe
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
+from roaming_event_system import RoamingEventError, attack_roaming_event, claim_roaming_event_reward, get_or_create_roaming_event, init_roaming_event_tables
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
@@ -1348,4 +1349,92 @@ class PostgresSecretAreaServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_secret_area_schema_initialization_is_idempotent(self):
         await init_secret_area_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresRoamingEventServiceTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 9_876_543_210
+    other_id = 9_876_543_211
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in ("roaming_event_participants", "roaming_events", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 level INTEGER NOT NULL DEFAULT 1,
+                 xp INTEGER NOT NULL DEFAULT 0,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 hp INTEGER NOT NULL DEFAULT 120,
+                 max_hp INTEGER NOT NULL DEFAULT 120,
+                 hero_class TEXT NOT NULL DEFAULT 'Knight'
+               )"""
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id) VALUES(?),(?)",
+            (self.user_id, self.other_id),
+        )
+        await self.db.commit()
+        await init_roaming_event_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in ("roaming_event_participants", "roaming_events", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_event_creation_and_shared_damage_support_64_bit_ids(self):
+        event = await get_or_create_roaming_event(
+            self.db, 1, 3, "Mire Colossus", 1, now=1000
+        )
+        same = await get_or_create_roaming_event(
+            self.db, 1, 4, "Different Monster", 1, now=1001
+        )
+        self.assertEqual(event["event_id"], same["event_id"])
+        self.assertEqual(same["monster_name"], "Mire Colossus")
+        result = await attack_roaming_event(
+            self.db, event["event_id"], self.user_id, 5, now=1000
+        )
+        self.assertEqual(result["damage"], 5)
+        self.assertEqual(result["participants"], 1)
+
+    async def test_contributor_reward_is_atomic_and_one_time(self):
+        event = await get_or_create_roaming_event(
+            self.db, 1, 3, "Mire Colossus", 1, now=1000
+        )
+        await attack_roaming_event(self.db, event["event_id"], self.user_id, 5, now=1000)
+        await attack_roaming_event(self.db, event["event_id"], self.other_id, 100, now=1000)
+        reward = await claim_roaming_event_reward(self.db, event["event_id"], self.user_id)
+        self.assertEqual(reward["coins"], 136)
+        with self.assertRaises(RoamingEventError):
+            await claim_roaming_event_reward(self.db, event["event_id"], self.user_id)
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 136)
+
+    async def test_reward_claim_preserves_outer_transaction(self):
+        event = await get_or_create_roaming_event(
+            self.db, 1, 3, "Mire Colossus", 1, now=1000
+        )
+        await attack_roaming_event(self.db, event["event_id"], self.user_id, 5, now=1000)
+        await attack_roaming_event(self.db, event["event_id"], self.other_id, 100, now=1000)
+        await self.db.execute("BEGIN IMMEDIATE")
+        await claim_roaming_event_reward(self.db, event["event_id"], self.user_id)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 0)
+        cursor = await self.db.execute(
+            "SELECT reward_claimed FROM roaming_event_participants WHERE event_id=? AND user_id=?",
+            (event["event_id"], self.user_id),
+        )
+        self.assertEqual((await cursor.fetchone())["reward_claimed"], 0)
+
+    async def test_roaming_schema_initialization_is_idempotent(self):
+        await init_roaming_event_tables(self.db)
         await self.db.commit()
