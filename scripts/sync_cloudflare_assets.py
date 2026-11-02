@@ -21,14 +21,17 @@ END_MARKER = "\n\nconst STATIC_PATHS"
 def main() -> None:
     source = WORKER.read_text(encoding="utf-8")
     start = source.find(MARKER)
-    end = source.find(END_MARKER, start)
-    if start < 0 or end < 0:
+    if start < 0:
         raise SystemExit("Could not locate STATIC_ASSETS in cloudflare/worker.mjs")
 
-    raw = source[start + len(MARKER):end].strip()
-    if raw.endswith(";"):
-        raw = raw[:-1]
-    assets = json.loads(raw)
+    payload_start = start + len(MARKER)
+    try:
+        assets, consumed = json.JSONDecoder().raw_decode(source[payload_start:])
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Could not parse STATIC_ASSETS JSON: {exc}") from exc
+    suffix_start = payload_start + consumed
+    if suffix_start < len(source) and source[suffix_start] == ";":
+        suffix_start += 1
 
     expected = {
         route: {
@@ -50,8 +53,8 @@ def main() -> None:
         return
 
     assets.update(expected)
-    block = MARKER + json.dumps(assets, ensure_ascii=False, separators=(",", ":"))
-    updated = source[:start] + block + source[end:]
+    block = MARKER + json.dumps(assets, ensure_ascii=False, separators=(",", ":")) + ";"
+    updated = source[:start] + block + source[suffix_start:]
     if updated != source:
         WORKER.write_text(updated, encoding="utf-8")
         print("Cloudflare fallback assets synchronized.")
