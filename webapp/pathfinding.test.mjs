@@ -196,3 +196,50 @@ test("smoothed obstacle routes keep every movement segment outside clearance", (
     );
   }
 });
+
+
+test("rasterizes obstacle rectangles only into the cells they actually cover", () => {
+  const start = { x: 16, y: 48 };
+  const goal = { x: 112, y: 48 };
+  const obstacle = { x: 64, y: 48, width: 32, height: 32 };
+  const path = findPath(
+    start,
+    goal,
+    [
+      obstacle,
+      ...Array.from({ length: 250 }, (_, index) => ({
+        x: 1000 + index * 40,
+        y: 1000 + index * 40,
+        width: 24,
+        height: 24,
+      })),
+    ],
+    { width: 160, height: 128, cellSize: 32, margin: 0 },
+  );
+
+  assert.ok(path.length > 1, "the route should detour around the one in-bounds obstacle");
+  assert.deepEqual(path.at(-1), goal);
+  const points = [start, ...path];
+  for (let index = 1; index < points.length; index++) {
+    assert.equal(
+      segmentIntersectsExpandedRect(points[index - 1], points[index], obstacle, 0),
+      false,
+      "the optimized grid must preserve exact segment collision checks",
+    );
+  }
+});
+
+test("keeps obstacles outside the map from corrupting the collision grid", () => {
+  const destination = { x: 112, y: 48 };
+  const path = findPath(
+    { x: 16, y: 48 },
+    destination,
+    [
+      { x: -500, y: -500, width: 200, height: 200 },
+      { x: 800, y: 800, width: 400, height: 400 },
+    ],
+    { width: 160, height: 128, cellSize: 32, margin: 0 },
+  );
+
+  assert.deepEqual(path, [destination]);
+});
