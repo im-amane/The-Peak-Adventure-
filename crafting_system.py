@@ -1,18 +1,34 @@
 """Material drops and deterministic equipment crafting."""
 import random
 
+from item_rarity import rarity_label
+
 MATERIALS={
  "iron_ore":"Iron Ore","ember_shard":"Ember Shard","frost_crystal":"Frost Crystal",
  "void_essence":"Void Essence","star_dust":"Star Dust"
 }
+MATERIAL_RARITY={
+ "iron_ore":"common",
+ "ember_shard":"uncommon",
+ "frost_crystal":"rare",
+ "void_essence":"epic",
+ "star_dust":"legendary",
+}
+MATERIAL_MIN_LEVEL={
+ "iron_ore":1,
+ "ember_shard":1,
+ "frost_crystal":20,
+ "void_essence":40,
+ "star_dust":70,
+}
 RECIPES={
- "iron_sword":{"name":"Forged Iron Sword","slot":"weapon","level":5,"attack":12,"defense":0,
+ "iron_sword":{"name":"Forged Iron Sword","slot":"weapon","level":5,"rarity":"uncommon","attack":12,"defense":0,
    "cost":{"iron_ore":3,"ember_shard":1}},
- "frost_armor":{"name":"Frostguard Armor","slot":"armor","level":15,"attack":0,"defense":14,
+ "frost_armor":{"name":"Frostguard Armor","slot":"armor","level":15,"rarity":"rare","attack":0,"defense":14,
    "cost":{"iron_ore":2,"frost_crystal":3}},
- "rift_blade":{"name":"Riftforged Blade","slot":"weapon","level":50,"attack":38,"defense":0,
+ "rift_blade":{"name":"Riftforged Blade","slot":"weapon","level":50,"rarity":"epic","attack":38,"defense":0,
    "cost":{"void_essence":3,"star_dust":2,"ember_shard":2}},
- "celestial_mail":{"name":"Celestial Mail","slot":"armor","level":70,"attack":0,"defense":42,
+ "celestial_mail":{"name":"Celestial Mail","slot":"armor","level":70,"rarity":"legendary","attack":0,"defense":42,
    "cost":{"star_dust":4,"frost_crystal":3,"void_essence":2}},
 }
 
@@ -75,7 +91,7 @@ async def award_material_drop(db,user_id,monster,rng=None):
     await db.execute("""INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)
       ON CONFLICT(user_id,material_id) DO UPDATE SET quantity=player_materials.quantity+excluded.quantity""",
       (user_id,material,amount))
-    return {"id":material,"name":MATERIALS[material],"quantity":amount}
+    return {"id":material,"name":MATERIALS[material],"quantity":amount,"rarity":MATERIAL_RARITY[material],"rarity_label":rarity_label(MATERIAL_RARITY[material]),"minimum_level":MATERIAL_MIN_LEVEL[material]}
 
 async def craft_item(db,user_id,player_level,recipe_id):
     if type(user_id) is not int or user_id <= 0:
@@ -161,4 +177,4 @@ async def craft_item(db,user_id,player_level,recipe_id):
 async def list_recipes(player_level):
     if type(player_level) is not int or not 1 <= player_level <= 100:
         raise CraftingError("Invalid player level.")
-    return [{"id":key,**value,"unlocked":player_level>=value["level"]} for key,value in RECIPES.items()]
+    return [{"id":key,**value,"rarity_label":rarity_label(value["rarity"]),"unlocked":player_level>=value["level"]} for key,value in RECIPES.items()]
