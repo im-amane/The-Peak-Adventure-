@@ -472,10 +472,40 @@
         opponent.className = "matchmaking-opponent";
         opponent.textContent = "Opponent ID: " + queue.opponent_id + " · Level " + queue.opponent_level + " · Rating gap " + queue.rating_gap;
         ui.matchmakingDetails.appendChild(opponent);
-        const note = document.createElement("p");
-        note.className = "small";
-        note.textContent = "Opponent found. Live PvP battle controls are not connected yet.";
-        ui.matchmakingDetails.appendChild(note);
+      }
+      const battle = queue.battle;
+      if (battle) {
+        const panel = document.createElement("section");
+        panel.className = "matchmaking-battle";
+        panel.setAttribute("aria-live", "polite");
+        const heading = document.createElement("h4");
+        heading.textContent = battle.status === "active" ? "⚔️ Live PvP Battle" : "🏁 PvP Battle Complete";
+        panel.appendChild(heading);
+        const opponentLine = document.createElement("p");
+        opponentLine.textContent = battle.opponent_name + " · Lv." + battle.opponent_level;
+        panel.appendChild(opponentLine);
+        const hpLine = document.createElement("p");
+        hpLine.textContent = "Your HP: " + battle.my_hp + " / " + battle.my_max_hp + " · Opponent HP: " + battle.opponent_hp + " / " + battle.opponent_max_hp;
+        panel.appendChild(hpLine);
+        const turnLine = document.createElement("p");
+        turnLine.className = "small";
+        turnLine.textContent = battle.status === "finished"
+          ? (battle.winner_id === gameState.user_id ? "You won this match." : (battle.winner_id ? "Your opponent won this match." : "Match closed."))
+          : (battle.is_my_turn ? "Your turn. Choose an action." : "Waiting for your opponent...");
+        panel.appendChild(turnLine);
+        if (battle.status === "active") {
+          [["attack","⚔️ Attack"],["skill","✨ Class Skill"],["surrender","🏳️ Surrender"]].forEach(([action,label]) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "social-action";
+            button.textContent = label;
+            button.dataset.pvpAction = action;
+            button.dataset.matchId = String(battle.match_id);
+            button.disabled = requestInFlight || !battle.is_my_turn;
+            panel.appendChild(button);
+          });
+        }
+        ui.matchmakingDetails.appendChild(panel);
       }
     }
     const active = Boolean(queue && ["queued", "matched"].includes(queue.status));
@@ -503,6 +533,21 @@
       if (gameState) applyState(gameState);
     }
   }
+  async function runMatchmakingBattleAction(action, matchId) {
+    if (requestInFlight || !gameState) return;
+    requestInFlight = true;
+    try {
+      const result = await postApi("/api/matchmaking", {action,match_id:matchId});
+      applyState(result.state, result.message);
+    } catch (error) {
+      ui.status.textContent = error.message;
+      await loadState().catch(() => null);
+    } finally {
+      requestInFlight = false;
+      if (gameState) applyState(gameState);
+    }
+  }
+
   function renderSocial(social) {
     if (!ui.socialOverview) return;
     ui.socialOverview.replaceChildren();
@@ -1483,6 +1528,12 @@
   if(ui.matchmakingCasual)ui.matchmakingCasual.addEventListener("click",()=>runMatchmakingAction("join","casual"));
   if(ui.matchmakingRanked)ui.matchmakingRanked.addEventListener("click",()=>runMatchmakingAction("join","ranked"));
   if(ui.matchmakingCancel)ui.matchmakingCancel.addEventListener("click",()=>runMatchmakingAction("cancel"));
+  if(ui.matchmakingDetails)ui.matchmakingDetails.addEventListener("click",event=>{
+    const button=event.target.closest("[data-pvp-action]");
+    if(!button||button.disabled)return;
+    const matchId=Number(button.dataset.matchId);
+    if(Number.isSafeInteger(matchId)&&matchId>0)runMatchmakingBattleAction(button.dataset.pvpAction,matchId);
+  });
   if(ui.matchmakingRefresh)ui.matchmakingRefresh.addEventListener("click",async()=>{
     if(requestInFlight)return;
     requestInFlight=true;ui.matchmakingRefresh.disabled=true;
