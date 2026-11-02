@@ -11,8 +11,8 @@ from moderation_system import (
     init_moderation_tables,
     unban_player,
 )
-from mana_system import ManaError, consume_mana, get_mana, init_mana_tables, restore_mana
-from stamina_system import StaminaError, consume_stamina, get_stamina, init_stamina_tables, restore_stamina
+from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
+from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
 
 
 class QmarkTranslationTests(unittest.TestCase):
