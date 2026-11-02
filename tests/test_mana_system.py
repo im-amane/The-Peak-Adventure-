@@ -76,6 +76,23 @@ class ManaSystemTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await db.close()
 
+    async def test_consume_mana_can_defer_commit_to_battle_caller(self):
+        state=await consume_mana(self.db,105,30,now=1000,commit=False)
+        self.assertEqual(state["mana"],70)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT 1 FROM player_mana WHERE user_id=105")
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_restore_mana_can_defer_commit_to_battle_caller(self):
+        await consume_mana(self.db,106,30,now=1000)
+        state=await restore_mana(self.db,106,10,now=1000,commit=False)
+        self.assertEqual(state["mana"],80)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT mana FROM player_mana WHERE user_id=106")
+        self.assertEqual((await cur.fetchone())["mana"],70)
+
     async def test_ignored_mana_debit_does_not_allow_free_skill(self):
         await get_mana(self.db,104,now=1000)
         await self.db.execute(
