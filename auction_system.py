@@ -92,7 +92,7 @@ async def _settle_due(db, now):
 async def create_listing(db, seller_id, slot, start_price, duration_hours=24, now=None):
     now = _timestamp(now)
     _positive_id(seller_id, "seller")
-    if slot not in DEFAULTS:
+    if not isinstance(slot, str) or slot not in DEFAULTS:
         raise AuctionError("Only equipped weapons and armor can be listed.")
     if type(start_price) is not int or not 1 <= start_price <= 10_000_000:
         raise AuctionError("Starting bid must be between 1 and 10,000,000 coins.")
@@ -128,7 +128,7 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
         raise
 
 async def place_bid(db, bidder_id, listing_id, amount, now=None):
-    now = int(time.time()) if now is None else int(now)
+    now = _timestamp(now)
     _positive_id(bidder_id, "bidder")
     _positive_id(listing_id, "auction")
     if type(amount) is not int or not 1 <= amount <= 10_000_000:
@@ -158,7 +158,9 @@ async def place_bid(db, bidder_id, listing_id, amount, now=None):
         raise
 
 async def cancel_listing(db, seller_id, listing_id, now=None):
-    now = int(time.time()) if now is None else int(now)
+    _positive_id(seller_id, "seller")
+    _positive_id(listing_id, "auction")
+    now = _timestamp(now)
     await _settle_due(db, now)
     try:
         await db.execute("BEGIN IMMEDIATE")
@@ -178,7 +180,7 @@ async def cancel_listing(db, seller_id, listing_id, now=None):
         raise
 
 async def list_active_auctions(db, now=None, limit=20):
-    now = int(time.time()) if now is None else int(now)
+    now = _timestamp(now)
     await _settle_due(db, now)
     cur = await db.execute("""SELECT listing_id,seller_id,slot,item_name,item_stat,start_price,current_bid,
       highest_bidder,ends_at FROM auction_listings WHERE status='active' AND ends_at>?
