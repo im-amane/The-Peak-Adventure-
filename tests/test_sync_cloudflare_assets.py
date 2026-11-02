@@ -57,9 +57,19 @@ class CloudflareAssetSyncTests(unittest.TestCase):
             sync_cloudflare_assets.main()
         source = self.worker.read_text(encoding="utf-8")
         start = source.index("const STATIC_ASSETS = ") + len("const STATIC_ASSETS = ")
-        end = source.index("\n\nconst STATIC_PATHS", start)
-        assets = json.loads(source[start:end])
+        assets, consumed = json.JSONDecoder().raw_decode(source[start:])
         self.assertEqual(assets["/game.js"]["body"], "current game bundle")
+        self.assertEqual(source[start + consumed], ";")
+
+    def test_check_mode_accepts_security_headers_between_assets_and_paths(self):
+        payload = {"/game.js": {"body": "current game bundle", "type": "application/javascript"}}
+        self.worker.write_text(
+            "const STATIC_ASSETS = " + json.dumps(payload)
+            + ";\\n\\nconst STATIC_SECURITY_HEADERS = {};\\n\\nconst STATIC_PATHS = new Set([]);\\n",
+            encoding="utf-8",
+        )
+        with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
+            sync_cloudflare_assets.main()
 
 
 if __name__ == "__main__":
