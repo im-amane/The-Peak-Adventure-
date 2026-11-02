@@ -93,8 +93,7 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(RuntimeError, "simulated reward failure"):
                 await self._call(main.api_action, {"action": "attack"})
 
-        self.assertTrue(main.db.in_transaction)
-        await main.db.rollback()
+        self.assertFalse(main.db.in_transaction)
         cur = await main.db.execute(
             "SELECT monster_hp,turn_count FROM battles WHERE user_id=?",
             (user_id,),
