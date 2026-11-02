@@ -3159,23 +3159,26 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
         )
 
         cursor = await self.postgres.execute(
-            """SELECT tc.table_name,kcu.column_name,ccu.table_name AS referenced_table,
-                      ccu.column_name AS referenced_column,rc.update_rule,rc.delete_rule
-               FROM information_schema.table_constraints tc
-               JOIN information_schema.key_column_usage kcu
-                 ON tc.constraint_catalog=kcu.constraint_catalog
-                AND tc.constraint_schema=kcu.constraint_schema
-                AND tc.constraint_name=kcu.constraint_name
-               JOIN information_schema.constraint_column_usage ccu
-                 ON tc.constraint_catalog=ccu.constraint_catalog
-                AND tc.constraint_schema=ccu.constraint_schema
-                AND tc.constraint_name=ccu.constraint_name
+            """SELECT child.relname AS table_name,child_column.attname AS column_name,
+                      parent.relname AS referenced_table,parent_column.attname AS referenced_column,
+                      rc.update_rule,rc.delete_rule
+               FROM pg_constraint fk
+               JOIN pg_class child ON child.oid=fk.conrelid
+               JOIN pg_namespace child_schema ON child_schema.oid=child.relnamespace
+               JOIN pg_class parent ON parent.oid=fk.confrelid
+               JOIN pg_namespace parent_schema ON parent_schema.oid=parent.relnamespace
+               JOIN LATERAL unnest(fk.conkey,fk.confkey)
+                    WITH ORDINALITY AS key(child_attnum,parent_attnum,ordinality) ON TRUE
+               JOIN pg_attribute child_column
+                 ON child_column.attrelid=child.oid AND child_column.attnum=key.child_attnum
+               JOIN pg_attribute parent_column
+                 ON parent_column.attrelid=parent.oid AND parent_column.attnum=key.parent_attnum
                JOIN information_schema.referential_constraints rc
-                 ON tc.constraint_catalog=rc.constraint_catalog
-                AND tc.constraint_schema=rc.constraint_schema
-                AND tc.constraint_name=rc.constraint_name
-               WHERE tc.constraint_type='FOREIGN KEY'
-                 AND tc.constraint_schema=current_schema()"""
+                 ON rc.constraint_schema=child_schema.nspname
+                AND rc.constraint_name=fk.conname
+               WHERE fk.contype='f'
+                 AND child_schema.nspname=current_schema()
+                 AND parent_schema.nspname=current_schema()"""
         )
         postgres_foreign_keys = {
             (
