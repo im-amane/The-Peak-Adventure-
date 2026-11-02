@@ -34,6 +34,11 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   for world in range(1,11):
    levels=world_encounter_levels(100,world,False)
    self.assertTrue(all((world-1)*10<level<=world*10 for level in levels))
+ async def test_encounter_rejects_non_boolean_boss_completion_state(self):
+  for value in (0,1,None,"yes"):
+   with self.subTest(value=value),self.assertRaises(WorldError):
+    world_encounter_levels(100,10,value)
+
  async def test_unbeaten_boss_is_mandatory_at_world_cap(self):
   self.assertEqual(world_encounter_levels(100,10,False),(100,))
  async def test_defeated_boss_allows_regular_monsters(self):
