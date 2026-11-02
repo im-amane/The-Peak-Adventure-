@@ -1729,6 +1729,10 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await respond_guild_invite(self.db, invite_id, self.member_id, True)
         raid_result = await attack_guild_raid(self.db, guild_id, self.member_id, 100)
         self.assertEqual(raid_result["status"], "won")
+        cursor = await self.db.execute(
+            "SELECT guild_xp FROM guilds WHERE guild_id=?", (guild_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["guild_xp"], 100)
 
         war_id = await declare_guild_war(
             self.db, guild_id, self.user_id, 900
@@ -1746,6 +1750,19 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertIsNotNone(first)
         self.assertIsNone(duplicate)
+        await record_guild_war_duel(
+            self.db, self.user_id, self.target_leader_id, self.user_id, duel_id=8_000_002
+        )
+        completed = await record_guild_war_duel(
+            self.db, self.user_id, self.target_leader_id, self.user_id, duel_id=8_000_003
+        )
+        self.assertEqual(completed["status"], "completed")
+        cursor = await self.db.execute(
+            "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",
+            (guild_id,),
+        )
+        guild = await cursor.fetchone()
+        self.assertEqual((guild["guild_level"], guild["guild_xp"]), (1, 250))
 
     async def test_concurrent_guild_raid_starts_create_only_one_active_raid(self):
         guild_id = await create_guild(self.db, self.user_id, "Concurrent Raiders")
