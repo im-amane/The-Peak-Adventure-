@@ -338,7 +338,6 @@ async def respond_guild_war(db, war_id, leader_id, accept):
 
 
 @_transactional
-@_transactional
 async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id, duel_id=None):
     if not all(valid_id(x) for x in (challenger_id,opponent_id,winner_id)) or winner_id not in {challenger_id,opponent_id}:
         return None
