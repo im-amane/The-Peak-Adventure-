@@ -257,6 +257,16 @@ async def attack_group_raid(db,chat_id,user_id,damage):
       ON CONFLICT(raid_id,user_id) DO UPDATE SET damage=damage+excluded.damage""",(raid["raid_id"],user_id,damage))
     return {"boss_name":raid["boss_name"],"hp":hp,"max_hp":raid["max_hp"],"damage":damage,"status":status}
 
+
+@_transactional
+async def attack_group_raid_and_reward(db,chat_id,user_id,damage):
+    """Settle raid damage and its mission/XP rewards as one atomic action."""
+    result=await attack_group_raid(db,chat_id,user_id,damage)
+    await record_group_activity(db,chat_id,"boss" if result["status"]=="won" else "battle")
+    await award_group_xp(db,chat_id,100 if result["status"]=="won" else 10)
+    return result
+
+
 async def group_raid_status(db,chat_id):
     cur=await db.execute("SELECT * FROM group_raids WHERE chat_id=? ORDER BY raid_id DESC LIMIT 1",(chat_id,))
     return await cur.fetchone()
