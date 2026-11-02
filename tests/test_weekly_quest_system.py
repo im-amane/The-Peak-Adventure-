@@ -46,6 +46,37 @@ class WeeklyQuestTests(unittest.IsolatedAsyncioTestCase):
         row=await cur.fetchone()
         self.assertEqual(row["claimed"],0)
 
+    async def test_weekly_operations_preserve_outer_transaction(self):
+        now = 1790000000
+        await self.db.execute("CREATE TABLE audit_log(value TEXT)")
+        await self.db.execute("INSERT INTO audit_log VALUES('keep')")
+        await record_weekly_progress(self.db,1,"wins",15,now=now)
+        self.assertTrue(self.db.in_transaction)
+        await get_weekly_quests(self.db,1,now=now)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+
+        rows=await get_weekly_quests(self.db,1,now=now)
+        hunter=next(row for row in rows if row["id"]=="weekly_hunter")
+        self.assertEqual(hunter["progress"],0)
+        cur=await self.db.execute("SELECT COUNT(*) FROM audit_log")
+        self.assertEqual((await cur.fetchone())[0],0)
+
+    async def test_weekly_reward_claim_preserves_outer_transaction(self):
+        now=1790000000
+        await record_weekly_progress(self.db,1,"wins",15,now=now)
+        await self.db.execute("CREATE TABLE audit_log(value TEXT)")
+        await self.db.execute("INSERT INTO audit_log VALUES('keep')")
+        await claim_weekly_reward(self.db,1,"weekly_hunter",now=now)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+
+        cur=await self.db.execute("SELECT coins,potions FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await cur.fetchone()),(0,0))
+        rows=await get_weekly_quests(self.db,1,now=now)
+        hunter=next(row for row in rows if row["id"]=="weekly_hunter")
+        self.assertFalse(hunter["claimed"])
+
     async def test_non_string_quest_id_is_rejected(self):
         with self.assertRaises(WeeklyQuestError):
             await claim_weekly_reward(self.db,1,[],now=1790000000)
