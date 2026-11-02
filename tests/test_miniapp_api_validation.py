@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -140,6 +141,61 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player["hp"], 100)
         cur = await main.db.execute("SELECT 1 FROM player_mana WHERE user_id=?", (user_id,))
         self.assertIsNone(await cur.fetchone())
+
+    async def test_coin_shop_rolls_back_debit_when_equipment_update_fails(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=2,coins=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.execute(
+            f"""CREATE TRIGGER reject_coin_shop_weapon
+                BEFORE UPDATE OF weapon,weapon_attack ON players
+                WHEN OLD.user_id={user_id}
+                BEGIN SELECT RAISE(ABORT, 'equipment write unavailable'); END"""
+        )
+        await main.db.commit()
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            await main.buy_shop_item(user_id,"iron_sword")
+
+        player=await main.get_player(user_id)
+        self.assertEqual(player["coins"],100)
+        self.assertEqual(player["weapon_attack"],0)
+
+    async def test_coin_shop_rejects_ignored_inventory_update_without_charging(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=2,coins=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.execute(
+            f"""CREATE TRIGGER ignore_coin_shop_weapon
+                BEFORE UPDATE OF weapon,weapon_attack ON players
+                WHEN OLD.user_id={user_id}
+                BEGIN SELECT RAISE(IGNORE); END"""
+        )
+        await main.db.commit()
+
+        with self.assertRaisesRegex(main.ShopError,"No coins were deducted"):
+            await main.buy_shop_item(user_id,"iron_sword")
+
+        player=await main.get_player(user_id)
+        self.assertEqual(player["coins"],100)
+        self.assertEqual(player["weapon_attack"],0)
+
+    async def test_coin_shop_potion_purchase_updates_inventory_and_wallet(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=1,coins=100,potions=0 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        item=await main.buy_shop_item(user_id,"health_potion")
+        player=await main.get_player(user_id)
+        self.assertEqual(item["name"],"Health Potion")
+        self.assertEqual((player["coins"],player["potions"]),(75,1))
 
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
