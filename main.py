@@ -4785,6 +4785,7 @@ API_ROUTE_LIMITS = {
     "/api/explore": 15,
     "/api/social": 20,
     "/api/matchmaking": 8,
+    "/api/settings": 10,
     "/api/premium-shop": 6,
     "/api/world": 15,
     "/api/dungeon": 15,
