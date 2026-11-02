@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 import aiosqlite
 from auction_system import *
+from auction_system import _settle_due
 
 class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
