@@ -177,11 +177,10 @@ async def get_group_profile(db,chat_id):
     return row
 
 @_transactional
-@_transactional
 async def award_group_xp(db,chat_id,amount):
     if not valid_chat(chat_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=5000:
         raise GroupError("Invalid group XP award.")
-    cur=await db.execute("SELECT group_level,group_xp FROM group_profiles WHERE chat_id=?",(chat_id,))
+    cur=await db.execute("SELECT group_level,group_xp FROM group_profiles WHERE chat_id=?" + _lock_group_sql(db),(chat_id,))
     row=await cur.fetchone()
     if not row: raise GroupError("Register this group first.")
     level,xp=row["group_level"],row["group_xp"]+amount
