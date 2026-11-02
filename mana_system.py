@@ -66,7 +66,7 @@ async def get_mana(db,user_id,now=None,commit=True):
     nested = await _begin_atomic(db, "get_mana")
     try:
         await db.execute(
-            "INSERT OR IGNORE INTO player_mana(user_id,mana,updated_at) VALUES(?,?,?)",
+            "INSERT INTO player_mana(user_id,mana,updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO NOTHING",
             (user_id,MAX_MANA,now),
         )
         cur=await db.execute("SELECT mana,updated_at FROM player_mana WHERE user_id=?",(user_id,))
@@ -121,8 +121,8 @@ async def restore_mana(db,user_id,amount=TURN_MANA_REGEN,now=None,commit=True):
     try:
         await get_mana(db,user_id,now)
         cur=await db.execute(
-            "UPDATE player_mana SET mana=MIN(?,mana+?),updated_at=? WHERE user_id=?",
-            (MAX_MANA,amount,now,user_id),
+            "UPDATE player_mana SET mana=CASE WHEN mana+? > ? THEN ? ELSE mana+? END,updated_at=? WHERE user_id=?",
+            (amount,MAX_MANA,MAX_MANA,amount,now,user_id),
         )
         if cur.rowcount != 1:
             raise ManaError("Mana could not be restored.")
