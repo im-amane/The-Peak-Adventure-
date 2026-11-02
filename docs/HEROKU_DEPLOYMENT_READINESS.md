@@ -31,7 +31,7 @@ Do not attempt to solve this by setting `DATABASE_URL` alone. The current applic
 
 ### 2. Durable backups and restore
 
-The current backup loop writes local SQLite snapshots. Before production:
+The current backup loop writes local SQLite snapshots. The SQLite backup utility now takes an online consistent snapshot, runs an integrity check, flushes the verified file and directory metadata before/after atomic publication, rotates old snapshots, and refuses restore while WAL/SHM sidecars exist. These protections improve local snapshot integrity but do not make dyno-local files durable. Before production:
 - Choose a durable backup destination or a database-native backup strategy.
 - Encrypt and restrict access to backups.
 - Verify backup integrity and perform a restore drill against a disposable database.
