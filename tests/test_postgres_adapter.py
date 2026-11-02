@@ -2725,6 +2725,7 @@ class AdminToolsPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await recent_admin_actions(self.db), [])
 
 
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
 class PostgresMainSqlCompatibilityTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.previous_db = main.db
