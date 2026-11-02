@@ -667,7 +667,8 @@ async def refresh_quest_progress(user_id: int, commit: bool = True):
         await db.execute(
             "INSERT INTO quest_progress(user_id, quest_id, progress, completed) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(user_id, quest_id) DO UPDATE SET progress=excluded.progress, "
-            "completed=MAX(quest_progress.completed, excluded.completed)",
+            "completed=CASE WHEN quest_progress.completed > excluded.completed "
+                "THEN quest_progress.completed ELSE excluded.completed END",
             (user_id, quest["id"], progress, int(progress >= quest["target"])),
         )
     if commit:
@@ -780,7 +781,8 @@ async def refresh_achievement_progress(user_id: int, commit: bool = True):
         await db.execute(
             "INSERT INTO achievement_progress(user_id, achievement_id, progress, completed) VALUES (?, ?, ?, ?) "
             "ON CONFLICT(user_id, achievement_id) DO UPDATE SET progress=excluded.progress, "
-            "completed=MAX(achievement_progress.completed, excluded.completed)",
+            "completed=CASE WHEN achievement_progress.completed > excluded.completed "
+                "THEN achievement_progress.completed ELSE excluded.completed END",
             (user_id, achievement["id"], progress, int(progress >= achievement["target"])),
         )
     if commit:
