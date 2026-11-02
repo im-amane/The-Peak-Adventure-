@@ -2088,6 +2088,25 @@ class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         columns = {row["column_name"] for row in await cursor.fetchall()}
         self.assertIn("sound_enabled", columns)
 
+    async def test_concurrent_partial_settings_updates_preserve_both_changes(self):
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                update_settings(self.db, self.user_id, notifications_enabled=False),
+                update_settings(other_db, self.user_id, sound_enabled=False),
+            )
+            self.assertEqual(len(results), 2)
+            self.assertEqual(
+                await get_settings(self.db, self.user_id),
+                {
+                    "notifications_enabled": 0,
+                    "profile_visibility": "public",
+                    "sound_enabled": 0,
+                },
+            )
+        finally:
+            await other_db.close()
+
     async def test_account_deletion_uses_postgres_catalog_and_cleans_optional_data(self):
         await self.db.execute(
             "INSERT INTO guild_chat_messages VALUES(5,?,'private guild text')",
