@@ -171,7 +171,23 @@
         // valid grid route could still clip an obstacle at its first/last edge.
         if (segmentBlocked(start, firstWaypoint) || segmentBlocked(lastWaypoint, goal)) return [];
         path[path.length - 1] = { x: goal.x, y: goal.y };
-        return path;
+
+        // Collapse unnecessary grid-center waypoints without ever crossing an
+        // expanded obstacle rectangle. This keeps movement smooth while
+        // preserving the same collision guarantees as the raw A-star route.
+        const smoothed = [];
+        let anchor = start;
+        let nextIndex = 0;
+        while (nextIndex < path.length) {
+          let farthest = path.length - 1;
+          while (farthest > nextIndex && segmentBlocked(anchor, path[farthest])) farthest--;
+          if (segmentBlocked(anchor, path[farthest])) return [];
+          const waypoint = { x: path[farthest].x, y: path[farthest].y };
+          smoothed.push(waypoint);
+          anchor = waypoint;
+          nextIndex = farthest + 1;
+        }
+        return smoothed;
       }
 
       for (const [dx, dy, cost] of directions) {
