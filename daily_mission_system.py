@@ -17,6 +17,32 @@ class DailyMissionError(ValueError):
     pass
 
 
+async def _begin_transaction(db, savepoint):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def current_day_key(
+
 def current_day_key(now=None):
     stamp = datetime.fromtimestamp(time.time() if now is None else now, timezone.utc)
     return stamp.strftime("%Y-%m-%d")
@@ -47,38 +73,48 @@ async def record_daily_progress(db, user_id, kind, amount=1, now=None):
     if not isinstance(amount, int) or isinstance(amount, bool) or not 1 <= amount <= 100:
         raise DailyMissionError("Invalid daily progress amount.")
     day_key = current_day_key(now)
-    await _ensure_day(db, user_id, day_key)
-    for mission in DAILY_MISSIONS:
-        if mission["kind"] == kind:
-            await db.execute(
-                "UPDATE player_daily_missions SET progress=MIN(?,progress+?) WHERE user_id=? AND day_key=? AND mission_id=?",
-                (mission["target"], amount, user_id, day_key, mission["id"]),
-            )
-    await db.commit()
-
+    savepoint = "daily_mission_progress"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        await _ensure_day(db, user_id, day_key)
+        for mission in DAILY_MISSIONS:
+            if mission["kind"] == kind:
+                await db.execute(
+                    "UPDATE player_daily_missions SET progress=MIN(?,progress+?) WHERE user_id=? AND day_key=? AND mission_id=?",
+                    (mission["target"], amount, user_id, day_key, mission["id"]),
+                )
+        await _commit_transaction(db, nested, savepoint)
+    except Exception:
+        await _rollback_transaction(db, nested, savepoint)
+        raise
 
 async def get_daily_missions(db, user_id, now=None):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise DailyMissionError("Invalid player account.")
     day_key = current_day_key(now)
-    await _ensure_day(db, user_id, day_key)
-    cur = await db.execute(
-        "SELECT mission_id,progress,claimed FROM player_daily_missions WHERE user_id=? AND day_key=?",
-        (user_id, day_key),
-    )
-    rows = {row["mission_id"]: row for row in await cur.fetchall()}
-    await db.commit()
-    result = []
-    for mission in DAILY_MISSIONS:
-        row = rows[mission["id"]]
-        result.append({
-            **mission,
-            "progress": row["progress"],
-            "completed": row["progress"] >= mission["target"],
-            "claimed": bool(row["claimed"]),
-        })
-    return result
-
+    savepoint = "daily_mission_read"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        await _ensure_day(db, user_id, day_key)
+        cur = await db.execute(
+            "SELECT mission_id,progress,claimed FROM player_daily_missions WHERE user_id=? AND day_key=?",
+            (user_id, day_key),
+        )
+        rows = {row["mission_id"]: row for row in await cur.fetchall()}
+        result = [
+            {
+                **mission,
+                "progress": rows[mission["id"]]["progress"],
+                "completed": rows[mission["id"]]["progress"] >= mission["target"],
+                "claimed": bool(rows[mission["id"]]["claimed"]),
+            }
+            for mission in DAILY_MISSIONS
+        ]
+        await _commit_transaction(db, nested, savepoint)
+        return result
+    except Exception:
+        await _rollback_transaction(db, nested, savepoint)
+        raise
 
 async def claim_daily_mission(db, user_id, mission_id, now=None):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
@@ -87,8 +123,9 @@ async def claim_daily_mission(db, user_id, mission_id, now=None):
         raise DailyMissionError("Unknown daily mission.")
     day_key = current_day_key(now)
     mission = MISSION_BY_ID[mission_id]
+    savepoint = "daily_mission_claim"
+    nested = await _begin_transaction(db, savepoint)
     try:
-        await db.execute("BEGIN IMMEDIATE")
         await _ensure_day(db, user_id, day_key)
         cur = await db.execute(
             "SELECT progress,claimed FROM player_daily_missions WHERE user_id=? AND day_key=? AND mission_id=?",
@@ -102,16 +139,21 @@ async def claim_daily_mission(db, user_id, mission_id, now=None):
         cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
         if not await cur.fetchone():
             raise DailyMissionError("Player account not found.")
-        await db.execute(
+        cur = await db.execute(
             "UPDATE player_daily_missions SET claimed=1 WHERE user_id=? AND day_key=? AND mission_id=? AND claimed=0",
             (user_id, day_key, mission_id),
         )
-        await db.execute(
+        if cur.rowcount != 1:
+            raise DailyMissionError("This daily mission reward has already been claimed.")
+        cur = await db.execute(
             "UPDATE players SET coins=coins+?,potions=potions+? WHERE user_id=?",
             (mission["coins"], mission["potions"], user_id),
         )
-        await db.commit()
+        if cur.rowcount != 1:
+            raise DailyMissionError("Player account not found.")
+        await _commit_transaction(db, nested, savepoint)
         return mission
     except Exception:
-        await db.rollback()
+        await _rollback_transaction(db, nested, savepoint)
         raise
+
