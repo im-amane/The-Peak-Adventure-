@@ -262,6 +262,25 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await other.rollback()
             await other.close()
 
+    async def test_player_advisory_lock_survives_gameplay_transaction_rollback(self):
+        user_id = 9_800_000_002
+        await self.db.acquire_player_lock(user_id)
+        await self.db.execute("BEGIN")
+        await self.db.execute(
+            "INSERT INTO adapter_probe(value) VALUES (?)",
+            ("lock-rollback-probe",),
+        )
+        with self.assertRaises(UniqueViolation):
+            await self.db.execute(
+                "INSERT INTO adapter_probe(value) VALUES (?)",
+                ("lock-rollback-probe",),
+            )
+
+        # The gameplay connection is now in an aborted transaction. Releasing the
+        # dedicated advisory session must still work before the caller rolls back.
+        await self.db.release_player_lock(user_id)
+        await self.db.rollback()
+
     async def test_player_advisory_lock_rejects_invalid_keys(self):
         for user_id in (0, -1, True, 9_223_372_036_854_775_808):
             with self.assertRaisesRegex(ValueError, "positive signed 64-bit"):
