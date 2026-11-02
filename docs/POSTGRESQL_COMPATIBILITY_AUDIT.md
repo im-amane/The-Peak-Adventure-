@@ -32,7 +32,7 @@ The project has a PostgreSQL 16 adapter, dialect-aware full-game schema initiali
 
 - `main.init_db()` selects Psycopg when `DATABASE_URL` is explicitly set and otherwise retains SQLite. PostgreSQL startup errors fail closed and close a partially initialized connection.
 - Backend-selection and failure-cleanup tests cover the runtime selection path; CI also runs the PostgreSQL adapter and service integration suites against PostgreSQL 16.
-- The app still owns one global connection per process and uses process-local locks. Cross-process transaction/locking behavior must be audited before separate web/worker processes or horizontal scaling.
+- The app still owns one gameplay connection per process. Player-scoped actions now take PostgreSQL session advisory locks on a dedicated lock connection, so those locks survive gameplay transaction commits/rollbacks and coordinate across processes. Group/guild/party/multi-account workflows and any remaining unguarded mutation paths still need a broader cross-process locking audit before separate web/worker processes or horizontal scaling.
 - The runtime deliberately disables the SQLite snapshot loop when PostgreSQL is selected. The operations monitor reports that no durable PostgreSQL backup provider is configured.
 
 ### 2. Backup, restore and recovery
@@ -78,7 +78,7 @@ It is a one-way data-copy tool, not a live replication or zero-downtime migratio
 1. Complete a dry-run against a representative, backed-up SQLite database and review all schema/count/type warnings.
 2. Select and implement a durable PostgreSQL backup destination plus verified restore rehearsal; the storage provider must be chosen before this can be completed safely.
 3. Expand PostgreSQL smoke coverage to the remaining main-command and Mini App mutation paths, and finish the SQLite-specific SQL/transaction audit.
-4. Audit all cross-process locking and idempotency assumptions before adding separate web and Telegram worker process roles.
+4. Extend database-level locking and idempotency to group/guild/party and multi-account operations; the new player advisory lock is only one layer of the cross-process concurrency design.
 5. Run browser/device, Telegram, multiplayer concurrency, security and load acceptance tests.
 6. Only after explicit approval, schedule a controlled data migration and Heroku release.
 
