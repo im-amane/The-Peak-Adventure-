@@ -51,4 +51,62 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   await register_group(self.db,-1002,"Summit",303); await award_group_xp(self.db,-1002,500)
   self.assertEqual((await top_groups(self.db))[0]["chat_id"],-1002)
 
+ async def test_group_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_group_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='group_profiles'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
+ async def test_group_activity_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await record_group_activity(self.db,-1001,"battle",2)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT COUNT(*) FROM group_missions WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_claim_mission_preserves_outer_transaction(self):
+  await record_group_activity(self.db,-1001,"battle",5)
+  await self.db.execute("BEGIN")
+  await claim_group_mission(self.db,-1001,202,"battles")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT claimed FROM group_missions WHERE chat_id=-1001 AND mission_date=? AND mission_id='battles'",(today(),))
+  self.assertEqual((await cur.fetchone())["claimed"],0)
+  cur=await self.db.execute("SELECT group_xp FROM group_profiles WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())["group_xp"],0)
+
+ async def test_mission_claim_rolls_back_when_group_xp_update_fails(self):
+  await record_group_activity(self.db,-1001,"battle",5)
+  await self.db.execute("CREATE TRIGGER reject_group_xp BEFORE UPDATE OF group_xp ON group_profiles BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await claim_group_mission(self.db,-1001,202,"battles")
+  cur=await self.db.execute("SELECT claimed FROM group_missions WHERE chat_id=-1001 AND mission_date=? AND mission_id='battles'",(today(),))
+  self.assertEqual((await cur.fetchone())["claimed"],0)
+  cur=await self.db.execute("SELECT group_xp FROM group_profiles WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())["group_xp"],0)
+
+ async def test_raid_attack_rolls_back_when_contribution_fails(self):
+  await start_group_raid(self.db,-1001,202,10,"Root Warden",1000)
+  await self.db.execute("CREATE TRIGGER reject_group_contribution BEFORE INSERT ON group_raid_contributions BEGIN SELECT RAISE(ABORT,'contribution unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await attack_group_raid(self.db,-1001,101,100)
+  cur=await self.db.execute("SELECT hp,status FROM group_raids WHERE chat_id=-1001")
+  raid=await cur.fetchone()
+  self.assertEqual((raid["hp"],raid["status"]),(1000,"active"))
+  cur=await self.db.execute("SELECT COUNT(*) FROM group_raid_cooldowns")
+  self.assertEqual((await cur.fetchone())[0],0)
+
 if __name__=="__main__": unittest.main()
