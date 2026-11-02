@@ -221,6 +221,14 @@ async def claim_group_mission(db,chat_id,user_id,mission_id):
     return mission["reward"],mission["xp"]
 
 
+
+@_transactional
+async def record_group_activity_reward(db,chat_id,kind,xp):
+    """Apply group mission progress and its matching group XP atomically."""
+    await record_group_activity(db,chat_id,kind)
+    return await award_group_xp(db,chat_id,xp)
+
+
 @_transactional
 async def claim_group_mission_reward(db,chat_id,user_id,mission_id):
     """Claim the group mission and credit its player coin reward atomically."""
