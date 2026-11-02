@@ -33,7 +33,7 @@ from guild_system import (
     GuildFeatureError, attack_guild_raid, create_guild, create_guild_invite,
     declare_guild_war, get_guild_chat, get_guild_missions, guild_role,
     init_guild_features, record_guild_war_duel, respond_guild_invite,
-    respond_guild_war, send_guild_message, start_guild_raid,
+    respond_guild_war, send_guild_message, start_guild_raid, record_guild_activity,
 )
 from group_system import (
     GroupError, attack_group_raid, claim_group_mission_reward,
@@ -2928,3 +2928,58 @@ class PostgresFullSchemaInitializationTests(unittest.IsolatedAsyncioTestCase):
                  AND column_name='user_id'"""
         )
         self.assertEqual((await cursor.fetchone())["data_type"], "bigint")
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresBattleScalarSqlTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.previous_db = main.db
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_battle_" + uuid.uuid4().hex[:12]
+        await self.db.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db.commit()
+        await self.db.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.db)
+        main.db = self.db
+        self.user_id = 9_000_000_011
+        await main.get_player(self.user_id, "BattleSqlHero")
+        await self.db.execute(
+            "UPDATE players SET coins=100,hp=95,max_hp=100,skill_cd=2 WHERE user_id=?",
+            (self.user_id,),
+        )
+        await self.db.commit()
+
+    async def asyncTearDown(self):
+        main.db = self.previous_db
+        if self.db.in_transaction:
+            await self.db.rollback()
+        await self.db.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_battle_hp_and_cooldown_updates_work_on_postgres(self):
+        await main._apply_battle_victory_heal(self.db, self.user_id)
+        cursor = await self.db.execute(
+            "SELECT hp,skill_cd FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        row = await cursor.fetchone()
+        self.assertEqual((row["hp"], row["skill_cd"]), (100, 1))
+
+        await main._apply_battle_turn_state(self.db, self.user_id, 80)
+        cursor = await self.db.execute(
+            "SELECT hp,skill_cd FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        row = await cursor.fetchone()
+        self.assertEqual((row["hp"], row["skill_cd"]), (80, 0))
+
+    async def test_guild_mission_progress_caps_on_postgres(self):
+        guild_id = await create_guild(self.db, self.user_id, "ScalarSqlGuild")
+        await record_guild_activity(self.db, guild_id, self.user_id, "battle", 20)
+        cursor = await self.db.execute(
+            "SELECT progress FROM guild_missions WHERE guild_id=? AND mission_id='battles'",
+            (guild_id,),
+        )
+        row = await cursor.fetchone()
+        self.assertEqual(row["progress"], 5)
