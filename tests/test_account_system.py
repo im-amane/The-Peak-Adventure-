@@ -268,7 +268,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertIsNotNone(await cur.fetchone())
 
  async def test_delete_account_removes_guild_chat_history(self):
-  await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
+  await self.db.execute("INSERT INTO guild_chat_messages(message_id,guild_id,user_id,message) VALUES(1,5,1,'private guild text')")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM guild_chat_messages WHERE user_id=1")
