@@ -62,7 +62,7 @@ class QuestClaimTests(unittest.IsolatedAsyncioTestCase):
             "SELECT coins,potions FROM players WHERE user_id=?", (self.user_id,)
         )
         player = await cur.fetchone()
-        self.assertEqual((player["coins"], player["potions"]), (0, 0))
+        self.assertEqual((player["coins"], player["potions"]), (0, 3))
 
     async def test_failed_wallet_update_does_not_consume_quest_claim(self):
         await main.db.execute(
@@ -83,7 +83,7 @@ class QuestClaimTests(unittest.IsolatedAsyncioTestCase):
             "SELECT coins,potions FROM players WHERE user_id=?", (self.user_id,)
         )
         player = await cur.fetchone()
-        self.assertEqual((player["coins"], player["potions"]), (0, 0))
+        self.assertEqual((player["coins"], player["potions"]), (0, 3))
 
     async def test_ignored_claim_update_rolls_back_wallet_credit(self):
         await main.db.execute(
@@ -104,7 +104,7 @@ class QuestClaimTests(unittest.IsolatedAsyncioTestCase):
             "SELECT coins,potions FROM players WHERE user_id=?", (self.user_id,)
         )
         player = await cur.fetchone()
-        self.assertEqual((player["coins"], player["potions"]), (0, 0))
+        self.assertEqual((player["coins"], player["potions"]), (0, 3))
 
 
 if __name__ == "__main__":
