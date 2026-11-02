@@ -31,10 +31,10 @@ async def _begin_atomic(db, savepoint):
     return nested
 
 
-async def _commit_atomic(db, nested, savepoint):
+async def _commit_atomic(db, nested, savepoint, commit=True):
     if nested:
         await db.execute(f"RELEASE SAVEPOINT {savepoint}")
-    else:
+    elif commit:
         await db.commit()
 
 
@@ -60,7 +60,7 @@ async def init_mana_tables(db):
         raise
 
 
-async def get_mana(db,user_id,now=None):
+async def get_mana(db,user_id,now=None,commit=True):
     _validate_user(user_id)
     now = _validate_now(now)
     nested = await _begin_atomic(db, "get_mana")
@@ -79,7 +79,7 @@ async def get_mana(db,user_id,now=None):
             updated=now
         if gained or updated!=row["updated_at"]:
             await db.execute("UPDATE player_mana SET mana=?,updated_at=? WHERE user_id=?",(mana,updated,user_id))
-        await _commit_atomic(db, nested, "get_mana")
+        await _commit_atomic(db, nested, "get_mana", commit)
         elapsed_since=max(0,now-updated)
         return {"mana":mana,"max_mana":MAX_MANA,
                 "next_regen_seconds":0 if mana>=MAX_MANA else REGEN_SECONDS-(elapsed_since%REGEN_SECONDS)}
@@ -88,7 +88,7 @@ async def get_mana(db,user_id,now=None):
         raise
 
 
-async def consume_mana(db,user_id,amount=SKILL_MANA_COST,now=None):
+async def consume_mana(db,user_id,amount=SKILL_MANA_COST,now=None,commit=True):
     _validate_user(user_id)
     if not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=MAX_MANA:
         raise ManaError("Invalid mana cost.")
@@ -105,14 +105,14 @@ async def consume_mana(db,user_id,amount=SKILL_MANA_COST,now=None):
         if cur.rowcount != 1:
             raise ManaError("Mana changed before the skill could be used. Try again.")
         state=await get_mana(db,user_id,now)
-        await _commit_atomic(db, nested, "consume_mana")
+        await _commit_atomic(db, nested, "consume_mana", commit)
         return state
     except Exception:
         await _rollback_atomic(db, nested, "consume_mana")
         raise
 
 
-async def restore_mana(db,user_id,amount=TURN_MANA_REGEN,now=None):
+async def restore_mana(db,user_id,amount=TURN_MANA_REGEN,now=None,commit=True):
     _validate_user(user_id)
     if not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=MAX_MANA:
         raise ManaError("Invalid mana restore amount.")
@@ -127,7 +127,7 @@ async def restore_mana(db,user_id,amount=TURN_MANA_REGEN,now=None):
         if cur.rowcount != 1:
             raise ManaError("Mana could not be restored.")
         state=await get_mana(db,user_id,now)
-        await _commit_atomic(db, nested, "restore_mana")
+        await _commit_atomic(db, nested, "restore_mana", commit)
         return state
     except Exception:
         await _rollback_atomic(db, nested, "restore_mana")
