@@ -62,6 +62,26 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported generated ID column"):
             await main._insert_generated_id(main.db, "INSERT INTO duels(chat_id) VALUES (?)", (1,), "chat_id")
 
+    async def test_dialect_specific_social_and_expiry_sql(self):
+        self.assertIn("MIN(?,?)", main._friend_pair_lookup_sql(main.db))
+        self.assertIn("MAX(?,?)", main._friend_pair_lookup_sql(main.db))
+        self.assertIn("datetime(created_at)", main._stale_trade_expiry_sql(main.db))
+
+    async def test_expire_stale_trades_uses_sqlite_datetime_semantics(self):
+        await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(0,101,102,'pending',datetime('now','-25 hours'))"""
+        )
+        await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,created_at)
+               VALUES(0,103,104,'pending',datetime('now','-1 hour'))"""
+        )
+        await main.db.commit()
+        expired = await main.expire_stale_trades()
+        self.assertEqual(expired, 1)
+        cur = await main.db.execute("SELECT status FROM trades ORDER BY trade_id")
+        self.assertEqual([row["status"] for row in await cur.fetchall()], ["expired", "pending"])
+
     async def test_database_healthcheck_detects_unavailable_database(self):
         self.assertTrue(await main.database_healthcheck())
         active_db = main.db
