@@ -62,7 +62,7 @@ def _contains_sql_keyword(sql: str, keywords: set[str]) -> bool:
     length = len(sql)
     while index < length:
         if sql.startswith("--", index):
-            newline = sql.find("\\n", index + 2)
+            newline = sql.find("\n", index + 2)
             if newline < 0:
                 return False
             index = newline + 1
@@ -90,7 +90,7 @@ def _contains_sql_keyword(sql: str, keywords: set[str]) -> bool:
             )
             index += 1
             while index < length:
-                if quote == "'" and escape_string and sql[index] == "\\\\":
+                if quote == "'" and escape_string and sql[index] == "\\":
                     index += 2
                 elif sql[index] == quote:
                     if index + 1 < length and sql[index + 1] == quote:
@@ -130,6 +130,14 @@ def _is_write_statement(sql: str) -> bool:
     if keyword == "WITH":
         return _contains_sql_keyword(sql, {"INSERT", "UPDATE", "DELETE", "MERGE"})
     return False
+
+
+def _prepare_statement(sql: str) -> str:
+    """Translate legacy placeholders and the SQLite-only explicit write-begin form."""
+    statement = _prepare_statement(sql)
+    if re.fullmatch(r"\s*BEGIN\s+IMMEDIATE\s*;?\s*", statement, re.IGNORECASE):
+        return "BEGIN"
+    return statement
 
 
 def qmark_to_pyformat(sql: str) -> str:
@@ -264,9 +272,6 @@ class PostgresConnection:
 
     async def execute(self, sql: str, parameters: Sequence[Any] | None = None):
         statement = qmark_to_pyformat(sql)
-        if statement.strip().upper() == "BEGIN IMMEDIATE":
-            statement = "BEGIN"
-
         # SQLite starts implicit transactions for writes, but not for SELECTs.
         # Psycopg autocommit mode plus this explicit write detection preserves
         # that observable in_transaction behavior for the supported SQL subset.
