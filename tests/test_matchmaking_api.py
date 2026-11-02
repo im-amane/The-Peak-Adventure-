@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import patch
 
@@ -43,13 +44,13 @@ class MatchmakingApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_join_and_cancel_are_authenticated_server_actions(self):
         joined = await self.call_api({"action": "join", "mode": "casual"})
         self.assertEqual(joined.status, 200)
-        body = await joined.json()
+        body = json.loads(joined.body.decode())
         self.assertEqual(body["result"]["status"], "queued")
         self.assertEqual(body["state"]["matchmaking"]["status"], "queued")
 
         cancelled = await self.call_api({"action": "cancel"})
         self.assertEqual(cancelled.status, 200)
-        body = await cancelled.json()
+        body = json.loads(cancelled.body.decode())
         self.assertTrue(body["result"]["cancelled"])
         self.assertEqual(body["state"]["matchmaking"]["status"], "cancelled")
 
