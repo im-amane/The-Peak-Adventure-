@@ -27,3 +27,29 @@ jobs:
       - run: node --check cloudflare/worker.mjs
       - run: node --test webapp/pathfinding.test.mjs
       - run: node --test cloudflare/worker.test.mjs
+
+  postgres-adapter:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: peak_adventure_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d peak_adventure_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/peak_adventure_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -p "test_postgres_adapter.py" -v
