@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import main
 
@@ -56,7 +56,7 @@ class MiniAppSecurityTelemetryTests(unittest.IsolatedAsyncioTestCase):
             raise AssertionError("Rate-limited requests must not reach the handler.")
 
         with patch("main.validate_init_data", return_value={"id": 99102, "first_name": "Tester"}), \
-             patch.object(main.api_rate_limiter, "allow", return_value=(False, 12)):
+             patch.object(main.database_api_rate_limiter, "allow", new=AsyncMock(return_value=(False, 12))):
             response = await main.miniapp_rate_limit(request, handler)
 
         self.assertEqual(response.status, 429)
