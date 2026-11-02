@@ -485,22 +485,55 @@ async def start_battle(user_id: int, username: str | None, send_target):
         await _start_battle_unlocked(user_id, username, send_target)
 
 
-async def claim_daily_reward(user_id: int) -> bool:
+async def claim_daily_reward(user_id: int, now: int | None = None) -> bool:
     assert db is not None
-    async with player_locks[user_id]:
-        now = int(datetime.now(timezone.utc).timestamp())
-        cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
-        previous = await cur.fetchone()
-        if previous and now - previous["claimed_at"] < 86400:
-            return False
-        await db.execute(
-            "INSERT INTO daily_claims(user_id, claimed_at) VALUES (?, ?) "
-            "ON CONFLICT(user_id) DO UPDATE SET claimed_at=excluded.claimed_at",
-            (user_id, now),
-        )
-        await db.execute("UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?", (user_id,))
-        await db.commit()
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise ValueError("Invalid player account.")
+    stamp = int(datetime.now(timezone.utc).timestamp()) if now is None else now
+    if not isinstance(stamp,int) or isinstance(stamp,bool) or stamp<0:
+        raise ValueError("Invalid daily reward timestamp.")
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_daily_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            cur = await db.execute("SELECT claimed_at FROM daily_claims WHERE user_id=?", (user_id,))
+            previous = await cur.fetchone()
+            if previous and stamp - previous["claimed_at"] < 86400:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_daily_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+                else:
+                    await db.rollback()
+                return False
+            cur = await db.execute(
+                "INSERT INTO daily_claims(user_id, claimed_at) VALUES (?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET claimed_at=excluded.claimed_at",
+                (user_id, stamp),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Daily reward claim could not be recorded.")
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+50, potions=potions+1 WHERE user_id=?",
+                (user_id,),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Daily reward wallet update failed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+        else:
+            await db.commit()
         return True
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_daily_reward")
+                await db.execute("RELEASE SAVEPOINT claim_daily_reward")
+            else:
+                await db.rollback()
+        raise
 
 
 async def refresh_quest_progress(user_id: int, commit: bool = True):
