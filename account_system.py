@@ -65,6 +65,10 @@ async def init_account_tables(db):
           sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
+        if _is_postgres(db):
+            await db.execute(
+                "ALTER TABLE player_settings ALTER COLUMN user_id TYPE BIGINT"
+            )
         if not await _column_exists(db, "player_settings", "sound_enabled"):
             await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
         await _atomic_finish(db, name, nested)
