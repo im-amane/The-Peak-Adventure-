@@ -224,4 +224,15 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_listing_duration(self):
         with self.assertRaises(AuctionError): await create_listing(self.db,1,"weapon",100,169,now=1000)
 
+
+    async def test_table_initialization_preserves_outer_transaction(self):
+        await self.db.commit()
+        await self.db.execute("BEGIN")
+        await self.db.execute("UPDATE players SET weapon='Pending Blade' WHERE user_id=1")
+        await init_auction_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
+        self.assertEqual((await cur.fetchone())["weapon"],"Stormblade")
+
 if __name__=="__main__": unittest.main()
