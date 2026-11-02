@@ -53,3 +53,4 @@ jobs:
           python-version: "3.11"
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -p "test_postgres_adapter.py" -v
+      - run: python -m unittest discover -s tests -p "test_matchmaking_postgres.py" -v
