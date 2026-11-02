@@ -1093,7 +1093,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_remove_friend_allows_a_new_request(self):
         request_id = await send_friend_request(self.db, self.alice, self.bob)
-        await respond_to_friend_request(self.db, request_id, self.bob, "accept")
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
         await remove_friend(self.db, self.alice, self.bob)
         self.assertEqual(await list_friends(self.db, self.alice), [])
         new_id = await send_friend_request(self.db, self.alice, self.bob)
@@ -1101,8 +1101,9 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_reverse_pending_request_is_accepted(self):
         request_id = await send_friend_request(self.db, self.alice, self.bob)
-        reverse_id = await send_friend_request(self.db, self.bob, self.alice)
-        self.assertEqual(reverse_id, request_id)
+        with self.assertRaisesRegex(FriendError, "Accept it instead"):
+            await send_friend_request(self.db, self.bob, self.alice)
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
         self.assertEqual(len(await list_friends(self.db, self.alice)), 1)
 
     async def test_duplicate_open_request_is_rejected(self):
