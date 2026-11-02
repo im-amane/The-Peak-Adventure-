@@ -139,7 +139,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["role"],"leader")
  async def test_delete_account_removes_social_and_economy_data(self):
-  await self.db.execute("INSERT INTO guild_war_duel_events VALUES(1,5,2),(2,5,1)")
+  await self.db.execute("INSERT INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(1,5,2),(2,5,1)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT COUNT(*) n FROM players")
