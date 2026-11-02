@@ -238,7 +238,7 @@
     renderSocial(data.social || {});
     renderMatchmaking(data.matchmaking || null);
     renderDungeon(data.dungeon || null, data.dungeons || []);
-    renderMaterials(data.materials || {});
+    renderMaterials(data.materials || {}, data.material_rarity || {});
     renderStory(data.story || []);
     if (data.settings) {
       const notifications = document.getElementById("setting-notifications");
@@ -344,7 +344,7 @@
     }
   }
 
-  function renderMaterials(materials) {
+  function renderMaterials(materials, materialRarity = {}) {
     if (!ui.inventoryMaterials) return;
     ui.inventoryMaterials.replaceChildren();
     const names={iron_ore:"Iron Ore",ember_shard:"Ember Shard",frost_crystal:"Frost Crystal",void_essence:"Void Essence",star_dust:"Star Dust"};
@@ -355,7 +355,12 @@
     }
     entries.forEach(([id,quantity])=>{
       const chip=document.createElement("span"); chip.className="material-chip";
-      chip.textContent=(names[id]||id)+" ×"+quantity; ui.inventoryMaterials.appendChild(chip);
+      const rarity=materialRarity[id]||"common";
+      const label=rarity.charAt(0).toUpperCase()+rarity.slice(1);
+      chip.dataset.rarity=rarity;
+      chip.textContent=(names[id]||id)+" · "+label+" ×"+quantity;
+      chip.title=label+" crafting material";
+      ui.inventoryMaterials.appendChild(chip);
     });
   }
 
