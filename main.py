@@ -551,6 +551,25 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         await db.commit()
 
 
+async def _has_active_pvp_match(db, user_id: int) -> bool:
+    if getattr(db, "dialect", "sqlite") == "postgres":
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
+    query = (
+        """SELECT b.match_id FROM matchmaking_battles b
+           JOIN matchmaking_matches m ON m.match_id=b.match_id
+           WHERE b.status='active' AND m.status='matched'
+             AND (m.player_one_id=? OR m.player_two_id=?)
+           LIMIT 1"""
+    )
+    if getattr(db, "dialect", "sqlite") == "postgres":
+        query += " FOR UPDATE OF b,m"
+    cursor = await db.execute(query, (user_id, user_id))
+    return await cursor.fetchone() is not None
+
+
 async def _start_battle_unlocked(user_id: int, username: str | None, send_target):
     assert db is not None
     p = await get_player(user_id, username)
@@ -565,11 +584,20 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         await send_target.answer("💀 Your hero is exhausted. Use /heal before exploring again.")
         return
     try:
+        await db.execute("BEGIN IMMEDIATE")
+        if await _has_active_pvp_match(db, user_id):
+            await db.rollback()
+            await send_target.answer("⚔️ Finish your active PvP match before entering the wilds.")
+            return
         await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
+        await db.rollback()
         state = await get_stamina(db, user_id)
         await send_target.answer("⚡ " + escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
         return
+    except Exception:
+        await db.rollback()
+        raise
     try:
         world_id = await get_current_world(db, user_id, p["level"])
         boss_level = world_id * 10
@@ -3987,22 +4015,7 @@ async def api_explore(request: web.Request):
             # Existing battles are checked above, so refreshing the active battle is free.
             try:
                 await db.execute("BEGIN IMMEDIATE")
-                if getattr(db, "dialect", "sqlite") == "postgres":
-                    await db.execute(
-                        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-                        (f"peak-adventure-matchmaking-player:{user_id}",),
-                    )
-                pvp_query = (
-                    """SELECT b.match_id FROM matchmaking_battles b
-                       JOIN matchmaking_matches m ON m.match_id=b.match_id
-                       WHERE b.status='active' AND m.status='matched'
-                         AND (m.player_one_id=? OR m.player_two_id=?)
-                       LIMIT 1"""
-                )
-                if getattr(db, "dialect", "sqlite") == "postgres":
-                    pvp_query += " FOR UPDATE OF b,m"
-                cur = await db.execute(pvp_query, (user_id, user_id))
-                if await cur.fetchone():
+                if await _has_active_pvp_match(db, user_id):
                     await db.rollback()
                     return web.json_response(
                         {"error": "Finish your active PvP match before starting a monster encounter."},
