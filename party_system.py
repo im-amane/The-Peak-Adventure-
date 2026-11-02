@@ -334,7 +334,7 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     await db.execute("DELETE FROM party_members WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_contributions WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_cooldowns WHERE user_id=?", (user_id,))
-    await db.execute("DELETE FROM party_battle_rewards WHERE user_id=?", (user_id,))
+    # Preserve reward claims when a member leaves; otherwise rejoining lets them farm old battles.
     new_leader = None
     if party and party["leader_id"] == user_id:
         cur = await db.execute(
