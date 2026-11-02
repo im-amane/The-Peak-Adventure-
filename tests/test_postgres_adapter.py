@@ -23,6 +23,7 @@ from daily_mission_system import DailyMissionError, claim_daily_mission, get_dai
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
+from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
 class QmarkTranslationTests(unittest.TestCase):
