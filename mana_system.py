@@ -51,7 +51,7 @@ async def init_mana_tables(db):
     nested = await _begin_atomic(db, "init_mana_tables")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS player_mana(
-          user_id INTEGER PRIMARY KEY,mana INTEGER NOT NULL DEFAULT 100 CHECK(mana BETWEEN 0 AND 100),
+          user_id BIGINT PRIMARY KEY,mana INTEGER NOT NULL DEFAULT 100 CHECK(mana BETWEEN 0 AND 100),
           updated_at INTEGER NOT NULL
         )""")
         await _commit_atomic(db, nested, "init_mana_tables")
