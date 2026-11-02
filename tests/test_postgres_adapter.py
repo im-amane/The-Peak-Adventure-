@@ -597,5 +597,66 @@ class PostgresDungeonServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["dungeon_id"], 1)
 
 
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresTelegramIdWidthTests(unittest.IsolatedAsyncioTestCase):
+    player_id = 9_876_543_210
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        tables = (
+            "dungeon_rewards", "dungeon_runs", "world_discoveries", "player_worlds",
+            "player_monster_mastery", "story_reward_claims", "story_flags", "player_story",
+            "player_stamina", "player_mana", "player_bans", "party_members", "players",
+        )
+        for table in tables:
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 potions BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id) VALUES(?)", (self.player_id,)
+        )
+        await self.db.execute("CREATE TABLE party_members(user_id BIGINT,party_id BIGINT)")
+        await self.db.commit()
+        await init_moderation_tables(self.db)
+        await init_mana_tables(self.db)
+        await init_stamina_tables(self.db)
+        await init_story_tables(self.db)
+        await init_evolution_tables(self.db)
+        await init_world_tables(self.db)
+        await init_dungeon_tables(self.db)
+
+    async def asyncTearDown(self):
+        tables = (
+            "dungeon_rewards", "dungeon_runs", "world_discoveries", "player_worlds",
+            "player_monster_mastery", "story_reward_claims", "story_flags", "player_story",
+            "player_stamina", "player_mana", "player_bans", "party_members", "players",
+        )
+        for table in tables:
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_all_migrated_service_schemas_accept_64_bit_telegram_ids(self):
+        player_id = self.player_id
+        await ban_player(self.db, player_id + 1, player_id, "64-bit account", now=1000)
+        self.assertEqual((await get_active_ban(self.db, player_id))["actor_id"], player_id + 1)
+
+        self.assertEqual((await consume_mana(self.db, player_id, 10, now=1000))["mana"], 90)
+        self.assertEqual((await consume_stamina(self.db, player_id, 10, now=1000))["stamina"], 90)
+        await choose_story_path(self.db, player_id, 1, 1, "follow_mira")
+        self.assertEqual((await get_story_flags(self.db, player_id)), {})
+        self.assertEqual((await record_monster_defeat(self.db, player_id, 7))["defeats"], 1)
+        self.assertEqual(await travel_to_world(self.db, player_id, 21, 3), {
+            "world_id": 3, "name": "Stormglass Highlands", "min_level": 21
+        })
+        self.assertEqual((await discover_world_landmark(self.db, player_id, 21, 3))["coins"], 175)
+        self.assertEqual((await enter_dungeon(self.db, player_id, 21, 3))["dungeon_id"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()
