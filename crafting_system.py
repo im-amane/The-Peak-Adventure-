@@ -40,6 +40,10 @@ async def get_materials(db,user_id):
     return {row["material_id"]:row["quantity"] for row in rows}
 
 async def award_material_drop(db,user_id,monster,rng=None):
+    if type(user_id) is not int or user_id <= 0:
+        raise CraftingError("Invalid player account.")
+    if not isinstance(monster, dict) or type(monster.get("level")) is not int or not 1 <= monster["level"] <= 100:
+        raise CraftingError("Invalid monster drop source.")
     rng=rng or random
     chance=0.75 if monster.get("boss") else 0.45
     if rng.random()>chance:return None
@@ -56,7 +60,6 @@ async def award_material_drop(db,user_id,monster,rng=None):
     await db.execute("""INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)
       ON CONFLICT(user_id,material_id) DO UPDATE SET quantity=quantity+excluded.quantity""",
       (user_id,material,amount))
-    await db.commit()
     return {"id":material,"name":MATERIALS[material],"quantity":amount}
 
 async def craft_item(db,user_id,player_level,recipe_id):
