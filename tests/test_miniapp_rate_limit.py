@@ -69,6 +69,7 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
             "/api/quest/claim": 10,
             "/api/daily-mission/claim": 10,
             "/api/weekly-quest/claim": 10,
+            "/api/matchmaking": 8,
         }
         for path, limit in route_limits.items():
             with self.subTest(path=path):
