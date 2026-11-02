@@ -102,6 +102,7 @@ async def get_matchmaking_battle(db: Any, user_id: int, match_id: int | None = N
         "is_my_turn": row["status"] == "active" and row["turn_user_id"] == user_id,
         "turn_count": row["turn_count"],
         "winner_id": row["winner_id"],
+        "is_winner": row["winner_id"] == user_id,
     }
 
 
