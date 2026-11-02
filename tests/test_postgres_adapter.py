@@ -1626,6 +1626,31 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(first)
         self.assertIsNone(duplicate)
 
+    async def test_concurrent_guild_raid_starts_create_only_one_active_raid(self):
+        guild_id = await create_guild(self.db, self.user_id, "Concurrent Raiders")
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                start_guild_raid(
+                    self.db, guild_id, self.user_id, 10, "Root Warden", 1000
+                ),
+                start_guild_raid(
+                    other_db, guild_id, self.user_id, 10, "Ash Titan", 1000
+                ),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(result, int) for result in results), 1)
+            self.assertEqual(
+                sum(isinstance(result, GuildFeatureError) for result in results), 1
+            )
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM guild_raids WHERE guild_id=? AND status='active'",
+                (guild_id,),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 1)
+        finally:
+            await other_db.close()
+
     async def test_raid_cooldown_uses_postgres_timestamp_arithmetic(self):
         guild_id = await create_guild(self.db, self.user_id, "Cooldown Crew")
         invite_id = await create_guild_invite(
