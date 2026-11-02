@@ -45,12 +45,12 @@ async def init_dungeon_tables(db):
     nested = await _begin_transaction(db, "init_dungeon_tables")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_runs(
-          user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
+          user_id BIGINT PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
           started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TIMESTAMPTZ
         )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_rewards(
-          user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id BIGINT NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,dungeon_id)
         )""")
         await _commit_transaction(db, nested, "init_dungeon_tables")
