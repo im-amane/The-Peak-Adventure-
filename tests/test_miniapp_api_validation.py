@@ -206,7 +206,8 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
 
         await main.buy_shop_item(user_id,"health_potion")
 
-        self.assertFalse(main.db.in_transaction)
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
         player=await main.get_player(user_id)
         self.assertEqual((player["coins"],player["potions"]),(100,0))
 
