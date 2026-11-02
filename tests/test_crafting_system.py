@@ -79,6 +79,14 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    with self.subTest(user_id=user_id,recipe_id=recipe_id),self.assertRaises(CraftingError):
     await craft_item(self.db,user_id,10,recipe_id)
 
+ async def test_inventory_and_recipe_queries_reject_invalid_accounts_or_levels(self):
+  for user_id in (True,0,-1,"1"):
+   with self.subTest(user_id=user_id),self.assertRaises(CraftingError):
+    await get_materials(self.db,user_id)
+  for level in (True,0,101,1.5,"10"):
+   with self.subTest(level=level),self.assertRaises(CraftingError):
+    await list_recipes(level)
+
  async def test_unknown_recipe_rejected(self):
   with self.assertRaises(CraftingError):await craft_item(self.db,1,1,"nope")
 if __name__=="__main__":unittest.main()
