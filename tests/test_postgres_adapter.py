@@ -20,7 +20,10 @@ from moderation_system import (
 )
 from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
 from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
-from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
+from story_system import (
+    CHAPTERS, StoryError, choose_story_path, claim_story_reward,
+    get_story_chapters, get_story_flags, init_story_tables,
+)
 from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
 from world_system import WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world
 from dungeon_system import DungeonError, advance_dungeon, abandon_dungeon, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
@@ -3238,3 +3241,65 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
                 self.postgres,
                 apply=True,
             )
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresStoryProgressionSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_story_" + uuid.uuid4().hex[:12]
+        await self.db.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db.commit()
+        await self.db.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.db)
+        self.user_id = 9_000_000_041
+        await self.db.execute(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,100)",
+            (self.user_id, "StoryHero"),
+        )
+        await self.db.commit()
+
+    async def asyncTearDown(self):
+        if self.db.in_transaction:
+            await self.db.rollback()
+        await self.db.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_story_branch_rewards_and_party_gate_work_on_postgres(self):
+        chapters = await get_story_chapters(self.db, self.user_id, 100)
+        self.assertTrue(chapters[0]["unlocked"])
+        self.assertFalse(chapters[1]["unlocked"])
+
+        choices = (
+            "follow_mira",
+            "trust_mira",
+            "speak_truth",
+            "free_echo",
+            "show_mercy",
+            "forgive_mira",
+            "reject_bargain",
+        )
+        for chapter_id, choice in enumerate(choices, start=1):
+            await choose_story_path(self.db, self.user_id, 100, chapter_id, choice)
+
+        flags = await get_story_flags(self.db, self.user_id)
+        self.assertEqual(flags["trust_path"], "mira")
+        chapters = await get_story_chapters(self.db, self.user_id, 100)
+        self.assertIn("Mira stands beside you", chapters[2]["scene"])
+        self.assertFalse(chapters[7]["unlocked"])
+
+        party_id = await create_party(self.db, self.user_id)
+        self.assertGreater(party_id, 0)
+        chapters = await get_story_chapters(self.db, self.user_id, 100)
+        self.assertTrue(chapters[7]["unlocked"])
+        await choose_story_path(self.db, self.user_id, 100, 8, "light_together")
+
+        self.assertEqual(await claim_story_reward(self.db, self.user_id, 1), 80)
+        with self.assertRaises(StoryError):
+            await claim_story_reward(self.db, self.user_id, 1)
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 80)
