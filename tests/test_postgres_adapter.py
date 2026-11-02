@@ -2154,6 +2154,36 @@ class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.db.execute("DROP TABLE IF EXISTS api_rate_limit_events")
             await self.db.commit()
 
+    async def test_database_rate_limiter_caps_a_concurrent_postgres_burst(self):
+        limiter = DatabaseSlidingWindowRateLimiter(window_seconds=60)
+        connections = [self.db]
+        try:
+            await limiter.init(self.db)
+            for _ in range(7):
+                connections.append(
+                    await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+                )
+            results = await asyncio.gather(*(
+                limiter.allow(
+                    connections[index % len(connections)],
+                    "postgres-burst-player",
+                    12,
+                    now=600,
+                )
+                for index in range(120)
+            ))
+            self.assertEqual(sum(allowed for allowed, _ in results), 12)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM api_rate_limit_events WHERE rate_key=?",
+                ("postgres-burst-player",),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 12)
+        finally:
+            for connection in connections[1:]:
+                await connection.close()
+            await self.db.execute("DROP TABLE IF EXISTS api_rate_limit_events")
+            await self.db.commit()
+
     async def test_settings_use_bigint_ids_and_postgres_catalog_migration(self):
         self.assertEqual(
             await get_settings(self.db, self.user_id),
