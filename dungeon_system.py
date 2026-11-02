@@ -43,18 +43,22 @@ def _validate_user_id(user_id):
 
 
 async def init_dungeon_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS dungeon_runs(
-      user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
-      started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS dungeon_rewards(
-      user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,dungeon_id)
-    );
-    """)
-    await db.commit()
+    """Initialize dungeon storage without committing a caller-owned transaction."""
+    nested = await _begin_transaction(db, "init_dungeon_tables")
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_runs(
+          user_id INTEGER PRIMARY KEY,dungeon_id INTEGER NOT NULL,room INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','abandoned')),
+          started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,completed_at TEXT
+        )""")
+        await db.execute("""CREATE TABLE IF NOT EXISTS dungeon_rewards(
+          user_id INTEGER NOT NULL,dungeon_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,dungeon_id)
+        )""")
+        await _commit_transaction(db, nested, "init_dungeon_tables")
+    except Exception:
+        await _rollback_transaction(db, nested, "init_dungeon_tables")
+        raise
 
 
 def available_dungeons(player_level):
