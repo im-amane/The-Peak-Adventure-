@@ -26,15 +26,42 @@ WORLD_LANDMARKS=(
 class WorldError(ValueError):
     pass
 
+
+async def _begin_transaction(db, savepoint):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_transaction(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
 def world_min_level(world_id):
     if not isinstance(world_id,int) or isinstance(world_id,bool) or not 1<=world_id<=10:
         raise WorldError("World must be between 1 and 10.")
     return (world_id-1)*10+1
 
+
 def unlocked_world_count(player_level):
     if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
         raise WorldError("Player level must be between 1 and 100.")
     return min(10,(player_level-1)//10+1)
+
 
 async def init_world_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
@@ -47,17 +74,24 @@ async def init_world_tables(db):
     )""")
     await db.commit()
 
+
 async def get_current_world(db,user_id,player_level):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
         raise WorldError("Invalid player account.")
     maximum=unlocked_world_count(player_level)
-    cur=await db.execute("SELECT current_world FROM player_worlds WHERE user_id=?",(user_id,))
-    row=await cur.fetchone()
-    current=min(maximum,row["current_world"]) if row else 1
-    await db.execute("""INSERT INTO player_worlds(user_id,current_world) VALUES(?,?)
-      ON CONFLICT(user_id) DO UPDATE SET current_world=excluded.current_world""",(user_id,current))
-    await db.commit()
-    return current
+    nested=await _begin_transaction(db,"get_current_world")
+    try:
+        cur=await db.execute("SELECT current_world FROM player_worlds WHERE user_id=?",(user_id,))
+        row=await cur.fetchone()
+        current=min(maximum,row["current_world"]) if row else 1
+        await db.execute("""INSERT INTO player_worlds(user_id,current_world) VALUES(?,?)
+          ON CONFLICT(user_id) DO UPDATE SET current_world=excluded.current_world""",(user_id,current))
+        await _commit_transaction(db,nested,"get_current_world")
+        return current
+    except Exception:
+        await _rollback_transaction(db,nested,"get_current_world")
+        raise
+
 
 async def travel_to_world(db,user_id,player_level,world_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
@@ -68,17 +102,24 @@ async def travel_to_world(db,user_id,player_level,world_id):
     if world_id>maximum:
         required=world_min_level(world_id)
         raise WorldError(f"{WORLD_NAMES[world_id-1]} unlocks at player level {required}.")
-    await db.execute("""INSERT INTO player_worlds(user_id,current_world) VALUES(?,?)
-      ON CONFLICT(user_id) DO UPDATE SET current_world=excluded.current_world,updated_at=CURRENT_TIMESTAMP""",
-      (user_id,world_id))
-    await db.commit()
-    return {"world_id":world_id,"name":WORLD_NAMES[world_id-1],"min_level":world_min_level(world_id)}
+    nested=await _begin_transaction(db,"travel_to_world")
+    try:
+        await db.execute("""INSERT INTO player_worlds(user_id,current_world) VALUES(?,?)
+          ON CONFLICT(user_id) DO UPDATE SET current_world=excluded.current_world,updated_at=CURRENT_TIMESTAMP""",
+          (user_id,world_id))
+        await _commit_transaction(db,nested,"travel_to_world")
+        return {"world_id":world_id,"name":WORLD_NAMES[world_id-1],"min_level":world_min_level(world_id)}
+    except Exception:
+        await _rollback_transaction(db,nested,"travel_to_world")
+        raise
+
 
 async def get_world_choices(db,user_id,player_level):
     current=await get_current_world(db,user_id,player_level)
     maximum=unlocked_world_count(player_level)
     return [{"id":i+1,"name":name,"min_level":world_min_level(i+1),
       "unlocked":i+1<=maximum,"current":i+1==current} for i,name in enumerate(WORLD_NAMES)]
+
 
 def world_encounter_levels(player_level,world_id,boss_defeated=False):
     if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
@@ -91,6 +132,7 @@ def world_encounter_levels(player_level,world_id,boss_defeated=False):
     candidates=nearby_monster_levels(effective,boss_defeated if effective==world_max else False)
     filtered=tuple(level for level in candidates if world_min<=level<=world_max)
     return filtered or (world_min,)
+
 
 async def get_world_landmark(db,user_id,world_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
@@ -109,8 +151,8 @@ async def discover_world_landmark(db,user_id,player_level,world_id):
     world_min_level(world_id)
     if world_id>unlocked_world_count(player_level):
         raise WorldError("This landmark is beyond your unlocked worlds.")
+    nested=await _begin_transaction(db,"discover_world_landmark")
     try:
-        await db.execute("BEGIN IMMEDIATE")
         await db.execute(
             "INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)",
             (user_id,world_id),
@@ -123,11 +165,11 @@ async def discover_world_landmark(db,user_id,player_level,world_id):
         )
         if cur.rowcount!=1:
             raise WorldError("Player account not found.")
-        await db.commit()
+        await _commit_transaction(db,nested,"discover_world_landmark")
         return {"landmark":WORLD_LANDMARKS[world_id-1][0],"coins":reward,"potions":potions}
     except sqlite3.IntegrityError as exc:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"discover_world_landmark")
         raise WorldError("You have already discovered this landmark.") from exc
     except Exception:
-        await db.rollback()
+        await _rollback_transaction(db,nested,"discover_world_landmark")
         raise
