@@ -25,7 +25,7 @@ from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
-from group_system import GroupError, attack_group_raid_and_reward, award_group_xp, claim_group_mission, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
+from group_system import GroupError, attack_group_raid_and_reward, award_group_xp, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
@@ -1503,8 +1503,7 @@ async def group_command(message: Message):
         if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
         try:
             if not await verify_live_group_admin(message): raise GroupError("Your Telegram administrator role is no longer active.")
-            coins,xp=await claim_group_mission(db,cid,uid,args[2].lower())
-            await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(coins,uid)); await db.commit()
+            coins,xp=await claim_group_mission_reward(db,cid,uid,args[2].lower())
             await message.answer(f"🎁 Claimed {coins} coins and {xp} group XP.")
         except GroupError as exc: await message.answer(escape(str(exc)))
         return
