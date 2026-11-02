@@ -342,37 +342,41 @@ async def init_core_schema(connection) -> None:
         raise
 
 
+async def init_game_schema(connection) -> None:
+    """Initialize every game service schema on an already-open database connection."""
+    await init_core_schema(connection)
+    await database_api_rate_limiter.init(connection)
+    await init_friend_tables(connection)
+    await init_party_tables(connection)
+    await init_group_tables(connection)
+    await init_character_tables(connection)
+    await init_account_tables(connection)
+    await init_admin_tables(connection)
+    await init_guild_features(connection)
+    await init_world_tables(connection)
+    await init_dungeon_tables(connection)
+    await init_crafting_tables(connection)
+    await init_presence_tables(connection)
+    await init_story_tables(connection)
+    await init_auction_tables(connection)
+    await init_stamina_tables(connection)
+    await init_report_tables(connection)
+    await init_weekly_tables(connection)
+    await init_daily_mission_tables(connection)
+    await init_roaming_event_tables(connection)
+    await init_evolution_tables(connection)
+    await init_secret_area_tables(connection)
+    await init_security_tables(connection)
+    await init_premium_tables(connection)
+    await init_moderation_tables(connection)
+    await init_mana_tables(connection)
+
+
 async def init_db():
     global db
     db = await aiosqlite.connect(DB_PATH)
     db.row_factory = aiosqlite.Row
-    await init_core_schema(db)
-    await database_api_rate_limiter.init(db)
-    await init_friend_tables(db)
-    await init_party_tables(db)
-    await init_group_tables(db)
-    await init_character_tables(db)
-    await init_account_tables(db)
-    await init_admin_tables(db)
-    await init_guild_features(db)
-    await init_world_tables(db)
-    await init_dungeon_tables(db)
-    await init_crafting_tables(db)
-    await init_presence_tables(db)
-    await init_story_tables(db)
-    await init_auction_tables(db)
-    await init_stamina_tables(db)
-    await init_report_tables(db)
-    await init_weekly_tables(db)
-    await init_daily_mission_tables(db)
-    await init_roaming_event_tables(db)
-    await init_evolution_tables(db)
-    await init_secret_area_tables(db)
-    await init_security_tables(db)
-    await init_premium_tables(db)
-    await init_moderation_tables(db)
-    await init_mana_tables(db)
-
+    await init_game_schema(db)
 
 async def get_player(user_id: int, username: str | None = None):
     """Read/update a player without committing a transaction owned by the caller."""

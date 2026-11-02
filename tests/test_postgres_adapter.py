@@ -2,6 +2,7 @@ import asyncio
 import os
 import time
 import unittest
+import uuid
 
 from psycopg.errors import UniqueViolation
 
@@ -2876,3 +2877,54 @@ class PostgresCoreSchemaTests(unittest.IsolatedAsyncioTestCase):
             {"initiator_weapon", "initiator_armor", "partner_weapon", "partner_armor"}
             .issubset(columns)
         )
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresFullSchemaInitializationTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_init_" + uuid.uuid4().hex[:12]
+        await self.db.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db.commit()
+        await self.db.execute(f'SET search_path TO "{self.schema}"')
+
+    async def asyncTearDown(self):
+        if self.db.in_transaction:
+            await self.db.rollback()
+        await self.db.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_all_game_services_initialize_idempotently_on_postgres(self):
+        await main.init_game_schema(self.db)
+        await main.init_game_schema(self.db)
+
+        cursor = await self.db.execute(
+            """SELECT COUNT(*) AS count FROM information_schema.tables
+               WHERE table_schema=current_schema() AND table_type='BASE TABLE'"""
+        )
+        self.assertGreaterEqual((await cursor.fetchone())["count"], 30)
+
+        for table in (
+            "players",
+            "player_settings",
+            "player_presence",
+            "player_stamina",
+            "player_mana",
+            "player_bans",
+            "auction_listings",
+            "premium_wallets",
+        ):
+            cursor = await self.db.execute(
+                """SELECT 1 FROM information_schema.tables
+                   WHERE table_schema=current_schema() AND table_name=?""",
+                (table,),
+            )
+            self.assertIsNotNone(await cursor.fetchone(), table)
+
+        cursor = await self.db.execute(
+            """SELECT data_type FROM information_schema.columns
+               WHERE table_schema=current_schema() AND table_name='players'
+                 AND column_name='user_id'"""
+        )
+        self.assertEqual((await cursor.fetchone())["data_type"], "bigint")
