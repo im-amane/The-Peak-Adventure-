@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 import aiosqlite
 from unittest.mock import patch
 
