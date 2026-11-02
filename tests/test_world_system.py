@@ -7,6 +7,7 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
   self.db=await aiosqlite.connect(":memory:"); self.db.row_factory=aiosqlite.Row
   await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY,coins INTEGER DEFAULT 0,potions INTEGER DEFAULT 0)")
   await self.db.execute("INSERT INTO players VALUES(101,0,0)")
+  await self.db.commit()
   await init_world_tables(self.db)
  async def asyncTearDown(self): await self.db.close()
  async def test_new_player_starts_in_first_world(self):
