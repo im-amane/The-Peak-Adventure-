@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import main
 
@@ -212,6 +212,23 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         await main.db.rollback()
         player=await main.get_player(user_id)
         self.assertEqual((player["coins"],player["potions"]),(100,0))
+
+    async def test_exploration_failure_refunds_stamina_cost(self):
+        user_id=self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+        target=type("Target",(),{"answer":AsyncMock()})()
+        with patch("main.get_current_world",side_effect=RuntimeError("simulated world lookup failure")):
+            with self.assertRaisesRegex(RuntimeError,"simulated world lookup failure"):
+                await main._start_battle_unlocked(user_id,"ValidationHero",target)
+        self.assertFalse(main.db.in_transaction)
+        cur=await main.db.execute("SELECT 1 FROM player_stamina WHERE user_id=?",(user_id,))
+        self.assertIsNone(await cur.fetchone())
+        cur=await main.db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
+        self.assertIsNone(await cur.fetchone())
 
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
