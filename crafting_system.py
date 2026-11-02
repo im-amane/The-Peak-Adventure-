@@ -28,11 +28,11 @@ async def init_crafting_tables(db):
         await db.execute("BEGIN IMMEDIATE")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS player_materials(
-          user_id INTEGER NOT NULL,material_id TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),
+          user_id BIGINT NOT NULL,material_id TEXT NOT NULL,quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity>=0),
           PRIMARY KEY(user_id,material_id)
         )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS crafted_items(
-          user_id INTEGER NOT NULL,recipe_id TEXT NOT NULL,crafted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id BIGINT NOT NULL,recipe_id TEXT NOT NULL,crafted_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,recipe_id)
         )""")
         if nested:
@@ -87,7 +87,11 @@ async def craft_item(db,user_id,player_level,recipe_id):
 
     recipe=RECIPES[recipe_id]
     savepoint="craft_item_transaction"
-    await db.execute(f"SAVEPOINT {savepoint}")
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
     try:
         player=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
         if await player.fetchone() is None:
@@ -120,27 +124,38 @@ async def craft_item(db,user_id,player_level,recipe_id):
         )
         if recipe["slot"]=="weapon":
             equipped=await db.execute(
-                """UPDATE players SET weapon=?,weapon_attack=MAX(weapon_attack,?)
+                """UPDATE players
+                   SET weapon=?,weapon_attack=CASE WHEN weapon_attack>? THEN weapon_attack ELSE ? END
                    WHERE user_id=?""",
-                (recipe["name"],recipe["attack"],user_id),
+                (recipe["name"],recipe["attack"],recipe["attack"],user_id),
             )
         else:
             equipped=await db.execute(
-                """UPDATE players SET armor=?,armor_defense=MAX(armor_defense,?)
+                """UPDATE players
+                   SET armor=?,armor_defense=CASE WHEN armor_defense>? THEN armor_defense ELSE ? END
                    WHERE user_id=?""",
-                (recipe["name"],recipe["defense"],user_id),
+                (recipe["name"],recipe["defense"],recipe["defense"],user_id),
             )
         if equipped.rowcount!=1:
             raise CraftingError("Player account not found.")
-        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
         return recipe
     except CraftingError:
-        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
         raise
     except Exception as exc:
-        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
-        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
         raise CraftingError("Crafting failed safely. No materials were consumed.") from exc
 
 async def list_recipes(player_level):
