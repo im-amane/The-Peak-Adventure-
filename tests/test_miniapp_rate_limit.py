@@ -87,9 +87,20 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
         expected = {
             "/api/action", "/api/explore", "/api/social", "/api/premium-shop",
             "/api/world", "/api/dungeon", "/api/appearance", "/api/story",
-            "/api/quest/claim", "/api/daily-mission/claim", "/api/weekly-quest/claim", "/api/settings",
+            "/api/quest/claim", "/api/daily-mission/claim", "/api/weekly-quest/claim",
+            "/api/matchmaking", "/api/settings",
         }
         self.assertTrue(expected.issubset(main.API_ROUTE_LIMITS))
+
+    async def test_every_registered_api_mutation_route_has_a_route_limit(self):
+        app = main.create_web_app()
+        registered_mutations = {
+            route.resource.canonical
+            for route in app.router.routes()
+            if route.resource.canonical.startswith("/api/")
+            and route.method not in {"GET", "HEAD", "OPTIONS"}
+        }
+        self.assertEqual(registered_mutations, set(main.API_ROUTE_LIMITS))
 
     async def test_repeated_blocked_requests_only_write_one_security_event_per_window(self):
         main.db = object()
