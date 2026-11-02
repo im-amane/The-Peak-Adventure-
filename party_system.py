@@ -11,6 +11,7 @@ _DB_WRITE_LOCKS: dict[tuple[int, int], asyncio.Lock] = {}
 
 
 def _serialize_db_write(function):
+    """Serialize writes and give each party operation an atomic boundary."""
     @wraps(function)
     async def wrapped(db, *args, **kwargs):
         key = (id(db), id(asyncio.get_running_loop()))
@@ -19,7 +20,26 @@ def _serialize_db_write(function):
             lock = asyncio.Lock()
             _DB_WRITE_LOCKS[key] = lock
         async with lock:
-            return await function(db, *args, **kwargs)
+            savepoint = "party_" + function.__name__
+            nested = db.in_transaction
+            if nested:
+                await db.execute(f"SAVEPOINT {savepoint}")
+            else:
+                await db.execute("BEGIN IMMEDIATE")
+            try:
+                result = await function(db, *args, **kwargs)
+                if nested:
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await db.commit()
+                return result
+            except Exception:
+                if nested:
+                    await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                    await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+                else:
+                    await db.rollback()
+                raise
     return wrapped
 
 
@@ -34,55 +54,53 @@ def _valid_id(value: int) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
+@_serialize_db_write
 async def init_party_tables(db: aiosqlite.Connection) -> None:
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS parties (
-      party_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      leader_id INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_members (
-      user_id INTEGER PRIMARY KEY,
-      party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
-      joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_invites (
-      invite_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
-      inviter_id INTEGER NOT NULL,
-      target_id INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending'
-        CHECK(status IN ('pending','accepted','declined','cancelled')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      responded_at TEXT
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_party_pending_target
-      ON party_invites(target_id) WHERE status='pending';
-    CREATE INDEX IF NOT EXISTS idx_party_members_party
-      ON party_members(party_id, joined_at);
-    """)
-
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS party_battles(
-      battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
-      monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_contributions(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_cooldowns(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    CREATE TABLE IF NOT EXISTS party_battle_rewards(
-      battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(battle_id,user_id)
-    );
-    """)
-    await db.commit()
+    """Create party storage without committing a caller-owned transaction."""
+    statements = (
+        """CREATE TABLE IF NOT EXISTS parties (
+          party_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          leader_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_members (
+          user_id INTEGER PRIMARY KEY,
+          party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
+          joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_invites (
+          invite_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          party_id INTEGER NOT NULL REFERENCES parties(party_id) ON DELETE CASCADE,
+          inviter_id INTEGER NOT NULL,
+          target_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending'
+            CHECK(status IN ('pending','accepted','declined','cancelled')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          responded_at TEXT
+        )""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_party_pending_target ON party_invites(target_id) WHERE status='pending'",
+        "CREATE INDEX IF NOT EXISTS idx_party_members_party ON party_members(party_id, joined_at)",
+        """CREATE TABLE IF NOT EXISTS party_battles(
+          battle_id INTEGER PRIMARY KEY AUTOINCREMENT,party_id INTEGER NOT NULL,monster_level INTEGER NOT NULL,
+          monster_name TEXT NOT NULL,max_hp INTEGER NOT NULL,hp INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','won')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_contributions(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_cooldowns(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS party_battle_rewards(
+          battle_id INTEGER NOT NULL,user_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(battle_id,user_id)
+        )""",
+    )
+    for statement in statements:
+        await db.execute(statement)
 
 
 @_serialize_db_write
