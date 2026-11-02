@@ -75,6 +75,72 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         player = await main.get_player(user_id)
         self.assertLess(player["hp"], 100)
 
+    async def test_lethal_attack_keeps_battle_and_rewards_in_one_transaction(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.execute(
+            """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+               VALUES(?,1,1,0,0,0)""",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        with patch("main.finish_battle", side_effect=RuntimeError("simulated reward failure")):
+            with self.assertRaisesRegex(RuntimeError, "simulated reward failure"):
+                await self._call(main.api_action, {"action": "attack"})
+
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        cur = await main.db.execute(
+            "SELECT monster_hp,turn_count FROM battles WHERE user_id=?",
+            (user_id,),
+        )
+        battle = await cur.fetchone()
+        self.assertEqual((battle["monster_hp"],battle["turn_count"]), (1,0))
+        player = await main.get_player(user_id)
+        self.assertEqual(player["hp"], 100)
+        cur = await main.db.execute("SELECT 1 FROM player_mana WHERE user_id=?", (user_id,))
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_defeat_keeps_battle_and_mana_updates_in_one_transaction(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.execute(
+            """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+               VALUES(?,1,77,0,0,0)""",
+            (user_id,),
+        )
+        await main.db.commit()
+        defeated = {
+            "monster_hp": 50, "enemy_damage": 100, "evaded": False,
+            "special_turn": False, "reflect_damage": 0, "poison_damage": 0,
+            "player_hp": 0, "effect_notes": [],
+        }
+        with patch("main.resolve_enemy_turn", return_value=defeated), patch(
+            "main.finish_battle", side_effect=RuntimeError("simulated defeat finalization failure")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "simulated defeat finalization failure"):
+                await self._call(main.api_action, {"action": "attack"})
+
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        cur = await main.db.execute(
+            "SELECT monster_hp,turn_count FROM battles WHERE user_id=?",
+            (user_id,),
+        )
+        battle = await cur.fetchone()
+        self.assertEqual((battle["monster_hp"],battle["turn_count"]), (77,0))
+        player = await main.get_player(user_id)
+        self.assertEqual(player["hp"], 100)
+        cur = await main.db.execute("SELECT 1 FROM player_mana WHERE user_id=?", (user_id,))
+        self.assertIsNone(await cur.fetchone())
+
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
         self.assertEqual(response.status, 400)
