@@ -101,6 +101,19 @@
           <div id="social-party-overview" class="social-card-grid"><p class="small">Loading your party...</p></div>
         </section>
         <section id="social-panel-guild" class="social-tab-panel" role="tabpanel" aria-labelledby="social-tab-guild" tabindex="0" data-social-panel="guild" hidden>
+          <div class="guild-management-tools">
+            <form id="guild-create-form" class="social-search-form">
+              <label for="guild-create-name">Create a guild</label>
+              <div><input id="guild-create-name" type="text" minlength="3" maxlength="20" pattern="[A-Za-z0-9 _-]+" placeholder="Guild name" autocomplete="off" required><button type="submit">Create guild</button></div>
+              <p class="small">Creating a guild costs 100 coins. Names can use letters, numbers, spaces, _ and -.</p>
+            </form>
+            <form id="guild-invite-form" class="social-search-form" hidden>
+              <label for="guild-invite-player-id">Invite an accepted friend</label>
+              <div><input id="guild-invite-player-id" type="number" min="1" step="1" inputmode="numeric" placeholder="Friend player ID" required><button type="submit">Send guild invite</button></div>
+            </form>
+            <button id="guild-leave" type="button" hidden>Leave guild</button>
+            <p id="guild-management-status" class="small" role="status" aria-live="polite">Guild membership and invitations update with your social state.</p>
+          </div>
           <div id="social-guild-overview" class="social-card-grid"><p class="small">Loading your guild...</p></div>
           <section id="guild-chat-panel" class="guild-chat-panel" aria-labelledby="guild-chat-title">
             <div class="section-heading"><h3 id="guild-chat-title">Guild Chat</h3><button id="guild-chat-load" type="button">Load messages</button></div>
