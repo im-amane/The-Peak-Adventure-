@@ -36,7 +36,7 @@ from crafting_system import MATERIALS, CraftingError, award_material_drop, craft
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
-from rate_limit import SlidingWindowRateLimiter
+from rate_limit import DatabaseSlidingWindowRateLimiter, SlidingWindowRateLimiter
 from db_backup import create_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
@@ -259,6 +259,7 @@ async def init_db():
         except aiosqlite.OperationalError:
             pass
     await db.commit()
+    await database_api_rate_limiter.init(db)
     await init_friend_tables(db)
     await init_party_tables(db)
     await init_group_tables(db)
@@ -4614,6 +4615,7 @@ async def database_healthcheck() -> bool:
 
 api_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
 api_route_rate_limiter = SlidingWindowRateLimiter(window_seconds=60)
+database_api_rate_limiter = DatabaseSlidingWindowRateLimiter(window_seconds=60)
 rate_limit_event_limiter = SlidingWindowRateLimiter(window_seconds=60)
 API_ROUTE_LIMITS = {
     "/api/action": 20,
@@ -4640,14 +4642,25 @@ async def miniapp_rate_limit(request: web.Request, handler):
         if ban:
             return web.json_response({"error": "Game account suspended.", "reason": ban["reason"]}, status=403)
     global_limit = 120 if request.method == "GET" else 40
-    allowed, retry_after = api_rate_limiter.allow(
-        f"telegram:{user['id']}:{request.method}", global_limit
-    )
+    global_key = f"telegram:{user['id']}:{request.method}"
+    if db is not None and callable(getattr(db, "execute", None)):
+        async with db_lock:
+            allowed, retry_after = await database_api_rate_limiter.allow(
+                db, global_key, global_limit
+            )
+    else:
+        allowed, retry_after = api_rate_limiter.allow(global_key, global_limit)
+
     route_limit = API_ROUTE_LIMITS.get(request.path)
     if allowed and route_limit is not None:
-        allowed, retry_after = api_route_rate_limiter.allow(
-            f"telegram:{user['id']}:{request.path}", route_limit
-        )
+        route_key = f"telegram:{user['id']}:{request.path}"
+        if db is not None and callable(getattr(db, "execute", None)):
+            async with db_lock:
+                allowed, retry_after = await database_api_rate_limiter.allow(
+                    db, route_key, route_limit
+                )
+        else:
+            allowed, retry_after = api_route_rate_limiter.allow(route_key, route_limit)
     if not allowed:
         # Do not turn every blocked retry into another database write.
         should_log, _ = rate_limit_event_limiter.allow(f"rate-event:{user['id']}", 1)
