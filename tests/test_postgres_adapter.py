@@ -2400,12 +2400,13 @@ class CharacterAppearancePostgresIntegrationTests(unittest.IsolatedAsyncioTestCa
                  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                )"""
         )
+        legacy_user_id = 601
         await self.db.execute(
-            "INSERT INTO character_appearance(user_id) VALUES(?)", (self.user_id,)
+            "INSERT INTO character_appearance(user_id) VALUES(?)", (legacy_user_id,)
         )
         await self.db.commit()
         await init_character_tables(self.db)
-        appearance = await get_appearance(self.db, self.user_id)
+        appearance = await get_appearance(self.db, legacy_user_id)
         self.assertEqual((appearance["face"], appearance["body"]), ("soft", "balanced"))
         cursor = await self.db.execute(
             "SELECT data_type FROM information_schema.columns "
