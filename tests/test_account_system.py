@@ -169,6 +169,17 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT leader_id FROM parties WHERE party_id=7")
   self.assertEqual((await cur.fetchone())["leader_id"],2)
+ async def test_party_leader_transfer_failure_rolls_back_account_deletion(self):
+  await self.db.execute("INSERT INTO parties VALUES(7,1)")
+  await self.db.execute("INSERT INTO party_members VALUES(1,7,CURRENT_TIMESTAMP),(2,7,CURRENT_TIMESTAMP)")
+  await self.db.execute("CREATE TRIGGER block_party_leader_transfer BEFORE UPDATE OF leader_id ON parties BEGIN SELECT RAISE(IGNORE); END")
+  await self.db.commit()
+  with self.assertRaises(AccountError):
+   await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT leader_id FROM parties WHERE party_id=7")
+  self.assertEqual((await cur.fetchone())["leader_id"],1)
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
  async def test_delete_missing_account_rejected(self):
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
   with self.assertRaises(AccountError): await delete_player_account(self.db,999)
@@ -179,6 +190,19 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   await delete_player_account(self.db,1)
   cur=await self.db.execute("SELECT owner_id FROM group_profiles WHERE chat_id=-100")
   self.assertEqual((await cur.fetchone())["owner_id"],2)
+ async def test_group_owner_transfer_failure_rolls_back_account_deletion(self):
+  await self.db.execute("INSERT INTO group_profiles VALUES(-100,1)")
+  await self.db.execute("INSERT INTO group_admins VALUES(-100,1,'owner'),(-100,2,'admin')")
+  await self.db.execute("CREATE TRIGGER block_group_owner_transfer BEFORE UPDATE OF owner_id ON group_profiles BEGIN SELECT RAISE(IGNORE); END")
+  await self.db.commit()
+  with self.assertRaises(AccountError):
+   await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT owner_id FROM group_profiles WHERE chat_id=-100")
+  self.assertEqual((await cur.fetchone())["owner_id"],1)
+  cur=await self.db.execute("SELECT role FROM group_admins WHERE chat_id=-100 AND user_id=2")
+  self.assertEqual((await cur.fetchone())["role"],"admin")
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
  async def test_delete_account_removes_orphaned_group(self):
   await self.db.execute("INSERT INTO group_profiles VALUES(-101,1)")
   await self.db.execute("INSERT INTO group_admins VALUES(-101,1,'owner')")
