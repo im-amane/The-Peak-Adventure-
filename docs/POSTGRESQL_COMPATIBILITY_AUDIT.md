@@ -7,9 +7,9 @@ This is an engineering status report. PostgreSQL compatibility tests do not mean
 
 ## Executive finding
 
-The project now has a PostgreSQL 16 adapter proof-of-concept, dialect-aware full-game schema initialization, SQLite/PostgreSQL schema-parity tests, PostgreSQL smoke coverage for selected main gameplay flows, and a guarded SQLite-to-PostgreSQL data migration utility.
+The project has a PostgreSQL 16 adapter, dialect-aware full-game schema initialization, SQLite/PostgreSQL schema-parity tests, broad service-level PostgreSQL integration coverage, selected main gameplay smoke tests, and a guarded SQLite-to-PostgreSQL data migration utility. PR #93 has now wired explicit runtime selection through `DATABASE_URL`; SQLite remains the default when that variable is unset, and PostgreSQL connection/schema failures stop startup rather than falling back silently.
 
-**The application still runs on SQLite.** `main.init_db()` still opens an `aiosqlite` connection, and the PostgreSQL adapter is not wired into the production runtime. No live data migration, Heroku provisioning, or deployment has occurred.
+**PostgreSQL runtime support is implemented but is not production-approved or production-verified.** The active deployment remains unchanged; no live data migration, Heroku provisioning, or deployment has occurred.
 
 ## Verified progress
 
@@ -22,7 +22,7 @@ The project now has a PostgreSQL 16 adapter proof-of-concept, dialect-aware full
 | Main gameplay smoke tests | PostgreSQL tests exercise `miniapp_state()`, large Telegram IDs, quest/achievement upserts, and idempotent daily rewards |
 | Combat and guild SQL | PostgreSQL tests cover portable HP/cooldown updates and capped guild mission progress |
 | Data migration utility | Dry-run, bounded batch copy, FK dependency ordering, identity sequence reset, rollback and non-empty target refusal are tested against PostgreSQL 16 |
-| Runtime database | SQLite remains active; no PostgreSQL runtime switch has occurred |
+| Runtime database | `DATABASE_URL` explicitly selects PostgreSQL; otherwise SQLite is selected. The deployed/current environment has not been switched |
 | Backup/restore | Existing `db_backup.py` is SQLite-specific; a PostgreSQL backup/restore and recovery procedure is still required |
 | Deployment | No Heroku deployment or live Telegram/device QA has been performed |
 
@@ -30,14 +30,15 @@ The project now has a PostgreSQL 16 adapter proof-of-concept, dialect-aware full
 
 ### 1. Runtime connection and lifecycle
 
-- `main.init_db()` still creates the SQLite connection directly.
-- The PostgreSQL adapter is not selected by an explicit runtime backend setting.
-- The app still owns a global database connection and has process-local locks; these must be reviewed before separate web/worker processes or horizontal scaling.
-- PostgreSQL startup must not be enabled until backup/restore, runtime connection handling, and full gameplay-path coverage are complete.
+- `main.init_db()` selects Psycopg when `DATABASE_URL` is explicitly set and otherwise retains SQLite. PostgreSQL startup errors fail closed and close a partially initialized connection.
+- Backend-selection and failure-cleanup tests cover the runtime selection path; CI also runs the PostgreSQL adapter and service integration suites against PostgreSQL 16.
+- The app still owns one global connection per process and uses process-local locks. Cross-process transaction/locking behavior must be audited before separate web/worker processes or horizontal scaling.
+- The runtime deliberately disables the SQLite snapshot loop when PostgreSQL is selected. The operations monitor reports that no durable PostgreSQL backup provider is configured.
 
 ### 2. Backup, restore and recovery
 
-- `db_backup.py` uses SQLite's online backup API and `PRAGMA integrity_check`.
+- `db_backup.py` uses SQLite's online backup API and `PRAGMA integrity_check`; it is never run against a PostgreSQL connection.
+- PostgreSQL backup/restore is not implemented. The runtime reports this gap rather than writing a misleading SQLite file.
 - The current migration utility does not create a source backup, migrate triggers/views, or prove a restore.
 - A PostgreSQL backup strategy, durable backup destination, restore rehearsal, retention policy, and rollback runbook are still required.
 - Do not migrate a production database until a recoverable backup has been verified.
@@ -75,17 +76,16 @@ It is a one-way data-copy tool, not a live replication or zero-downtime migratio
 ## Recommended next sequence
 
 1. Complete a dry-run against a representative, backed-up SQLite database and review all schema/count/type warnings.
-2. Add PostgreSQL backup and restore verification with a durable destination.
-3. Finish the runtime connection factory behind an explicit backend selector, keeping SQLite as the default.
-4. Add full main-command and Mini App mutation smoke tests against PostgreSQL.
-5. Separate web and Telegram worker process roles behind a safe PostgreSQL-only guard.
-6. Run browser/device, Telegram, multiplayer concurrency, security and load acceptance tests.
-7. Only after explicit approval, schedule a controlled data migration and Heroku release.
+2. Select and implement a durable PostgreSQL backup destination plus verified restore rehearsal; the storage provider must be chosen before this can be completed safely.
+3. Expand PostgreSQL smoke coverage to the remaining main-command and Mini App mutation paths, and finish the SQLite-specific SQL/transaction audit.
+4. Audit all cross-process locking and idempotency assumptions before adding separate web and Telegram worker process roles.
+5. Run browser/device, Telegram, multiplayer concurrency, security and load acceptance tests.
+6. Only after explicit approval, schedule a controlled data migration and Heroku release.
 
 ## Safety boundary
 
-- SQLite remains the current prototype database.
+- SQLite remains the default and active prototype backend unless `DATABASE_URL` is explicitly configured for a process.
 - No live SQLite data has been migrated.
-- No PostgreSQL runtime switch has occurred.
+- No production environment has been switched to PostgreSQL.
 - No Heroku resource has been provisioned and no deployment has occurred.
 - Telegram Stars purchases remain disabled.
