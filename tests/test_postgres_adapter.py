@@ -3133,7 +3133,10 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
                 if (
                     source_affinity == "text"
                     and target["affinity"] == "datetime"
-                    and column.lower().endswith(("_at", "_time", "_date"))
+                    and (
+                        column.lower().endswith(("_at", "_time", "_date"))
+                        or column.lower() in {"last_seen", "created", "updated"}
+                    )
                 ):
                     # SQLite stores ISO timestamp values as TEXT in several legacy
                     # tables; PostgreSQL schema uses native timestamp columns.
