@@ -73,7 +73,7 @@ async def award_material_drop(db,user_id,monster,rng=None):
         material="star_dust" if rng.random()<0.6 else "void_essence"
     amount=2 if monster.get("boss") else 1
     await db.execute("""INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)
-      ON CONFLICT(user_id,material_id) DO UPDATE SET quantity=quantity+excluded.quantity""",
+      ON CONFLICT(user_id,material_id) DO UPDATE SET quantity=player_materials.quantity+excluded.quantity""",
       (user_id,material,amount))
     return {"id":material,"name":MATERIALS[material],"quantity":amount}
 
