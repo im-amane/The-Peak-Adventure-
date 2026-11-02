@@ -1,4 +1,5 @@
 import unittest
+import asyncio
 import aiosqlite
 from datetime import datetime, timezone
 from guild_system import *
@@ -122,6 +123,21 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT challenger_score,status,winner_guild FROM guild_wars WHERE war_id=?",(war,))
   state=await cur.fetchone()
   self.assertEqual((state["challenger_score"],state["status"],state["winner_guild"]),(3,"completed",10))
+
+ async def test_concurrent_duplicate_guild_war_callback_scores_once(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  results=await asyncio.gather(
+   record_guild_war_duel(self.db,1,4,1,duel_id=7201),
+   record_guild_war_duel(self.db,1,4,1,duel_id=7201),
+  )
+  self.assertEqual(sum(result is not None for result in results),1)
+  cur=await self.db.execute("SELECT challenger_score,target_score FROM guild_wars WHERE war_id=?",(war,))
+  scores=await cur.fetchone()
+  self.assertEqual((scores["challenger_score"],scores["target_score"]),(1,0))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE duel_id=7201")
+  self.assertEqual((await cur.fetchone())[0],1)
+
  async def test_guild_war_completes_after_three_wins(self):
   war=await declare_guild_war(self.db,10,1,20)
   await respond_guild_war(self.db,war,4,True)
