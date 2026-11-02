@@ -2,6 +2,8 @@
 from datetime import datetime, timezone
 from functools import wraps
 import asyncio
+import re
+import sqlite3
 
 class GuildFeatureError(ValueError):
     pass
@@ -122,9 +124,8 @@ async def init_guild_features(db):
         await db.execute(statement)
 
 
-@_transactional
-async def disband_guild(db,guild_id,actor_id):
-    """Delete a guild and every guild-owned record atomically."""
+
+async def _delete_guild_records_unlocked(db,guild_id,actor_id):
     if not valid_id(guild_id) or not valid_id(actor_id):
         raise GuildFeatureError("Invalid guild disband request.")
     cur=await db.execute(
@@ -154,20 +155,110 @@ async def disband_guild(db,guild_id,actor_id):
     )
     for table in (
         "guild_invites","guild_announcements","guild_chat_messages",
-        "guild_missions","guild_raids","guild_wars",
+        "guild_missions","guild_raids",
     ):
-        if table=="guild_wars":
-            await db.execute(
-                "DELETE FROM guild_wars WHERE challenger_guild=? OR target_guild=?",
-                (guild_id,guild_id),
-            )
-        else:
-            await db.execute(f"DELETE FROM {table} WHERE guild_id=?",(guild_id,))
+        await db.execute(f"DELETE FROM {table} WHERE guild_id=?",(guild_id,))
+    await db.execute(
+        "DELETE FROM guild_wars WHERE challenger_guild=? OR target_guild=?",
+        (guild_id,guild_id),
+    )
     await db.execute("DELETE FROM guild_members WHERE guild_id=?",(guild_id,))
     cur=await db.execute("DELETE FROM guilds WHERE guild_id=?",(guild_id,))
     if cur.rowcount!=1:
         raise GuildFeatureError("Guild changed while it was being disbanded.")
     return True
+
+
+@_transactional
+async def disband_guild(db,guild_id,actor_id):
+    """Delete a guild and every guild-owned record atomically."""
+    return await _delete_guild_records_unlocked(db,guild_id,actor_id)
+
+
+@_transactional
+async def create_guild(db,user_id,name):
+    if not valid_id(user_id) or not isinstance(name,str):
+        raise GuildFeatureError("Invalid guild creation request.")
+    name=" ".join(name.split()).strip()
+    if not 3<=len(name)<=20 or not re.fullmatch(r"[A-Za-z0-9 _-]+",name):
+        raise GuildFeatureError("Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone():
+        raise GuildFeatureError("Register before creating a guild.")
+    cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
+    if await cur.fetchone():
+        raise GuildFeatureError("You are already in a guild.")
+    cur=await db.execute(
+        "UPDATE players SET coins=coins-100 WHERE user_id=? AND coins>=100",
+        (user_id,),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Creating a guild costs 100 coins.")
+    try:
+        cur=await db.execute("INSERT INTO guilds(name,leader_id) VALUES(?,?)",(name,user_id))
+    except sqlite3.IntegrityError as exc:
+        raise GuildFeatureError("That guild name is already taken.") from exc
+    guild_id=int(cur.lastrowid)
+    cur=await db.execute(
+        "INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'leader')",
+        (user_id,guild_id),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership could not be created.")
+    return guild_id
+
+
+@_transactional
+async def join_guild(db,user_id,guild_id):
+    if not valid_id(user_id) or not valid_id(guild_id):
+        raise GuildFeatureError("Invalid guild join request.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone():
+        raise GuildFeatureError("Register before joining a guild.")
+    cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
+    if await cur.fetchone():
+        raise GuildFeatureError("You are already in a guild.")
+    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?",(guild_id,))
+    guild=await cur.fetchone()
+    if not guild:
+        raise GuildFeatureError("Guild not found.")
+    cur=await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?",(guild_id,))
+    if (await cur.fetchone())["total"]>=20:
+        raise GuildFeatureError("This guild has reached its 20-member limit.")
+    try:
+        cur=await db.execute(
+            "INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'member')",
+            (user_id,guild_id),
+        )
+    except sqlite3.IntegrityError as exc:
+        raise GuildFeatureError("You are already in a guild.") from exc
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership could not be created.")
+    return guild["name"]
+
+
+@_transactional
+async def leave_guild(db,user_id):
+    if not valid_id(user_id):
+        raise GuildFeatureError("Invalid player account.")
+    cur=await db.execute("SELECT guild_id,role FROM guild_members WHERE user_id=?",(user_id,))
+    membership=await cur.fetchone()
+    if not membership:
+        raise GuildFeatureError("You are not in a guild.")
+    guild_id=membership["guild_id"]
+    if membership["role"]=="leader":
+        cur=await db.execute("SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?",(guild_id,))
+        if (await cur.fetchone())["total"]>1:
+            raise GuildFeatureError("Guild leaders cannot leave while members remain. Use /guild disband; leadership transfer is not available yet.")
+        await _delete_guild_records_unlocked(db,guild_id,user_id)
+        return True
+    cur=await db.execute(
+        "DELETE FROM guild_members WHERE user_id=? AND guild_id=?",
+        (user_id,guild_id),
+    )
+    if cur.rowcount!=1:
+        raise GuildFeatureError("Guild membership changed; retry leaving.")
+    return False
 
 async def guild_role(db,guild_id,user_id):
     cur=await db.execute("SELECT role FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
