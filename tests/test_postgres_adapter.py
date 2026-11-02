@@ -1912,6 +1912,32 @@ class GroupPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["coins"], 120)
 
+    async def test_concurrent_group_mission_claims_preserve_all_group_xp(self):
+        await record_group_activity(self.db, self.chat_id, "battle", 5)
+        await record_group_activity(self.db, self.chat_id, "boss", 1)
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                claim_group_mission_reward(
+                    self.db, self.chat_id, self.owner_id, "battles"
+                ),
+                claim_group_mission_reward(
+                    other_db, self.chat_id, self.admin_id, "boss"
+                ),
+                return_exceptions=True,
+            )
+            self.assertEqual(sorted(results), [(120, 40), (250, 80)])
+            profile = await get_group_profile(self.db, self.chat_id)
+            self.assertEqual((profile["group_level"], profile["group_xp"]), (1, 120))
+            cursor = await self.db.execute(
+                "SELECT user_id,coins FROM players WHERE user_id IN (?,?) ORDER BY user_id",
+                (self.owner_id, self.admin_id),
+            )
+            balances = {row["user_id"]: row["coins"] for row in await cursor.fetchall()}
+            self.assertEqual(balances, {self.owner_id: 120, self.admin_id: 250})
+        finally:
+            await other_db.close()
+
     async def test_group_raid_generated_id_cooldown_and_contribution_upsert(self):
         raid_id = await start_group_raid(
             self.db, self.chat_id, self.admin_id, 10, "Root Warden", 1000
