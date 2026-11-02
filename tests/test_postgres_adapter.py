@@ -40,7 +40,8 @@ from roaming_event_system import RoamingEventError, attack_roaming_event, claim_
 from guild_system import (
     GuildFeatureError, attack_guild_raid, create_guild, create_guild_invite,
     declare_guild_war, get_guild_chat, get_guild_missions, guild_role,
-    init_guild_features, join_guild, record_guild_war_duel, respond_guild_invite,
+    claim_guild_mission, init_guild_features, join_guild, record_guild_activity,
+    record_guild_war_duel, respond_guild_invite,
     respond_guild_war, send_guild_message, start_guild_raid, record_guild_activity,
 )
 from group_system import (
@@ -1807,6 +1808,31 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 (guild_id,),
             )
             self.assertEqual((await cursor.fetchone())["total"], 20)
+        finally:
+            await other_db.close()
+
+    async def test_concurrent_guild_mission_claims_preserve_all_guild_xp(self):
+        guild_id = await create_guild(self.db, self.user_id, "Mission XP Guard")
+        invite_id = await create_guild_invite(
+            self.db, guild_id, self.user_id, self.member_id
+        )
+        await respond_guild_invite(self.db, invite_id, self.member_id, True)
+        await record_guild_activity(self.db, guild_id, self.member_id, "battle", 5)
+        await record_guild_activity(self.db, guild_id, self.member_id, "boss", 1)
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                claim_guild_mission(self.db, guild_id, self.user_id, "battles"),
+                claim_guild_mission(other_db, guild_id, self.user_id, "boss"),
+                return_exceptions=True,
+            )
+            self.assertEqual(results, [60, 120])
+            cursor = await self.db.execute(
+                "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",
+                (guild_id,),
+            )
+            guild = await cursor.fetchone()
+            self.assertEqual((guild["guild_level"], guild["guild_xp"]), (1, 180))
         finally:
             await other_db.close()
 
