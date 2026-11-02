@@ -1,10 +1,11 @@
 import asyncio
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 import aiosqlite
 from auction_system import *
-from auction_system import _settle_due
+from auction_system import _for_update, _settle_due
 
 class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -65,6 +66,16 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
         with self.assertRaises(AuctionError): await cancel_listing(self.db,1,listing,now=1002)
+
+    async def test_cancel_locks_listing_row_before_checking_for_bids(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        with patch("auction_system._for_update", wraps=_for_update) as lock_query:
+            await cancel_listing(self.db,1,listing,now=1001)
+
+        self.assertTrue(any(
+            "SELECT * FROM auction_listings WHERE listing_id=? AND status='active'" in call.args[1]
+            for call in lock_query.call_args_list
+        ))
     async def test_buyer_old_equipment_is_preserved_in_stash(self):
         listing=await create_listing(self.db,1,"weapon",100,1,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
