@@ -4543,6 +4543,7 @@ async def api_matchmaking(request: web.Request):
                 else:
                     result = {"cancelled": await cancel_matchmaking(db, user_id)}
                 state = await miniapp_state(user)
+                await db.commit()
     except MatchmakingError as exc:
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response(
