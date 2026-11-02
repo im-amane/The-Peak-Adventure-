@@ -1,3 +1,4 @@
+import asyncio
 import tempfile
 import unittest
 from unittest.mock import patch
