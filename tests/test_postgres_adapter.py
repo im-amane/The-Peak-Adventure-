@@ -1830,6 +1830,48 @@ class PartyPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["coins"], 75)
 
+    async def test_concurrent_invite_accepts_cannot_exceed_party_capacity(self):
+        party_id = await create_party(self.db, self.leader_id)
+        first_invite = await invite_to_party(
+            self.db, party_id, self.leader_id, self.member_id
+        )
+        await respond_to_party_invite(self.db, first_invite, self.member_id, True)
+
+        extra_member = self.member_id + 1
+        first_target = self.member_id + 2
+        second_target = self.member_id + 3
+        await self.db.execute(
+            "INSERT INTO party_members(user_id,party_id) VALUES(?,?)",
+            (extra_member, party_id),
+        )
+        first_pending = await invite_to_party(
+            self.db, party_id, self.leader_id, first_target
+        )
+        second_pending = await invite_to_party(
+            self.db, party_id, self.leader_id, second_target
+        )
+
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                respond_to_party_invite(
+                    self.db, first_pending, first_target, True
+                ),
+                respond_to_party_invite(
+                    other_db, second_pending, second_target, True
+                ),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(result is None for result in results), 1)
+            self.assertEqual(sum(isinstance(result, PartyError) for result in results), 1)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM party_members WHERE party_id=?",
+                (party_id,),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 4)
+        finally:
+            await other_db.close()
+
     async def test_party_attack_cooldown_uses_postgres_timestamps(self):
         party_id = await create_party(self.db, self.leader_id)
         await start_party_battle(
