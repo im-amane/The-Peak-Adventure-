@@ -134,7 +134,7 @@ async def handle_unhandled_error(event):
     return True
 
 
-db: aiosqlite.Connection | None = None
+db: aiosqlite.Connection | PostgresConnection | None = None
 db_lock = asyncio.Lock()
 player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 
