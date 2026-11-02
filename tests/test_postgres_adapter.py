@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sqlite3
 import time
 import unittest
 import uuid
@@ -3408,6 +3409,25 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
             "trade_id",
         )
         self.assertGreater(next_trade_id, original_trade_id)
+
+    async def test_dry_run_blocks_schema_with_missing_postgres_unique_index(self):
+        with sqlite3.connect(self.sqlite_path) as source:
+            source.execute(
+                "CREATE UNIQUE INDEX source_only_level_unique ON players(level)"
+            )
+        report = await migrate_sqlite_to_postgres(
+            self.sqlite_path,
+            self.postgres,
+            apply=True,
+        )
+        self.assertFalse(report["compatible"])
+        self.assertFalse(report["applied"])
+        self.assertTrue(any(
+            "PostgreSQL missing unique index" in difference
+            for difference in report["schema_differences"]
+        ))
+        cursor = await self.postgres.execute("SELECT COUNT(*) AS count FROM players")
+        self.assertEqual((await cursor.fetchone())["count"], 0)
 
     async def test_migration_requires_an_idle_postgres_connection(self):
         await self.postgres.execute("BEGIN")
