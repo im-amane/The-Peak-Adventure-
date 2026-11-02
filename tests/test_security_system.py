@@ -20,14 +20,18 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
     async def test_records_and_aggregates_suspicious_activity(self):
         await record_security_event(self.db, 101, "invalid_battle_action", "unknown action", 2)
         await record_security_event(self.db, 101, "invalid_monster_request", "level 999", 4)
+        await record_security_event(self.db, 101, "invalid_economy_action", "auction bid rejected", 2)
+        await record_security_event(self.db, 101, "repeated_rate_limit", "API throttled", 3)
         await record_security_event(self.db, 202, "invalid_social_action", "unsupported action", 1)
         rows = await get_suspicious_players(self.db)
         self.assertEqual(rows[0]["user_id"], 101)
-        self.assertEqual(rows[0]["event_count"], 2)
+        self.assertEqual(rows[0]["event_count"], 4)
         self.assertEqual(rows[0]["max_severity"], 4)
-        self.assertEqual(rows[0]["risk_score"], 6)
+        self.assertEqual(rows[0]["risk_score"], 11)
         self.assertEqual(rows[0]["high_severity_count"], 1)
-        self.assertEqual(rows[0]["event_type_count"], 2)
+        self.assertEqual(rows[0]["event_type_count"], 4)
+        self.assertEqual(rows[0]["rate_limit_count"], 1)
+        self.assertEqual(rows[0]["economy_abuse_count"], 1)
 
     async def test_event_details_are_bounded(self):
         await record_security_event(self.db, 101, "invalid_battle_action", "x" * 400)
