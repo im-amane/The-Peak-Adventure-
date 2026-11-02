@@ -197,6 +197,22 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item["name"],"Health Potion")
         self.assertEqual((player["coins"],player["potions"]),(75,1))
 
+    async def test_coin_shop_purchase_preserves_outer_transaction(self):
+        user_id = self.user["id"]
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=1,coins=100,potions=0 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+        await main.db.execute("BEGIN")
+
+        await main.buy_shop_item(user_id,"health_potion")
+
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        player=await main.get_player(user_id)
+        self.assertEqual((player["coins"],player["potions"]),(100,0))
+
     async def test_unhashable_battle_action_returns_400_and_is_logged(self):
         response = await self._call(main.api_action, {"action": []})
         self.assertEqual(response.status, 400)
