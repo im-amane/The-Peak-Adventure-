@@ -1645,7 +1645,7 @@
     ui.status.textContent=error.message || "Could not load the game. Reopen it from Telegram.";
   });
   window.setInterval(()=>{
-    if(document.hidden||requestInFlight||!gameState||!gameState.matchmaking||gameState.matchmaking.status!=="matched")return;
+    if(document.hidden||requestInFlight||!gameState||!gameState.matchmaking||!["queued","matched"].includes(gameState.matchmaking.status))return;
     loadState().catch(()=>{});
   },10000);
   document.addEventListener("visibilitychange",()=>{
