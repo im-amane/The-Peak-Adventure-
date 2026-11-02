@@ -127,7 +127,7 @@ class QmarkTranslationTests(unittest.TestCase):
         )
         self.assertEqual(
             _prepare_statement("  insert or ignore into discoveries(level) values (?);  "),
-            "  insert into discoveries(level) values (%s) ON CONFLICT DO NOTHING;",
+            "  INSERT INTO discoveries(level) values (%s) ON CONFLICT DO NOTHING;",
         )
 
 
