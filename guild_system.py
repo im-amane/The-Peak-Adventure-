@@ -11,6 +11,30 @@ MISSIONS={
 }
 ACTIVITY={"battle":"battles","boss":"boss","trade":"trades"}
 
+async def _begin_atomic(db, savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db, nested, savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
 def valid_id(value):
     return isinstance(value,int) and not isinstance(value,bool) and value>0
 
@@ -166,14 +190,21 @@ def _date(value=None):
 
 async def get_guild_missions(db,guild_id,mission_date=None):
     date=_date(mission_date)
-    for key in MISSIONS:
-        await db.execute("INSERT OR IGNORE INTO guild_missions(guild_id,mission_date,mission_id) VALUES(?,?,?)",(guild_id,date,key))
-    await db.commit()
-    cur=await db.execute("SELECT mission_id,progress,claimed FROM guild_missions WHERE guild_id=? AND mission_date=?",(guild_id,date))
-    rows=await cur.fetchall()
-    return [{"id":r["mission_id"],"title":MISSIONS[r["mission_id"]][0],"target":MISSIONS[r["mission_id"]][1],
-      "xp":MISSIONS[r["mission_id"]][2],"progress":r["progress"],"claimed":bool(r["claimed"]),
-      "completed":r["progress"]>=MISSIONS[r["mission_id"]][1]} for r in rows]
+    nested=await _begin_atomic(db,"get_guild_missions")
+    try:
+        for key in MISSIONS:
+            await db.execute("INSERT OR IGNORE INTO guild_missions(guild_id,mission_date,mission_id) VALUES(?,?,?)",(guild_id,date,key))
+        cur=await db.execute("SELECT mission_id,progress,claimed FROM guild_missions WHERE guild_id=? AND mission_date=?",(guild_id,date))
+        rows=await cur.fetchall()
+        result=[{"id":r["mission_id"],"title":MISSIONS[r["mission_id"]][0],"target":MISSIONS[r["mission_id"]][1],
+          "xp":MISSIONS[r["mission_id"]][2],"progress":r["progress"],"claimed":bool(r["claimed"]),
+          "completed":r["progress"]>=MISSIONS[r["mission_id"]][1]} for r in rows]
+        await _commit_atomic(db,nested,"get_guild_missions")
+        return result
+    except Exception:
+        await _rollback_atomic(db,nested,"get_guild_missions")
+        raise
+
 
 async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
     key=ACTIVITY.get(kind)
@@ -181,12 +212,19 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
         raise GuildFeatureError("Invalid guild activity.")
     cur=await db.execute("SELECT 1 FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
     if not await cur.fetchone(): return []
-    date=_date()
-    await get_guild_missions(db,guild_id,date)
-    target=MISSIONS[key][1]
-    await db.execute("UPDATE guild_missions SET progress=MIN(?,progress+?) WHERE guild_id=? AND mission_date=? AND mission_id=?",(target,amount,guild_id,date,key))
-    await db.commit()
-    return await get_guild_missions(db,guild_id,date)
+    nested=await _begin_atomic(db,"record_guild_activity")
+    try:
+        date=_date()
+        await get_guild_missions(db,guild_id,date)
+        target=MISSIONS[key][1]
+        await db.execute("UPDATE guild_missions SET progress=MIN(?,progress+?) WHERE guild_id=? AND mission_date=? AND mission_id=?",(target,amount,guild_id,date,key))
+        result=await get_guild_missions(db,guild_id,date)
+        await _commit_atomic(db,nested,"record_guild_activity")
+        return result
+    except Exception:
+        await _rollback_atomic(db,nested,"record_guild_activity")
+        raise
+
 
 async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
     if mission_id not in MISSIONS or not await _officer(db,guild_id,user_id):
