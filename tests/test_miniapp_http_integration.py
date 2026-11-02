@@ -161,7 +161,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
 
     async def test_settings_endpoint_rejects_unsupported_http_methods(self):
-        for method in ("PUT", "PATCH", "DELETE"):
+        for method in ("HEAD", "PUT", "PATCH", "DELETE"):
             response = await self.client.request(
                 method, "/api/settings", headers=self.headers, json={"sound_enabled": False}
             )
