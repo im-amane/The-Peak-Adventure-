@@ -150,7 +150,6 @@ async def respond_guild_invite(db,invite_id,target_id,accept):
         await db.execute("INSERT INTO guild_members(user_id,guild_id,role) VALUES(?,?,'member')",(target_id,invite["guild_id"]))
         status="accepted"
     else: status="declined"
-    await db.execute("UPDATE guild_invites SET status=?,responded_at=CURRENT_TIMESTAMP WHERE invite_id=? AND status='pending'",(status,invite_id))
     cur = await db.execute("UPDATE guild_invites SET status=?,responded_at=CURRENT_TIMESTAMP WHERE invite_id=? AND status='pending'", (status, invite_id))
     if cur.rowcount != 1:
         raise GuildFeatureError("This invitation was already handled.")
@@ -328,7 +327,6 @@ async def respond_guild_war(db, war_id, leader_id, accept):
     if await guild_role(db,war["target_guild"],leader_id)!="leader":
         raise GuildFeatureError("Only the challenged guild leader can respond.")
     status="active" if accept else "declined"
-    await db.execute("UPDATE guild_wars SET status=? WHERE war_id=? AND status='pending'",(status,war_id))
     cur = await db.execute("UPDATE guild_wars SET status=? WHERE war_id=? AND status='pending'", (status, war_id))
     if cur.rowcount != 1:
         raise GuildFeatureError("This guild war was already answered.")
