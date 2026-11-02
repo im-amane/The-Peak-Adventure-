@@ -215,4 +215,27 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT COUNT(*) n FROM guild_chat_messages WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["n"],0)
 
+ async def test_settings_update_preserves_outer_transaction(self):
+  await self.db.commit()
+  await self.db.execute("UPDATE players SET level=99 WHERE user_id=1")
+  await update_settings(self.db,1,notifications_enabled=False)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT level FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["level"],10)
+  cur=await self.db.execute("SELECT 1 FROM player_settings WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
+
+ async def test_table_initialization_preserves_outer_transaction(self):
+  await self.db.commit()
+  await self.db.execute("DROP TABLE player_settings")
+  await self.db.commit()
+  await self.db.execute("UPDATE players SET level=77 WHERE user_id=1")
+  await init_account_tables(self.db)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT level FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["level"],10)
+  cur=await self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='player_settings'")
+  self.assertIsNone(await cur.fetchone())
 if __name__=="__main__": unittest.main()
