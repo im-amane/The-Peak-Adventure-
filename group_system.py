@@ -168,7 +168,9 @@ async def award_group_xp(db,chat_id,amount):
     level,xp=row["group_level"],row["group_xp"]+amount
     while level<100 and xp>=level*500:
         xp-=level*500; level+=1
-    await db.execute("UPDATE group_profiles SET group_level=?,group_xp=? WHERE chat_id=?",(level,xp,chat_id))
+    cur = await db.execute("UPDATE group_profiles SET group_level=?,group_xp=? WHERE chat_id=?", (level, xp, chat_id))
+    if cur.rowcount != 1:
+        raise GroupError("Group XP could not be recorded.")
     return level,xp
 
 def today():
