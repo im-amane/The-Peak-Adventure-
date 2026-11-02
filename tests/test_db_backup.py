@@ -51,6 +51,35 @@ class DatabaseBackupTests(unittest.TestCase):
         with sqlite3.connect(self.database) as connection:
             self.assertEqual(connection.execute("SELECT coins FROM players WHERE user_id=7").fetchone()[0], 1234)
 
+    def test_restore_rejects_existing_wal_or_shm_sidecars(self):
+        backup = create_backup(self.database, self.root / "backups")
+        with sqlite3.connect(self.database) as connection:
+            connection.execute("UPDATE players SET coins=0 WHERE user_id=7")
+        for suffix in ("-wal", "-shm"):
+            with self.subTest(sidecar=suffix):
+                sidecar = Path(str(self.database) + suffix)
+                sidecar.write_bytes(b"stale sidecar")
+                try:
+                    with self.assertRaises(sqlite3.OperationalError):
+                        restore_backup(backup, self.database)
+                    with sqlite3.connect(self.database) as connection:
+                        self.assertEqual(
+                            connection.execute("SELECT coins FROM players WHERE user_id=7").fetchone()[0],
+                            0,
+                        )
+                    self.assertTrue(sidecar.exists())
+                finally:
+                    sidecar.unlink(missing_ok=True)
+
+    def test_restore_rejects_same_source_and_destination(self):
+        with self.assertRaises(sqlite3.OperationalError):
+            restore_backup(self.database, self.database)
+        with sqlite3.connect(self.database) as connection:
+            self.assertEqual(
+                connection.execute("SELECT coins FROM players WHERE user_id=7").fetchone()[0],
+                1234,
+            )
+
     def test_restore_rejects_corrupt_backup_without_changing_database(self):
         corrupt = self.root / "broken.sqlite3"
         corrupt.write_text("not a sqlite database", encoding="utf-8")
