@@ -33,7 +33,7 @@ from group_system import GroupError, attack_group_raid_and_reward, claim_group_m
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
-from guild_system import GuildFeatureError, create_guild, disband_guild, join_guild, leave_guild, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
+from guild_system import GuildFeatureError, create_guild, disband_guild, join_guild, leave_guild, attack_guild_raid, award_guild_xp, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
@@ -987,17 +987,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
     membership = await cur.fetchone()
     if membership:
-        cur = await db.execute("SELECT guild_level, guild_xp FROM guilds WHERE guild_id=?", (membership["guild_id"],))
-        guild = await cur.fetchone()
-        if guild:
-            guild_level, guild_xp = guild["guild_level"], guild["guild_xp"] + reward_xp
-            while guild_level < 100 and guild_xp >= guild_level * 500:
-                guild_xp -= guild_level * 500
-                guild_level += 1
-            await db.execute(
-                "UPDATE guilds SET guild_level=?, guild_xp=? WHERE guild_id=?",
-                (guild_level, guild_xp, membership["guild_id"]),
-            )
+        await award_guild_xp(db, membership["guild_id"], reward_xp)
     evolution = await record_monster_defeat(db, user_id, b["monster_level"])
     await advance_dungeon(db, user_id, m["level"])
     await award_material_drop(db, user_id, m)
