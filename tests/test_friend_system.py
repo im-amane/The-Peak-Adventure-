@@ -116,5 +116,48 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
             await remove_friend(self.db, 101, 202)
 
 
+    async def test_friend_table_initialization_preserves_outer_transaction(self):
+        db = await aiosqlite.connect(":memory:")
+        try:
+            await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+            await db.execute("BEGIN")
+            await db.execute("INSERT INTO transaction_marker VALUES(1)")
+            await init_friend_tables(db)
+            self.assertTrue(db.in_transaction)
+            await db.rollback()
+            cur = await db.execute("SELECT COUNT(*) FROM transaction_marker")
+            self.assertEqual((await cur.fetchone())[0], 0)
+            cur = await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='friend_requests'")
+            self.assertIsNone(await cur.fetchone())
+        finally:
+            await db.close()
+
+    async def test_send_request_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN")
+        await send_friend_request(self.db, 101, 202)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT COUNT(*) FROM friend_requests")
+        self.assertEqual((await cur.fetchone())[0], 0)
+
+    async def test_response_preserves_outer_transaction(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        await self.db.execute("BEGIN")
+        await respond_to_friend_request(self.db, request_id, 202, True)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT status FROM friend_requests WHERE request_id=?", (request_id,))
+        self.assertEqual((await cur.fetchone())["status"], "pending")
+
+    async def test_remove_friend_preserves_outer_transaction(self):
+        request_id = await send_friend_request(self.db, 101, 202)
+        await respond_to_friend_request(self.db, request_id, 202, True)
+        await self.db.execute("BEGIN")
+        await remove_friend(self.db, 101, 202)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual([row["user_id"] for row in await list_friends(self.db, 101)], [202])
+
+
 if __name__ == "__main__":
     unittest.main()
