@@ -181,6 +181,8 @@ async def cancel_listing(db, seller_id, listing_id, now=None):
 
 async def list_active_auctions(db, now=None, limit=20):
     now = _timestamp(now)
+    if type(limit) is not int or limit < 1:
+        raise AuctionError("Auction list limit must be a positive integer.")
     await _settle_due(db, now)
     cur = await db.execute("""SELECT listing_id,seller_id,slot,item_name,item_stat,start_price,current_bid,
       highest_bidder,ends_at FROM auction_listings WHERE status='active' AND ends_at>?
