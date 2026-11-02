@@ -246,7 +246,7 @@ async def join_guild(db,user_id,guild_id):
     cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
     if await cur.fetchone():
         raise GuildFeatureError("You are already in a guild.")
-    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?",(guild_id,))
+    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),(guild_id,))
     guild=await cur.fetchone()
     if not guild:
         raise GuildFeatureError("Guild not found.")
