@@ -48,7 +48,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second["opponent_id"], 1)
         self.assertIsNotNone(second["match_id"])
 
-        first_status = await get_matchmaking_status(self.db, 1)
+        first_status = await get_matchmaking_status(self.db, 1, now=1001)
         self.assertEqual(first_status["status"], "matched")
         self.assertEqual(first_status["match_id"], second["match_id"])
         self.assertEqual(first_status["opponent_id"], 2)
@@ -61,7 +61,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["winner_id"], 2)
-        self.assertEqual((await get_matchmaking_status(self.db, 1))["status"], "completed")
+        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1001))["status"], "completed")
 
     async def test_join_is_idempotent_and_cancelled_users_are_rate_limited(self):
         first = await join_matchmaking(self.db, 1, now=1000)
@@ -71,7 +71,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await cancel_matchmaking(self.db, 1, now=1002))
         self.assertFalse(await cancel_matchmaking(self.db, 1, now=1003))
-        self.assertEqual((await get_matchmaking_status(self.db, 1))["status"], "cancelled")
+        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1001))["status"], "cancelled")
 
         with self.assertRaisesRegex(MatchmakingError, "Wait 6 seconds"):
             await join_matchmaking(self.db, 1, now=1004)
@@ -88,8 +88,10 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_expired_queue_entry_cannot_be_matched(self):
         await join_matchmaking(self.db, 1, now=1000)
-        self.assertEqual(await expire_matchmaking_queue(self.db, now=1180), 1)
-        self.assertEqual((await get_matchmaking_status(self.db, 1))["status"], "expired")
+        self.assertEqual(
+            (await get_matchmaking_status(self.db, 1, now=1180))["status"],
+            "expired",
+        )
 
         other = await join_matchmaking(self.db, 2, now=1181)
         self.assertEqual(other["status"], "queued")
@@ -106,7 +108,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["status"], "queued")
         self.assertTrue(self.db.in_transaction)
         await self.db.rollback()
-        self.assertIsNone(await get_matchmaking_status(self.db, 1))
+        self.assertIsNone(await get_matchmaking_status(self.db, 1, now=1001))
 
 
 if __name__ == "__main__":
