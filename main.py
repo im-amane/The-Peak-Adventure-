@@ -3272,7 +3272,6 @@ async def _battle_action_unlocked(call: CallbackQuery):
     if new_enemy_hp == 0:
         await restore_mana(db, user_id, TURN_MANA_REGEN)
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
-        await db.commit()
         result = await finish_battle(user_id, True)
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
@@ -3310,12 +3309,12 @@ async def _battle_action_unlocked(call: CallbackQuery):
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
-    await db.commit()
     await restore_mana(db, user_id, TURN_MANA_REGEN)
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
         return
+    await db.commit()
     enemy_action = (
         f"💨 You evade {m['name']}'s attack with your {p['hero_class']} speed!"
         if evaded else (
@@ -4306,7 +4305,6 @@ async def api_action(request: web.Request):
                 "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
                 (user_id,),
             )
-            await db.commit()
             message = await finish_battle(user_id, True)
             return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
         p = await get_player(user_id)
@@ -4349,7 +4347,6 @@ async def api_action(request: web.Request):
             "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
             (new_hp, user_id),
         )
-        await db.commit()
         await restore_mana(db, user_id, TURN_MANA_REGEN)
         if new_hp == 0:
             message = await finish_battle(user_id, False)
@@ -4357,6 +4354,7 @@ async def api_action(request: web.Request):
                 "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
                 "state": await miniapp_state(user),
             })
+        await db.commit()
         enemy_text = (
             f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
             if evaded else (
