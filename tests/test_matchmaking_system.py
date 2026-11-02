@@ -61,7 +61,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(completed["status"], "completed")
         self.assertEqual(completed["winner_id"], 2)
-        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1001))["status"], "completed")
+        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1010))["status"], "completed")
 
     async def test_join_is_idempotent_and_cancelled_users_are_rate_limited(self):
         first = await join_matchmaking(self.db, 1, now=1000)
@@ -71,7 +71,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(await cancel_matchmaking(self.db, 1, now=1002))
         self.assertFalse(await cancel_matchmaking(self.db, 1, now=1003))
-        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1001))["status"], "cancelled")
+        self.assertEqual((await get_matchmaking_status(self.db, 1, now=1003))["status"], "cancelled")
 
         with self.assertRaisesRegex(MatchmakingError, "Wait 6 seconds"):
             await join_matchmaking(self.db, 1, now=1004)
