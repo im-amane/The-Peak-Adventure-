@@ -41,6 +41,14 @@ class RuntimeMonitorTests(unittest.TestCase):
         self.assertIsNone(snapshot["backup"]["last_error"])
         self.assertEqual(snapshot["backup"]["last_path"], "/safe/backups/snapshot.db")
 
+    def test_route_metrics_are_bounded_against_high_cardinality_paths(self):
+        monitor = RuntimeMonitor(clock=lambda: 1000.0)
+        for index in range(250):
+            monitor.record_request(f"/random/{index}", 200, 0.001)
+        snapshot = monitor.snapshot(3600)
+        self.assertLessEqual(len(snapshot["routes"]), 100)
+        self.assertEqual(snapshot["routes"]["/_other"]["requests"], 151)
+
     def test_missing_or_stale_backup_is_reported(self):
         now = [1000.0]
         monitor = RuntimeMonitor(clock=lambda: now[0])
