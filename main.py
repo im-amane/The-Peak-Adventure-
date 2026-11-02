@@ -1959,54 +1959,89 @@ async def decline_duel(call: CallbackQuery):
 @dp.callback_query(F.data.startswith("duel_action:"))
 async def duel_action(call: CallbackQuery):
     _, action, duel_id_text = call.data.split(":", 2)
-    duel_id = int(duel_id_text)
-    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-    duel = await cur.fetchone()
-    if not duel or duel["status"] != "active":
-        await call.answer("This duel is not active.", show_alert=True)
-        return
-    user_id = call.from_user.id
-    if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
-        await call.answer("You are not part of this duel.", show_alert=True)
-        return
-    if duel["turn_user_id"] != user_id:
-        await call.answer("Wait for your turn.", show_alert=True)
-        return
-    if action not in {"attack", "skill", "surrender"}:
+    if not duel_id_text.isdigit() or action not in {"attack", "skill", "surrender"}:
         await call.answer("Unknown duel action.", show_alert=True)
         return
-    await call.answer()
-    if action == "surrender":
-        winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
-        loser_id = user_id
-        await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (winner_id, duel_id))
-        await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
-        await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
-        await db.commit()
-    else:
-        attacker_id = user_id
-        defender_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
-        attacker = await get_player(attacker_id)
-        defender = await get_player(defender_id)
-        attacker_class = HERO_CLASSES.get(attacker["hero_class"], HERO_CLASSES["Knight"])
-        defender_class = HERO_CLASSES.get(defender["hero_class"], HERO_CLASSES["Knight"])
-        base = attacker["level"] * 8 + attacker_class["attack"] + attacker["weapon_attack"]
-        if action == "skill":
-            base = int(base * 1.8)
-        damage = max(5, base + random.randint(0, 12) - defender["armor_defense"] - defender_class["defense"])
-        if user_id == duel["challenger_id"]:
-            new_hp = max(0, duel["opponent_hp"] - damage)
-            await db.execute("UPDATE duels SET opponent_hp=? WHERE duel_id=?", (new_hp, duel_id))
+    duel_id = int(duel_id_text)
+    user_id = call.from_user.id
+
+    # Serialize the read/validate/write sequence across processes sharing SQLite.
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+        duel = await cur.fetchone()
+        if not duel or duel["status"] != "active":
+            await db.rollback()
+            await call.answer("This duel is not active.", show_alert=True)
+            return
+        if user_id not in {duel["challenger_id"], duel["opponent_id"]}:
+            await db.rollback()
+            await call.answer("You are not part of this duel.", show_alert=True)
+            return
+        if duel["turn_user_id"] != user_id:
+            await db.rollback()
+            await call.answer("Wait for your turn.", show_alert=True)
+            return
+
+        await call.answer()
+        if action == "surrender":
+            winner_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+            loser_id = user_id
+            cur = await db.execute(
+                """UPDATE duels SET status='finished',winner_id=?,turn_user_id=NULL
+                   WHERE duel_id=? AND status='active' AND turn_user_id=?""",
+                (winner_id, duel_id, user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel state changed before surrender could be settled.")
+            cur = await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel winner account could not be updated.")
+            cur = await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel loser account could not be updated.")
         else:
-            new_hp = max(0, duel["challenger_hp"] - damage)
-            await db.execute("UPDATE duels SET challenger_hp=? WHERE duel_id=?", (new_hp, duel_id))
-        if new_hp == 0:
-            await db.execute("UPDATE duels SET status='finished', winner_id=? WHERE duel_id=?", (user_id, duel_id))
-            await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (user_id,))
-            await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (defender_id,))
-        else:
-            await db.execute("UPDATE duels SET turn_user_id=? WHERE duel_id=?", (defender_id, duel_id))
+            attacker_id = user_id
+            defender_id = duel["opponent_id"] if user_id == duel["challenger_id"] else duel["challenger_id"]
+            attacker = await get_player(attacker_id)
+            defender = await get_player(defender_id)
+            attacker_class = HERO_CLASSES.get(attacker["hero_class"], HERO_CLASSES["Knight"])
+            defender_class = HERO_CLASSES.get(defender["hero_class"], HERO_CLASSES["Knight"])
+            base = attacker["level"] * 8 + attacker_class["attack"] + attacker["weapon_attack"]
+            if action == "skill":
+                base = int(base * 1.8)
+            damage = max(5, base + random.randint(0, 12) - defender["armor_defense"] - defender_class["defense"])
+            if user_id == duel["challenger_id"]:
+                hp_column = "opponent_hp"
+                previous_hp = duel["opponent_hp"]
+            else:
+                hp_column = "challenger_hp"
+                previous_hp = duel["challenger_hp"]
+            new_hp = max(0, previous_hp - damage)
+            if new_hp == 0:
+                query = f"""UPDATE duels SET {hp_column}=?,status='finished',winner_id=?,turn_user_id=NULL
+                            WHERE duel_id=? AND status='active' AND turn_user_id=? AND {hp_column}=?"""
+                params = (new_hp, user_id, duel_id, user_id, previous_hp)
+            else:
+                query = f"""UPDATE duels SET {hp_column}=?,turn_user_id=?
+                            WHERE duel_id=? AND status='active' AND turn_user_id=? AND {hp_column}=?"""
+                params = (new_hp, defender_id, duel_id, user_id, previous_hp)
+            cur = await db.execute(query, params)
+            if cur.rowcount != 1:
+                raise RuntimeError("Duel state changed before the attack could be settled.")
+            if new_hp == 0:
+                cur = await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (user_id,))
+                if cur.rowcount != 1:
+                    raise RuntimeError("Duel winner account could not be updated.")
+                cur = await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (defender_id,))
+                if cur.rowcount != 1:
+                    raise RuntimeError("Duel loser account could not be updated.")
         await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
+
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     if duel["status"] == "finished" and duel["chat_id"] < 0 and duel["winner_id"]:
