@@ -56,38 +56,80 @@ async def _has_active_battle(db, user_id):
     return await cur.fetchone() is not None
 
 async def _settle_due(db, now):
-    cur = await db.execute("SELECT * FROM auction_listings WHERE status='active' AND ends_at<=?", (now,))
-    rows = await cur.fetchall()
-    for row in rows:
-        if row["highest_bidder"] is not None:
-            seller = await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?", (row["current_bid"], row["seller_id"]))
-            buyer = await db.execute("SELECT 1 FROM players WHERE user_id=?", (row["highest_bidder"],))
-            if seller.rowcount and await buyer.fetchone():
-                column = row["slot"]
-                stat_column = "weapon_attack" if column == "weapon" else "armor_defense"
-                current = await db.execute(f"SELECT {column}, {stat_column} FROM players WHERE user_id=?", (row["highest_bidder"],))
-                equipped = await current.fetchone()
-                default_name, default_stat = DEFAULTS[column]
-                if await _has_active_battle(db, row["highest_bidder"]):
-                    await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
-                      (row["highest_bidder"],column,row["item_name"],row["item_stat"],row["listing_id"],now))
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            "SELECT * FROM auction_listings WHERE status='active' AND ends_at<=?",
+            (now,),
+        )
+        rows = await cur.fetchall()
+        for row in rows:
+            if row["highest_bidder"] is not None:
+                seller = await db.execute(
+                    "UPDATE players SET coins=coins+? WHERE user_id=?",
+                    (row["current_bid"], row["seller_id"]),
+                )
+                buyer = await db.execute(
+                    "SELECT 1 FROM players WHERE user_id=?",
+                    (row["highest_bidder"],),
+                )
+                if seller.rowcount and await buyer.fetchone():
+                    column = row["slot"]
+                    stat_column = "weapon_attack" if column == "weapon" else "armor_defense"
+                    current = await db.execute(
+                        f"SELECT {column}, {stat_column} FROM players WHERE user_id=?",
+                        (row["highest_bidder"],),
+                    )
+                    equipped = await current.fetchone()
+                    if await _has_active_battle(db, row["highest_bidder"]):
+                        await db.execute(
+                            """INSERT INTO auction_stash
+                               (user_id,slot,item_name,item_stat,source_listing_id,created_at)
+                               VALUES(?,?,?,?,?,?)""",
+                            (row["highest_bidder"], column, row["item_name"],
+                             row["item_stat"], row["listing_id"], now),
+                        )
+                    else:
+                        if equipped:
+                            await db.execute(
+                                """INSERT INTO auction_stash
+                                   (user_id,slot,item_name,item_stat,source_listing_id,created_at)
+                                   VALUES(?,?,?,?,?,?)""",
+                                (row["highest_bidder"], column, equipped[column],
+                                 equipped[stat_column], row["listing_id"], now),
+                            )
+                        await db.execute(
+                            f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?",
+                            (row["item_name"], row["item_stat"], row["highest_bidder"]),
+                        )
+                    await db.execute(
+                        "UPDATE auction_listings SET status='sold' WHERE listing_id=? AND status='active'",
+                        (row["listing_id"],),
+                    )
                 else:
-                    if equipped:
-                        # Preserve even starter gear so every equipment swap is reversible.
-                        await db.execute("INSERT INTO auction_stash(user_id,slot,item_name,item_stat,source_listing_id,created_at) VALUES(?,?,?,?,?,?)",
-                          (row["highest_bidder"],column,equipped[column],equipped[stat_column],row["listing_id"],now))
-                    await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["highest_bidder"]))
-                await db.execute("UPDATE auction_listings SET status='sold' WHERE listing_id=?", (row["listing_id"],))
+                    await db.execute(
+                        "UPDATE players SET coins=coins+? WHERE user_id=?",
+                        (row["current_bid"], row["highest_bidder"]),
+                    )
+                    await db.execute(
+                        "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
+                        (row["listing_id"],),
+                    )
             else:
-                await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?", (row["current_bid"], row["highest_bidder"]))
-                await db.execute("UPDATE auction_listings SET status='expired' WHERE listing_id=?", (row["listing_id"],))
-        else:
-            column = "weapon" if row["slot"] == "weapon" else "armor"
-            stat_column = "weapon_attack" if row["slot"] == "weapon" else "armor_defense"
-            await db.execute(f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?", (row["item_name"], row["item_stat"], row["seller_id"]))
-            await db.execute("UPDATE auction_listings SET status='expired' WHERE listing_id=?", (row["listing_id"],))
-    if rows:
+                column = "weapon" if row["slot"] == "weapon" else "armor"
+                stat_column = "weapon_attack" if row["slot"] == "weapon" else "armor_defense"
+                await db.execute(
+                    f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?",
+                    (row["item_name"], row["item_stat"], row["seller_id"]),
+                )
+                await db.execute(
+                    "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
+                    (row["listing_id"],),
+                )
         await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
 
 async def create_listing(db, seller_id, slot, start_price, duration_hours=24, now=None):
     now = _timestamp(now)
