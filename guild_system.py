@@ -444,7 +444,12 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
         date=_date()
         await get_guild_missions(db,guild_id,date)
         target=MISSIONS[key][1]
-        await db.execute("UPDATE guild_missions SET progress=MIN(?,progress+?) WHERE guild_id=? AND mission_date=? AND mission_id=?",(target,amount,guild_id,date,key))
+        await db.execute(
+            """UPDATE guild_missions
+               SET progress=CASE WHEN progress+? > ? THEN ? ELSE progress+? END
+               WHERE guild_id=? AND mission_date=? AND mission_id=?""",
+            (amount,target,target,amount,guild_id,date,key),
+        )
         result=await get_guild_missions(db,guild_id,date)
         await _commit_atomic(db,nested,"record_guild_activity")
         return result
