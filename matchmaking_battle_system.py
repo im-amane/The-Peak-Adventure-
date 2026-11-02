@@ -13,6 +13,9 @@ class MatchmakingBattleError(ValueError):
     """A PvP action is not valid for the current match state."""
 
 
+TURN_TIMEOUT_SECONDS = 120
+
+
 def _is_postgres(db: Any) -> bool:
     return getattr(db, "dialect", "sqlite") == "postgres"
 
@@ -62,10 +65,39 @@ async def _battle_row(db: Any, match_id: int, lock: bool = False):
     return await cursor.fetchone()
 
 
-async def get_matchmaking_battle(db: Any, user_id: int, match_id: int | None = None) -> dict | None:
-    """Return only participant-safe battle state for the requesting player."""
+async def _settle_battle(
+    db: Any, row: Any, winner_id: int, stamp: int
+) -> None:
+    loser_id = row["player_two_id"] if winner_id == row["player_one_id"] else row["player_one_id"]
+    await db.execute(
+        """UPDATE matchmaking_battles SET status='finished',winner_id=?,
+           turn_user_id=NULL,turn_count=turn_count+1,updated_at=?
+           WHERE match_id=? AND status='active'""",
+        (winner_id, stamp, row["match_id"]),
+    )
+    await db.execute(
+        """UPDATE matchmaking_matches SET status='completed',completed_at=?,
+           winner_id=? WHERE match_id=? AND status='matched'""",
+        (stamp, winner_id, row["match_id"]),
+    )
+    await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
+    await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
+    await db.execute(
+        """UPDATE matchmaking_queue SET status='completed',updated_at=?
+           WHERE match_id=? AND status='matched'""",
+        (stamp, row["match_id"]),
+    )
+
+
+async def get_matchmaking_battle(
+    db: Any, user_id: int, match_id: int | None = None, *, now: int | None = None
+) -> dict | None:
+    """Return participant-safe state and lazily settle expired turns."""
     if not _valid_id(user_id):
         raise MatchmakingBattleError("Invalid player account.")
+    stamp = int(time.time()) if now is None else now
+    if not isinstance(stamp, int) or isinstance(stamp, bool) or stamp < 0:
+        raise MatchmakingBattleError("Invalid battle timestamp.")
     if match_id is None:
         cursor = await db.execute(
             """SELECT match_id FROM matchmaking_queue
@@ -73,15 +105,35 @@ async def get_matchmaking_battle(db: Any, user_id: int, match_id: int | None = N
                ORDER BY updated_at DESC LIMIT 1""",
             (user_id,),
         )
-        row = await cursor.fetchone()
-        if not row:
+        queued = await cursor.fetchone()
+        if not queued:
             return None
-        match_id = row["match_id"]
+        match_id = queued["match_id"]
     if not _valid_id(match_id):
         raise MatchmakingBattleError("Invalid matchmaking match.")
-    row = await _battle_row(db, match_id)
-    if not row or user_id not in {row["player_one_id"], row["player_two_id"]}:
-        return None
+    savepoint = "matchmaking_battle_state"
+    nested = await _begin(db, savepoint)
+    try:
+        row = await _battle_row(db, match_id, lock=True)
+        if not row or user_id not in {row["player_one_id"], row["player_two_id"]}:
+            await _commit(db, nested, savepoint)
+            return None
+        if (
+            row["status"] == "active"
+            and row["turn_user_id"] is not None
+            and stamp >= int(row["updated_at"]) + TURN_TIMEOUT_SECONDS
+        ):
+            winner_id = (
+                row["player_two_id"]
+                if row["turn_user_id"] == row["player_one_id"]
+                else row["player_one_id"]
+            )
+            await _settle_battle(db, row, winner_id, stamp)
+            row = await _battle_row(db, match_id)
+        await _commit(db, nested, savepoint)
+    except Exception:
+        await _rollback(db, nested, savepoint)
+        raise
     first = row["player_one_id"] == user_id
     opponent_id = row["player_two_id"] if first else row["player_one_id"]
     opponent_name = row["player_two_name"] if first else row["player_one_name"]
@@ -106,6 +158,8 @@ async def get_matchmaking_battle(db: Any, user_id: int, match_id: int | None = N
         "turn_count": row["turn_count"],
         "winner_id": row["winner_id"],
         "is_winner": row["winner_id"] == user_id,
+        "turn_deadline_at": int(row["updated_at"]) + TURN_TIMEOUT_SECONDS,
+        "turn_time_remaining": max(0, int(row["updated_at"]) + TURN_TIMEOUT_SECONDS - stamp),
     }
 
 
@@ -117,12 +171,16 @@ async def perform_matchmaking_battle_action(
     hero_classes: dict,
     *,
     rng=None,
+    now: int | None = None,
 ) -> dict:
     """Apply one validated player turn and settle match/rating counters atomically."""
     if not _valid_id(user_id) or not _valid_id(match_id):
         raise MatchmakingBattleError("Invalid player or match.")
     if not isinstance(action, str) or action not in {"attack", "skill", "surrender"}:
         raise MatchmakingBattleError("Choose attack, skill, or surrender.")
+    stamp = int(time.time()) if now is None else now
+    if not isinstance(stamp, int) or isinstance(stamp, bool) or stamp < 0:
+        raise MatchmakingBattleError("Invalid battle timestamp.")
     random_source = rng or random
     savepoint = "matchmaking_battle_action"
     nested = await _begin(db, savepoint)
@@ -132,6 +190,21 @@ async def perform_matchmaking_battle_action(
             raise MatchmakingBattleError("You are not part of this match.")
         if row["status"] != "active" or row["match_status"] != "matched":
             raise MatchmakingBattleError("This PvP battle is already closed.")
+        if row["turn_user_id"] is not None and stamp >= int(row["updated_at"]) + TURN_TIMEOUT_SECONDS:
+            timeout_winner = (
+                row["player_two_id"]
+                if row["turn_user_id"] == row["player_one_id"]
+                else row["player_one_id"]
+            )
+            await _settle_battle(db, row, timeout_winner, stamp)
+            await _commit(db, nested, savepoint)
+            state = await get_matchmaking_battle(db, user_id, match_id, now=stamp)
+            if state is None:
+                raise MatchmakingBattleError("Match state could not be loaded.")
+            state["last_action"] = "timeout"
+            state["damage"] = 0
+            state["timed_out"] = True
+            return state
         if row["turn_user_id"] != user_id:
             raise MatchmakingBattleError("Wait for your opponent's turn.")
 
@@ -194,34 +267,17 @@ async def perform_matchmaking_battle_action(
             await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
 
         if winner_id is not None:
-            await db.execute(
-                """UPDATE matchmaking_battles SET status='finished',winner_id=?,
-                   turn_user_id=NULL,turn_count=turn_count+1,updated_at=? WHERE match_id=?""",
-                (winner_id, int(time.time()), match_id),
-            )
-            await db.execute(
-                """UPDATE matchmaking_matches SET status='completed',completed_at=?,
-                   winner_id=? WHERE match_id=? AND status='matched'""",
-                (int(time.time()), winner_id, match_id),
-            )
-            loser_id = opponent_id if winner_id == user_id else user_id
-            await db.execute("UPDATE players SET pvp_wins=pvp_wins+1 WHERE user_id=?", (winner_id,))
-            await db.execute("UPDATE players SET pvp_losses=pvp_losses+1 WHERE user_id=?", (loser_id,))
-            await db.execute(
-                """UPDATE matchmaking_queue SET status='completed',updated_at=?
-                   WHERE match_id=? AND status='matched'""",
-                (int(time.time()), match_id),
-            )
+            await _settle_battle(db, row, winner_id, stamp)
         else:
             await db.execute(
                 "UPDATE matchmaking_battles SET turn_user_id=?,turn_count=turn_count+1,updated_at=? WHERE match_id=?",
-                (opponent_id, int(time.time()), match_id),
+                (opponent_id, stamp, match_id),
             )
         await _commit(db, nested, savepoint)
     except Exception:
         await _rollback(db, nested, savepoint)
         raise
-    state = await get_matchmaking_battle(db, user_id, match_id)
+    state = await get_matchmaking_battle(db, user_id, match_id, now=stamp)
     if state is None:
         raise MatchmakingBattleError("Match state could not be loaded.")
     state["last_action"] = action
