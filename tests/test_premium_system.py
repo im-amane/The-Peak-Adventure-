@@ -1,4 +1,5 @@
 import unittest
+import sqlite3
 import aiosqlite
 from unittest.mock import patch
 
@@ -116,6 +117,40 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.rollback()
         self.assertEqual(await get_premium_balance(self.db, 101), 0)
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
+    async def test_failed_stars_wallet_credit_rolls_back_ledger_and_preserves_outer_transaction(self):
+        await self.db.execute("UPDATE players SET potions=potions WHERE user_id=101")
+        await self.db.execute(
+            """CREATE TRIGGER reject_premium_wallet_credit
+               BEFORE UPDATE OF balance ON premium_wallets
+               WHEN NEW.balance > OLD.balance
+               BEGIN SELECT RAISE(ABORT, 'wallet credit unavailable'); END"""
+        )
+        package = get_premium_packages()["spark"]
+        with self.assertRaises(sqlite3.IntegrityError):
+            await credit_premium_purchase(self.db, 101, "spark", package["stars"], "charge-rollback")
+        self.assertTrue(self.db.in_transaction)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+        self.assertEqual(await get_premium_balance(self.db, 101), 0)
+        await self.db.rollback()
+
+    async def test_failed_shop_log_rolls_back_item_effect_and_gem_debit(self):
+        await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,100)")
+        await self.db.commit()
+        await self.db.execute(
+            """CREATE TRIGGER reject_shop_purchase_log
+               BEFORE INSERT ON premium_shop_purchases
+               BEGIN SELECT RAISE(ABORT, 'purchase log unavailable'); END"""
+        )
+        await self.db.commit()
+        with self.assertRaises(sqlite3.IntegrityError):
+            await buy_premium_item(self.db, 101, "potion_bundle")
+        cur = await self.db.execute("SELECT potions FROM players WHERE user_id=101")
+        self.assertEqual((await cur.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, 101), 100)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_shop_purchases")
         self.assertEqual((await cur.fetchone())["total"], 0)
 
     async def test_charge_id_cannot_be_replayed_for_another_account(self):
