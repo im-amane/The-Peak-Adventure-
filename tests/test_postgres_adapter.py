@@ -3129,8 +3129,17 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
             )
             for column, source in sqlite_columns[table].items():
                 target = postgres_columns[table][column]
+                source_affinity = source["affinity"]
+                if (
+                    source_affinity == "text"
+                    and target["affinity"] == "datetime"
+                    and column.lower().endswith(("_at", "_time", "_date"))
+                ):
+                    # SQLite stores ISO timestamp values as TEXT in several legacy
+                    # tables; PostgreSQL schema uses native timestamp columns.
+                    source_affinity = "datetime"
                 self.assertEqual(
-                    source["affinity"], target["affinity"],
+                    source_affinity, target["affinity"],
                     f"Type affinity mismatch for {table}.{column}: {source} vs {target}",
                 )
                 self.assertEqual(
