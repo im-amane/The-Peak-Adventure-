@@ -558,15 +558,22 @@
 
   function renderSocial(social) {
     if (!ui.socialOverview) return;
-    ui.socialOverview.replaceChildren();
-    const addCard=(title,lines)=>{
+    const panels = {
+      friends: document.getElementById("social-friends-overview"),
+      party: document.getElementById("social-party-overview"),
+      guild: document.getElementById("social-guild-overview"),
+      trading: document.getElementById("social-trading-overview")
+    };
+    Object.values(panels).forEach(panel=>{if(panel)panel.replaceChildren();});
+    const addCard=(panel,title,lines)=>{
+      if(!panel)return null;
       const card=document.createElement("article"); card.className="social-card";
       const heading=document.createElement("h3"); heading.textContent=title; card.appendChild(heading);
       if (!lines.length) lines=["No entries yet."];
       lines.forEach(line=>{
         const p=document.createElement("p"); p.className="social-member"; p.textContent=line; card.appendChild(p);
       });
-      ui.socialOverview.appendChild(card);
+      panel.appendChild(card);
       return card;
     };
     const addAction=(parent,label,action,extra={})=>{
@@ -575,35 +582,35 @@
       Object.entries(extra).forEach(([key,value])=>button.dataset[key]=String(value));
       parent.appendChild(button);
     };
-    const friendsCard=addCard("Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
+    const friendsCard=addCard(panels.friends,"Friends",(social.friends||[]).map(x=>x.username+" · Lv."+x.level));
     (social.friends||[]).forEach(friend=>{
       addAction(friendsCard,"Trade with "+friend.username,"trade_create",{targetId:friend.user_id});
       addAction(friendsCard,"Remove "+friend.username,"friend_remove",{friendId:friend.user_id});
     });
     const requests=social.friend_requests||[];
     if(requests.length){
-      const card=addCard("Incoming friend requests",requests.map(x=>x.username+" · Lv."+x.level));
+      const card=addCard(panels.friends,"Incoming friend requests",requests.map(x=>x.username+" · Lv."+x.level));
       requests.forEach(request=>{
         addAction(card,"Accept","friend_accept",{requestId:request.request_id});
         addAction(card,"Decline","friend_decline",{requestId:request.request_id});
       });
     }
     const party=social.party;
-    addCard("Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party."]);
+    addCard(panels.party,"Party",party ? ["Party #"+party.party_id,...party.members.map(x=>x.username+" · Lv."+x.level)] : ["Not in a party."]);
     const invites=social.party_invites||[];
     if(invites.length){
-      const card=addCard("Party invitations",invites.map(x=>x.username+" invited you to party #"+x.party_id));
+      const card=addCard(panels.party,"Party invitations",invites.map(x=>x.username+" invited you to party #"+x.party_id));
       invites.forEach(invite=>{
         addAction(card,"Accept","party_accept",{inviteId:invite.invite_id});
         addAction(card,"Decline","party_decline",{inviteId:invite.invite_id});
       });
     }
     const guild=social.guild;
-    addCard("Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
+    addCard(panels.guild,"Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
     if(ui.guildChatPanel)ui.guildChatPanel.hidden=!guild;
     const guildInvites=social.pending_guild_invites||[];
     if(guildInvites.length){
-      const card=addCard("Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
+      const card=addCard(panels.guild,"Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
       guildInvites.forEach(invite=>{
         addAction(card,"Accept","guild_accept",{inviteId:invite.invite_id});
         addAction(card,"Decline","guild_decline",{inviteId:invite.invite_id});
@@ -611,7 +618,7 @@
     }
     const pendingTrades=social.pending_trades||[];
     if(pendingTrades.length){
-      const card=addCard("Trade invitations",pendingTrades.map(trade=>
+      const card=addCard(panels.trading,"Trade invitations",pendingTrades.map(trade=>
         (trade.incoming?"From ":"To ")+trade.other_username+" · #"+trade.trade_id
       ));
       pendingTrades.forEach(trade=>{
@@ -626,11 +633,11 @@
         }
       });
     }else{
-      addCard("Trading",["No pending trade invitations."]);
+      addCard(panels.trading,"Trading",["No pending trade invitations."]);
     }
     const openTrades=social.open_trades||[];
     if(openTrades.length){
-      const card=addCard("Active trades",openTrades.map(trade=>
+      const card=addCard(panels.trading,"Active trades",openTrades.map(trade=>
         "#"+trade.trade_id+" with "+trade.other_username+
         " · Your offer: "+trade.my_coins+" coins, "+trade.my_potions+" potions"+
         " · Their offer: "+trade.their_coins+" coins, "+trade.their_potions+" potions"+
@@ -1510,6 +1517,35 @@
       applyState(result.state,result.message);
     }catch(error){ui.status.textContent=error.message;button.disabled=false;}
   });
+  const socialTabs=document.getElementById("social-tabs");
+  if(socialTabs){
+    const selectSocialTab=button=>{
+      const selected=button.dataset.socialTab;
+      socialTabs.querySelectorAll('[role="tab"]').forEach(tab=>{
+        const active=tab===button;
+        tab.setAttribute("aria-selected",String(active));
+        tab.tabIndex=active?0:-1;
+      });
+      document.querySelectorAll("[data-social-panel]").forEach(panel=>{
+        panel.hidden=panel.dataset.socialPanel!==selected;
+      });
+    };
+    socialTabs.addEventListener("click",event=>{
+      const button=event.target.closest("[data-social-tab]");
+      if(button)selectSocialTab(button);
+    });
+    socialTabs.addEventListener("keydown",event=>{
+      if(!["ArrowRight","ArrowLeft","Home","End"].includes(event.key))return;
+      const tabs=Array.from(socialTabs.querySelectorAll('[role="tab"]'));
+      const current=tabs.indexOf(document.activeElement);
+      if(current<0)return;
+      event.preventDefault();
+      const next=event.key==="Home"?0:event.key==="End"?tabs.length-1:
+        (current+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;
+      tabs[next].focus();
+      selectSocialTab(tabs[next]);
+    });
+  }
   if(ui.socialSearchForm)ui.socialSearchForm.addEventListener("submit",async event=>{
     event.preventDefault();
     const query=ui.socialSearchInput.value.trim();

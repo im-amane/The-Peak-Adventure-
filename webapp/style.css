@@ -227,3 +227,21 @@ button:disabled{opacity:.55}
 .matchmaking-battle p{margin:6px 0}
 .matchmaking-battle button{margin:6px 8px 0 0;min-height:40px}
 .matchmaking-battle button:disabled{opacity:.55;cursor:not-allowed}
+
+
+/* Dedicated, keyboard-accessible social sections */
+.social-overview{display:block;min-width:0}
+.social-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:12px 0}
+.social-tabs [role="tab"]{min-width:0;padding:10px 7px;border:1px solid rgba(180,198,187,.28);border-radius:10px;background:#111c26;color:#d7e1e6;font:inherit;font-size:12px;font-weight:700}
+.social-tabs [role="tab"][aria-selected="true"]{background:#354b42;border-color:var(--gold);color:#fff2d7;box-shadow:inset 0 0 0 1px rgba(208,184,132,.18)}
+.social-tabs [role="tab"]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.social-tab-panel{min-width:0;padding:4px 0 2px}
+.social-tab-panel[hidden]{display:none!important}
+.social-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:start}
+.social-card-grid>.social-card{min-width:0}
+.social-card-grid>.social-card:only-child{grid-column:1/-1}
+@media(max-width:520px){
+  .social-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .social-tabs [role="tab"]{min-height:42px;font-size:11px}
+  .social-card-grid{grid-template-columns:1fr}
+}
