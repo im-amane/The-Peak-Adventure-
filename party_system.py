@@ -47,6 +47,11 @@ def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
 
+def _lock_party_sql(db):
+    """Return the row-lock suffix needed to serialize party-wide limits on PostgreSQL."""
+    return " FOR UPDATE" if _is_postgres(db) else ""
+
+
 def _is_integrity_error(exc):
     sqlstate = getattr(exc, "sqlstate", None)
     return isinstance(exc, aiosqlite.IntegrityError) or (
@@ -146,7 +151,10 @@ async def invite_to_party(
         raise PartyError("Invalid party or player account.")
     if inviter_id == target_id:
         raise PartyError("You cannot invite yourself.")
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
     if not party:
         raise PartyError("Party not found.")
@@ -185,7 +193,7 @@ async def respond_to_party_invite(
     if not _valid_id(invite_id) or not _valid_id(target_id) or type(accept) is not bool:
         raise PartyError("Invalid party invitation.")
     cur = await db.execute(
-        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?",
+        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
         (invite_id,),
     )
     invite = await cur.fetchone()
@@ -194,6 +202,14 @@ async def respond_to_party_invite(
     if invite["target_id"] != target_id:
         raise PartyError("Only the invited player can respond.")
     if accept:
+        # Lock the parent party before checking capacity. Concurrent accepts on
+        # separate PostgreSQL connections must observe each other serially.
+        cur = await db.execute(
+            "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+            (invite["party_id"],),
+        )
+        if not await cur.fetchone():
+            raise PartyError("Party not found.")
         cur = await db.execute("SELECT 1 FROM party_members WHERE user_id=?", (target_id,))
         if await cur.fetchone():
             raise PartyError("You are already in a party.")
@@ -227,7 +243,10 @@ async def start_party_battle(db, party_id, user_id, monster_level, monster_name,
     clean_name = " ".join(str(monster_name or "").split())[:80]
     if not clean_name:
         raise PartyError("A monster name is required.")
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
     if not party or party["leader_id"] != user_id:
         raise PartyError("Only the party leader can start a co-op battle.")
