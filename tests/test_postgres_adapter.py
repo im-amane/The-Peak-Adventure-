@@ -2045,8 +2045,9 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute(
             """INSERT INTO players VALUES
                (?,?, 'Stormblade',25,'Traveler Clothes',0),
-               (?,?,'Rusty Sword',0,'Dragon Mail',40)""",
-            (self.seller_id, 100, self.buyer_id, 1000),
+               (?,?,'Rusty Sword',0,'Dragon Mail',40),
+               (?,?,'Oak Bow',12,'Traveler Clothes',0)""",
+            (self.seller_id, 100, self.buyer_id, 1000, self.buyer_id + 1, 1000),
         )
         await self.db.execute("CREATE TABLE battles(user_id BIGINT PRIMARY KEY)")
         await self.db.commit()
@@ -2156,7 +2157,7 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         try:
             outcomes = await asyncio.gather(
                 place_bid(self.db, self.buyer_id, listing_id, 100, now=1001),
-                place_bid(second_db, self.seller_id + 100, listing_id, 110, now=1001),
+                place_bid(second_db, self.buyer_id + 1, listing_id, 110, now=1001),
                 return_exceptions=True,
             )
             accepted = [value for value in outcomes if not isinstance(value, Exception)]
@@ -2169,7 +2170,7 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             listing = await cursor.fetchone()
             self.assertIn(listing["current_bid"], (100, 110))
-            self.assertIn(listing["highest_bidder"], (self.buyer_id, self.seller_id + 100))
+            self.assertIn(listing["highest_bidder"], (self.buyer_id, self.buyer_id + 1))
             cursor = await self.db.execute(
                 "SELECT coins FROM players WHERE user_id=?", (self.buyer_id,)
             )
