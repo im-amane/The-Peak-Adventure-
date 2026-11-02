@@ -324,5 +324,31 @@ class PostgresConnection:
     async def rollback(self) -> None:
         await self._connection.rollback()
 
+    @staticmethod
+    def _validate_advisory_lock_key(user_id: int) -> int:
+        if (
+            not isinstance(user_id, int)
+            or isinstance(user_id, bool)
+            or not 1 <= user_id <= 9_223_372_036_854_775_807
+        ):
+            raise ValueError("Advisory lock key must be a positive signed 64-bit integer.")
+        return user_id
+
+    async def acquire_player_lock(self, user_id: int) -> None:
+        """Acquire a session-scoped lock shared by every process using this database."""
+        key = self._validate_advisory_lock_key(user_id)
+        await self.execute("SELECT pg_advisory_lock(?)", (key,))
+
+    async def release_player_lock(self, user_id: int) -> None:
+        """Release a previously acquired session-scoped player lock."""
+        key = self._validate_advisory_lock_key(user_id)
+        cursor = await self.execute(
+            "SELECT pg_advisory_unlock(?) AS released",
+            (key,),
+        )
+        row = await cursor.fetchone()
+        if row is None or not row["released"]:
+            raise RuntimeError("PostgreSQL player advisory lock was not held by this connection.")
+
     async def close(self) -> None:
         await self._connection.close()
