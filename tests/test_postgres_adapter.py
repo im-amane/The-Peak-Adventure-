@@ -3043,3 +3043,58 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
                 f"SQLite-only={sorted(sqlite_columns[table] - postgres_columns[table])}, "
                 f"PostgreSQL-only={sorted(postgres_columns[table] - sqlite_columns[table])}",
             )
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresMainRuntimeSmokeTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.previous_db = main.db
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_runtime_" + uuid.uuid4().hex[:12]
+        await self.db.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db.commit()
+        await self.db.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.db)
+        main.db = self.db
+        self.user_id = 9_000_000_021
+
+    async def asyncTearDown(self):
+        main.db = self.previous_db
+        if self.db.in_transaction:
+            await self.db.rollback()
+        await self.db.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_miniapp_state_loads_for_large_telegram_id_on_postgres(self):
+        state = await main.miniapp_state({
+            "id": self.user_id,
+            "first_name": "PostgresHero",
+            "username": "postgreshero",
+        })
+        self.assertEqual(state["first_name"], "PostgresHero")
+        self.assertEqual(state["hero_class"], "Knight")
+        self.assertEqual(state["social"]["friends"], [])
+        self.assertEqual(state["social"]["friend_requests"], [])
+        self.assertEqual(state["social"]["party_invites"], [])
+        self.assertGreaterEqual(len(state["dungeons"]), 1)
+
+        cursor = await self.db.execute(
+            "SELECT user_id,username FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        player = await cursor.fetchone()
+        self.assertEqual(player["user_id"], self.user_id)
+        self.assertEqual(player["username"], "postgreshero")
+
+    async def test_daily_reward_claim_is_idempotent_on_postgres(self):
+        await main.get_player(self.user_id, "PostgresHero")
+        self.assertTrue(await main.claim_daily_reward(self.user_id, now=1_800_000_000))
+        self.assertFalse(await main.claim_daily_reward(self.user_id, now=1_800_000_060))
+        self.assertTrue(await main.claim_daily_reward(self.user_id, now=1_800_086_400))
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?",
+            (self.user_id,),
+        )
+        player = await cursor.fetchone()
+        self.assertEqual((player["coins"], player["potions"]), (100, 5))
