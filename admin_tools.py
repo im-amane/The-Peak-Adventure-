@@ -118,26 +118,6 @@ def parse_admin_ids(raw: str) -> set[int]:
     return result
 
 
-async def adjust_player_coins(db: aiosqlite.Connection, user_id: int, delta: int, actor_id: int | None = None) -> int:
-    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
-        raise AdminError("Invalid player ID.")
-    if not isinstance(delta,int) or isinstance(delta,bool) or delta==0 or abs(delta)>100000:
-        raise AdminError("Coin adjustment must be between -100000 and 100000, excluding zero.")
-    cur=await db.execute(
-        "UPDATE players SET coins=coins+? WHERE user_id=? AND coins+?>=0",
-        (delta,user_id,delta)
-    )
-    if cur.rowcount==0:
-        cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
-        if not await cur.fetchone(): raise AdminError("Player account not found.")
-        raise AdminError("Adjustment would make the player's coin balance negative.")
-    await db.commit()
-    if actor_id is not None:
-        await record_admin_action(db,actor_id,"coin_adjustment",user_id,"delta="+str(delta))
-    cur=await db.execute("SELECT coins FROM players WHERE user_id=?",(user_id,))
-    return (await cur.fetchone())["coins"]
-
-
 async def dashboard_stats(db: aiosqlite.Connection) -> dict:
     queries={
         "players":"SELECT COUNT(*) AS n FROM players",
