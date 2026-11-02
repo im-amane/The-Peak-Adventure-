@@ -4,6 +4,13 @@ import unittest
 from psycopg.errors import UniqueViolation
 
 from postgres_adapter import PostgresConnection, qmark_to_pyformat
+from moderation_system import (
+    ModerationError,
+    ban_player,
+    get_active_ban,
+    init_moderation_tables,
+    unban_player,
+)
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -116,6 +123,56 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ("rolled-back",),
         )
         self.assertEqual((await cursor.fetchone())["total"], 0)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresModerationServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS player_bans")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY)"
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES (1),(2)")
+        await self.db.commit()
+        await init_moderation_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS player_bans")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_ban_reban_and_unban_roundtrip_on_postgres(self):
+        await ban_player(self.db, 900, 2, "Repeated harassment", now=1000)
+        await ban_player(self.db, 901, 2, "Cheating detected", now=1100)
+        row = await get_active_ban(self.db, 2)
+        self.assertEqual(
+            (row["actor_id"], row["reason"], row["created_at"]),
+            (901, "Cheating detected", 1000),
+        )
+
+        await unban_player(self.db, 901, 2, now=1200)
+        self.assertIsNone(await get_active_ban(self.db, 2))
+
+    async def test_moderation_service_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await ban_player(self.db, 900, 2, "Repeated harassment", now=1000)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertFalse(self.db.in_transaction)
+        self.assertIsNone(await get_active_ban(self.db, 2))
+
+    async def test_missing_player_ban_is_rejected_and_not_persisted(self):
+        with self.assertRaises(ModerationError):
+            await ban_player(self.db, 900, 99, "Repeated harassment", now=1000)
+        self.assertIsNone(await get_active_ban(self.db, 99))
+
+    async def test_moderation_schema_initialization_is_idempotent(self):
+        await init_moderation_tables(self.db)
+        await init_moderation_tables(self.db)
         await self.db.commit()
 
 
