@@ -15,26 +15,77 @@ CHAPTERS=[
 class StoryError(ValueError):
     pass
 
+
+def _valid_user_id(user_id):
+    return isinstance(user_id,int) and not isinstance(user_id,bool) and user_id>0
+
+
+async def _begin_atomic(db,savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Keep story mutations atomic and preserve caller-owned transactions."""
+    from functools import wraps
+    @wraps(function)
+    async def wrapped(db,*args,**kwargs):
+        savepoint="story_"+function.__name__
+        nested=await _begin_atomic(db,savepoint)
+        try:
+            result=await function(db,*args,**kwargs)
+            await _commit_atomic(db,nested,savepoint)
+            return result
+        except Exception:
+            await _rollback_atomic(db,nested,savepoint)
+            raise
+    return wrapped
+
+
+@_transactional
 async def init_story_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS player_story(
-      user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,choice_id TEXT NOT NULL,
-      completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chapter_id)
-    );
-    CREATE TABLE IF NOT EXISTS story_flags(
-      user_id INTEGER NOT NULL,flag TEXT NOT NULL,value TEXT NOT NULL,
-      PRIMARY KEY(user_id,flag)
-    );
-    CREATE TABLE IF NOT EXISTS story_reward_claims(
-      user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(user_id,chapter_id)
-    );
-    """)
-    await db.commit()
+    """Create story tables without committing a caller-owned transaction."""
+    statements=(
+        """CREATE TABLE IF NOT EXISTS player_story(
+          user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,choice_id TEXT NOT NULL,
+          completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(user_id,chapter_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS story_flags(
+          user_id INTEGER NOT NULL,flag TEXT NOT NULL,value TEXT NOT NULL,
+          PRIMARY KEY(user_id,flag)
+        )""",
+        """CREATE TABLE IF NOT EXISTS story_reward_claims(
+          user_id INTEGER NOT NULL,chapter_id INTEGER NOT NULL,claimed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY(user_id,chapter_id)
+        )""",
+    )
+    for statement in statements:
+        await db.execute(statement)
+
 
 async def get_story_flags(db,user_id):
     cur=await db.execute("SELECT flag,value FROM story_flags WHERE user_id=?",(user_id,))
     return {row["flag"]:row["value"] for row in await cur.fetchall()}
+
 
 async def get_story_chapters(db,user_id,player_level):
     cur=await db.execute("SELECT chapter_id,choice_id FROM player_story WHERE user_id=?",(user_id,))
@@ -55,7 +106,13 @@ async def get_story_chapters(db,user_id,player_level):
           "branch_hint":flags.get("trust_path","")})
     return result
 
+
+@_transactional
 async def choose_story_path(db,user_id,player_level,chapter_id,choice_id):
+    if not _valid_user_id(user_id):
+        raise StoryError("Invalid player account.")
+    if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
+        raise StoryError("Invalid player level.")
     if not isinstance(chapter_id,int) or isinstance(chapter_id,bool) or not 1<=chapter_id<=len(CHAPTERS):
         raise StoryError("Story chapter not found.")
     chapter=CHAPTERS[chapter_id-1]
@@ -66,7 +123,8 @@ async def choose_story_path(db,user_id,player_level,chapter_id,choice_id):
     if chapter_id>1:
         cur=await db.execute("SELECT 1 FROM player_story WHERE user_id=? AND chapter_id=?",(user_id,chapter_id-1))
         if not await cur.fetchone():raise StoryError("Complete the previous story chapter first.")
-    if choice_id not in chapter["choices"]:raise StoryError("Choose one of the listed story paths.")
+    if not isinstance(choice_id,str) or choice_id not in chapter["choices"]:
+        raise StoryError("Choose one of the listed story paths.")
     if chapter.get("requires_party"):
         cur=await db.execute("SELECT COUNT(*) n FROM party_members WHERE user_id=?",(user_id,))
         if (await cur.fetchone())["n"]==0:raise StoryError("This chapter requires you to join a party first.")
@@ -75,17 +133,22 @@ async def choose_story_path(db,user_id,player_level,chapter_id,choice_id):
         flag="trust_path"
         value="mira" if choice_id=="trust_mira" else "wanderer"
         await db.execute("INSERT INTO story_flags(user_id,flag,value) VALUES(?,?,?) ON CONFLICT(user_id,flag) DO UPDATE SET value=excluded.value",(user_id,flag,value))
-    await db.commit()
     return {"chapter":chapter,"choice":chapter["choices"][choice_id],"reward":chapter["reward"]}
 
+
+@_transactional
 async def claim_story_reward(db,user_id,chapter_id):
-    if not isinstance(chapter_id,int) or isinstance(chapter_id,bool) or not 1<=chapter_id<=len(CHAPTERS): raise StoryError("Story chapter not found.")
+    if not _valid_user_id(user_id):
+        raise StoryError("Invalid player account.")
+    if not isinstance(chapter_id,int) or isinstance(chapter_id,bool) or not 1<=chapter_id<=len(CHAPTERS):
+        raise StoryError("Story chapter not found.")
     cur=await db.execute("SELECT 1 FROM player_story WHERE user_id=? AND chapter_id=?",(user_id,chapter_id))
     if not await cur.fetchone():raise StoryError("Complete this chapter before claiming its reward.")
     cur=await db.execute("SELECT 1 FROM story_reward_claims WHERE user_id=? AND chapter_id=?",(user_id,chapter_id))
     if await cur.fetchone():raise StoryError("Story reward already claimed.")
     await db.execute("INSERT INTO story_reward_claims(user_id,chapter_id) VALUES(?,?)",(user_id,chapter_id))
     reward=CHAPTERS[chapter_id-1]["reward"]
-    await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(reward,user_id))
-    await db.commit()
+    cur=await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(reward,user_id))
+    if cur.rowcount != 1:
+        raise StoryError("The story reward could not be credited.")
     return reward
