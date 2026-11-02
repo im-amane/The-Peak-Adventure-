@@ -24,6 +24,8 @@ from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekl
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
+from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
+from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -1202,4 +1204,67 @@ class PostgresSecurityEventServiceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_security_schema_initialization_is_idempotent(self):
         await init_security_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresPresenceServiceTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 9_876_543_210
+    friend_id = 9_876_543_211
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in ("player_presence", "friend_requests", "player_settings", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY,username TEXT,level INTEGER)"
+        )
+        await self.db.execute(
+            "CREATE TABLE friend_requests(user_low BIGINT,user_high BIGINT,status TEXT)"
+        )
+        await self.db.execute(
+            "CREATE TABLE player_settings(user_id BIGINT PRIMARY KEY,profile_visibility TEXT)"
+        )
+        await self.db.execute(
+            "INSERT INTO players VALUES(?,?,?),(?,?,?)",
+            (self.user_id, "Ash", 5, self.friend_id, "Mira", 7),
+        )
+        await self.db.execute(
+            "INSERT INTO friend_requests VALUES(?,?,?)",
+            (self.user_id, self.friend_id, "accepted"),
+        )
+        await self.db.commit()
+        await init_presence_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in ("player_presence", "friend_requests", "player_settings", "players"):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table}")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_touch_and_count_support_64_bit_telegram_ids(self):
+        await touch_presence(self.db, self.user_id)
+        await touch_presence(self.db, self.friend_id)
+        self.assertEqual(await count_online_players(self.db), 2)
+
+    async def test_online_friends_respect_privacy_setting(self):
+        await touch_presence(self.db, self.friend_id)
+        rows = await list_online_friends(self.db, self.user_id)
+        self.assertEqual([row["user_id"] for row in rows], [self.friend_id])
+        await self.db.execute(
+            "INSERT INTO player_settings(user_id,profile_visibility) VALUES(?,?)",
+            (self.friend_id, "private"),
+        )
+        await self.db.commit()
+        self.assertEqual(await list_online_friends(self.db, self.user_id), [])
+
+    async def test_presence_write_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await touch_presence(self.db, self.user_id)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await count_online_players(self.db), 0)
+
+    async def test_presence_schema_initialization_is_idempotent(self):
+        await init_presence_tables(self.db)
         await self.db.commit()
