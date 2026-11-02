@@ -6,19 +6,41 @@ class AccountError(ValueError):
 
 DEFAULT_SETTINGS={"notifications_enabled":1,"profile_visibility":"public","sound_enabled":1}
 
+async def _atomic_start(db, name):
+    nested = db.in_transaction
+    await db.execute("SAVEPOINT " + name if nested else "BEGIN IMMEDIATE")
+    return nested
+
+async def _atomic_finish(db, name, nested):
+    await db.execute("RELEASE SAVEPOINT " + name) if nested else await db.commit()
+
+async def _atomic_rollback(db, name, nested):
+    if nested:
+        await db.execute("ROLLBACK TO SAVEPOINT " + name)
+        await db.execute("RELEASE SAVEPOINT " + name)
+    else:
+        await db.rollback()
+
+
 async def init_account_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_settings(
-      user_id INTEGER PRIMARY KEY,
-      notifications_enabled INTEGER NOT NULL DEFAULT 1 CHECK(notifications_enabled IN (0,1)),
-      profile_visibility TEXT NOT NULL DEFAULT 'public' CHECK(profile_visibility IN ('public','friends')),
-      sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )""")
-    cur = await db.execute("PRAGMA table_info(player_settings)")
-    columns = {row["name"] for row in await cur.fetchall()}
-    if "sound_enabled" not in columns:
-        await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
-    await db.commit()
+    name = "init_account_tables"
+    nested = await _atomic_start(db, name)
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_settings(
+          user_id INTEGER PRIMARY KEY,
+          notifications_enabled INTEGER NOT NULL DEFAULT 1 CHECK(notifications_enabled IN (0,1)),
+          profile_visibility TEXT NOT NULL DEFAULT 'public' CHECK(profile_visibility IN ('public','friends')),
+          sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cur = await db.execute("PRAGMA table_info(player_settings)")
+        columns = {row["name"] for row in await cur.fetchall()}
+        if "sound_enabled" not in columns:
+            await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
+        await _atomic_finish(db, name, nested)
+    except Exception:
+        await _atomic_rollback(db, name, nested)
+        raise
 
 async def get_settings(db,user_id):
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0: raise AccountError("Invalid player account.")
@@ -38,11 +60,17 @@ async def update_settings(db,user_id,notifications_enabled=None,profile_visibili
     if sound_enabled is not None:
         if not isinstance(sound_enabled,bool): raise AccountError("Sound setting must be on or off.")
         current["sound_enabled"]=int(sound_enabled)
-    await db.execute("""INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility,sound_enabled) VALUES(?,?,?,?)
-      ON CONFLICT(user_id) DO UPDATE SET notifications_enabled=excluded.notifications_enabled,
-      profile_visibility=excluded.profile_visibility,sound_enabled=excluded.sound_enabled,updated_at=CURRENT_TIMESTAMP""",
-      (user_id,current["notifications_enabled"],current["profile_visibility"],current["sound_enabled"]))
-    await db.commit()
+    name = "update_player_settings"
+    nested = await _atomic_start(db, name)
+    try:
+        await db.execute("""INSERT INTO player_settings(user_id,notifications_enabled,profile_visibility,sound_enabled) VALUES(?,?,?,?)
+          ON CONFLICT(user_id) DO UPDATE SET notifications_enabled=excluded.notifications_enabled,
+          profile_visibility=excluded.profile_visibility,sound_enabled=excluded.sound_enabled,updated_at=CURRENT_TIMESTAMP""",
+          (user_id,current["notifications_enabled"],current["profile_visibility"],current["sound_enabled"]))
+        await _atomic_finish(db, name, nested)
+    except Exception:
+        await _atomic_rollback(db, name, nested)
+        raise
     return current
 
 async def _delete_player_account_unlocked(db,user_id):
