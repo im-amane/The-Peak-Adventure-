@@ -498,10 +498,15 @@
             const button = document.createElement("button");
             button.type = "button";
             button.className = "social-action";
-            button.textContent = label;
+            button.textContent = action === "skill"
+              ? ((gameState.skill_cd || 0) > 0
+                ? "⏳ Skill (" + gameState.skill_cd + ")"
+                : (!gameState.mana || gameState.mana.mana < 30 ? "🔮 Need 30 Mana" : label))
+              : label;
             button.dataset.pvpAction = action;
             button.dataset.matchId = String(battle.match_id);
-            button.disabled = requestInFlight || !battle.is_my_turn;
+            button.disabled = requestInFlight || !battle.is_my_turn
+              || (action === "skill" && ((gameState.skill_cd || 0) > 0 || !gameState.mana || gameState.mana.mana < 30));
             panel.appendChild(button);
           });
         }
