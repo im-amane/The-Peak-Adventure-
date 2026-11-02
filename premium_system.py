@@ -78,31 +78,40 @@ def parse_invoice_payload(payload):
 
 
 async def init_premium_tables(db):
-    await db.executescript("""CREATE TABLE IF NOT EXISTS premium_wallets(
-      user_id INTEGER PRIMARY KEY,balance INTEGER NOT NULL DEFAULT 0 CHECK(balance>=0),
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS premium_transactions(
-      transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      telegram_charge_id TEXT NOT NULL UNIQUE,
-      provider_charge_id TEXT NOT NULL DEFAULT '',
-      user_id INTEGER NOT NULL,
-      package_id TEXT NOT NULL,
-      stars INTEGER NOT NULL CHECK(stars>0),
-      gems INTEGER NOT NULL CHECK(gems>0),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_premium_transactions_user
-      ON premium_transactions(user_id,transaction_id DESC);
-    CREATE TABLE IF NOT EXISTS player_xp_boosts(
-      user_id INTEGER PRIMARY KEY,remaining_wins INTEGER NOT NULL DEFAULT 0 CHECK(remaining_wins>=0)
-    );
-    CREATE TABLE IF NOT EXISTS premium_shop_purchases(
-      purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
-      item_id TEXT NOT NULL,gems_spent INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    """)
-    await db.commit()
+    """Create premium tables without committing a caller-owned transaction."""
+    nested = await _begin_atomic(db, "init_premium_tables")
+    try:
+        statements = (
+            """CREATE TABLE IF NOT EXISTS premium_wallets(
+              user_id INTEGER PRIMARY KEY,balance INTEGER NOT NULL DEFAULT 0 CHECK(balance>=0),
+              updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS premium_transactions(
+              transaction_id INTEGER PRIMARY KEY AUTOINCREMENT,
+              telegram_charge_id TEXT NOT NULL UNIQUE,
+              provider_charge_id TEXT NOT NULL DEFAULT '',
+              user_id INTEGER NOT NULL,
+              package_id TEXT NOT NULL,
+              stars INTEGER NOT NULL CHECK(stars>0),
+              gems INTEGER NOT NULL CHECK(gems>0),
+              created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+            """CREATE INDEX IF NOT EXISTS idx_premium_transactions_user
+              ON premium_transactions(user_id,transaction_id DESC)""",
+            """CREATE TABLE IF NOT EXISTS player_xp_boosts(
+              user_id INTEGER PRIMARY KEY,remaining_wins INTEGER NOT NULL DEFAULT 0 CHECK(remaining_wins>=0)
+            )""",
+            """CREATE TABLE IF NOT EXISTS premium_shop_purchases(
+              purchase_id INTEGER PRIMARY KEY AUTOINCREMENT,user_id INTEGER NOT NULL,
+              item_id TEXT NOT NULL,gems_spent INTEGER NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )""",
+        )
+        for statement in statements:
+            await db.execute(statement)
+        await _commit_atomic(db, nested, "init_premium_tables")
+    except Exception:
+        await _rollback_atomic(db, nested, "init_premium_tables")
+        raise
 
 
 async def get_premium_balance(db, user_id):
