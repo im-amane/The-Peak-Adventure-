@@ -1,6 +1,7 @@
 import unittest
 import aiosqlite
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
+from guild_system import init_guild_features
 
 class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
@@ -14,7 +15,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE player_xp_boosts(user_id INTEGER PRIMARY KEY,remaining_wins INTEGER);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY,leader_id INTEGER);
   CREATE TABLE guild_members(user_id INTEGER PRIMARY KEY,guild_id INTEGER,role TEXT,joined_at TEXT DEFAULT CURRENT_TIMESTAMP);
-  CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,inviter_id INTEGER,target_id INTEGER);
+  CREATE TABLE guild_invites(invite_id INTEGER PRIMARY KEY,guild_id INTEGER,inviter_id INTEGER,target_id INTEGER,status TEXT DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,responded_at TEXT);
   CREATE TABLE guild_announcements(guild_id INTEGER PRIMARY KEY,message TEXT,author_id INTEGER);
   CREATE TABLE guild_raid_contributions(raid_id INTEGER,user_id INTEGER,damage INTEGER);
   CREATE TABLE guild_raid_cooldowns(raid_id INTEGER,user_id INTEGER,last_attack_at TEXT);
@@ -60,6 +61,7 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   INSERT INTO duels VALUES(1,1,2);
   INSERT INTO trades VALUES(1,1,2);
   """)
+  await init_guild_features(self.db)
   await init_account_tables(self.db)
  async def asyncTearDown(self): await self.db.close()
  async def test_default_settings(self):
@@ -137,7 +139,6 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["role"],"leader")
  async def test_delete_account_removes_social_and_economy_data(self):
-  await self.db.execute("CREATE TABLE guild_war_duel_events(duel_id INTEGER PRIMARY KEY,war_id INTEGER,winner_id INTEGER)")
   await self.db.execute("INSERT INTO guild_war_duel_events VALUES(1,5,2),(2,5,1)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
   await delete_player_account(self.db,1)
@@ -211,6 +212,41 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   for table in ("player_daily_missions","player_monster_mastery","roaming_event_participants"):
    cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
    self.assertEqual((await cur.fetchone())["n"],0)
+
+ async def test_deleting_last_guild_leader_cleans_guild_owned_records(self):
+  await self.db.execute("DELETE FROM guild_members WHERE user_id=2")
+  await self.db.execute("INSERT INTO guilds VALUES(6,2)")
+  await self.db.execute("INSERT INTO guild_members VALUES(2,6,'leader',CURRENT_TIMESTAMP)")
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(5,1,999),(6,2,998)")
+  await self.db.execute("INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(5,'old',1),(6,'keep',2)")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(5,1,'old chat'),(6,2,'keep chat')")
+  await self.db.execute("INSERT INTO guild_missions VALUES(5,'2026-11-02','battles',2,0),(6,'2026-11-02','battles',1,0)")
+  await self.db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(5,10,'Old boss',100,50),(6,10,'Keep boss',100,50)")
+  await self.db.execute("INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(1,1,50),(2,2,25)")
+  await self.db.execute("INSERT INTO guild_raid_cooldowns(raid_id,user_id) VALUES(1,1),(2,2)")
+  await self.db.execute("INSERT INTO guild_wars(war_id,challenger_guild,target_guild,status) VALUES(50,5,6,'completed')")
+  await self.db.execute("INSERT INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(500,50,1)")
+  await self.db.commit()
+
+  await delete_player_account(self.db,1)
+  for table in ("guilds","guild_members","guild_invites","guild_announcements","guild_chat_messages","guild_missions","guild_raids"):
+   cur=await self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE guild_id=5")
+   self.assertEqual((await cur.fetchone())[0],0,table)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_contributions WHERE raid_id=1")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_cooldowns WHERE raid_id=1")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_wars WHERE war_id=50")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE war_id=50")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=6")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_chat_messages WHERE guild_id=6")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raids WHERE guild_id=6")
+  self.assertEqual((await cur.fetchone())[0],1)
+
  async def test_delete_account_removes_guild_chat_history(self):
   await self.db.execute("CREATE TABLE guild_chat_messages(message_id INTEGER PRIMARY KEY,guild_id INTEGER,user_id INTEGER,message TEXT)")
   await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
