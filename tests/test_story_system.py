@@ -38,6 +38,16 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO party_members VALUES(1,10)")
   result=await choose_story_path(self.db,1,100,8,"light_together")
   self.assertEqual(result["chapter"]["title"],"The Last Lantern")
+
+ async def test_party_chapter_is_not_shown_as_unlocked_without_party(self):
+  for cid in range(1,8):
+   await choose_story_path(self.db,1,100,cid,next(iter(CHAPTERS[cid-1]["choices"])))
+  rows=await get_story_chapters(self.db,1,100)
+  self.assertTrue(rows[6]["completed"])
+  self.assertFalse(rows[7]["unlocked"])
+  await self.db.execute("INSERT INTO party_members VALUES(1,10)")
+  rows=await get_story_chapters(self.db,1,100)
+  self.assertTrue(rows[7]["unlocked"])
  async def test_reward_can_be_claimed_once(self):
   await choose_story_path(self.db,1,1,1,"follow_mira")
   self.assertEqual(await claim_story_reward(self.db,1,1),80)
