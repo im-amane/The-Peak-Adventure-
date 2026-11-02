@@ -22,18 +22,48 @@ class SecurityEventError(ValueError):
     pass
 
 
+async def _begin_transaction(db, savepoint):
+    nested = db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _finish_transaction(db, savepoint, nested):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_transaction(db, savepoint, nested):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
 async def init_security_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS security_events(
-      event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      event_type TEXT NOT NULL,
-      severity INTEGER NOT NULL DEFAULT 1 CHECK(severity BETWEEN 1 AND 5),
-      details TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )""")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_security_user_time ON security_events(user_id,created_at DESC)")
-    await db.execute("CREATE INDEX IF NOT EXISTS idx_security_time ON security_events(created_at DESC)")
-    await db.commit()
+    savepoint = "init_security_tables"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS security_events(
+          event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          severity INTEGER NOT NULL DEFAULT 1 CHECK(severity BETWEEN 1 AND 5),
+          details TEXT NOT NULL DEFAULT '',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_security_user_time ON security_events(user_id,created_at DESC)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_security_time ON security_events(created_at DESC)")
+        await _finish_transaction(db, savepoint, nested)
+    except Exception:
+        await _rollback_transaction(db, savepoint, nested)
+        raise
 
 
 async def record_security_event(db, user_id, event_type, details="", severity=1):
@@ -44,24 +74,30 @@ async def record_security_event(db, user_id, event_type, details="", severity=1)
     if not isinstance(severity, int) or isinstance(severity, bool) or not 1 <= severity <= 5:
         raise SecurityEventError("Security severity must be between 1 and 5.")
     clean = " ".join(str(details or "").split())[:240]
-    cur = await db.execute(
-        "INSERT INTO security_events(user_id,event_type,severity,details) VALUES(?,?,?,?)",
-        (user_id, event_type, severity, clean),
-    )
-    if int(cur.lastrowid) % CLEANUP_INTERVAL == 0:
-        await db.execute(
-            "DELETE FROM security_events WHERE created_at < datetime('now', ?)",
-            (f"-{RETENTION_DAYS} days",),
+    savepoint = "record_security_event"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        cur = await db.execute(
+            "INSERT INTO security_events(user_id,event_type,severity,details) VALUES(?,?,?,?)",
+            (user_id, event_type, severity, clean),
         )
-        await db.execute(
-            """DELETE FROM security_events
-               WHERE event_id <= (
-                 SELECT event_id FROM security_events
-                 ORDER BY event_id DESC LIMIT 1 OFFSET ?
-               )""",
-            (MAX_SECURITY_EVENTS,),
-        )
-    await db.commit()
+        if int(cur.lastrowid) % CLEANUP_INTERVAL == 0:
+            await db.execute(
+                "DELETE FROM security_events WHERE created_at < datetime('now', ?)",
+                (f"-{RETENTION_DAYS} days",),
+            )
+            await db.execute(
+                """DELETE FROM security_events
+                   WHERE event_id <= (
+                     SELECT event_id FROM security_events
+                     ORDER BY event_id DESC LIMIT 1 OFFSET ?
+                   )""",
+                (MAX_SECURITY_EVENTS,),
+            )
+        await _finish_transaction(db, savepoint, nested)
+    except Exception:
+        await _rollback_transaction(db, savepoint, nested)
+        raise
 
 
 async def get_suspicious_players(db, window_minutes=1440, limit=20):
