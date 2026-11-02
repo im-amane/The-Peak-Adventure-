@@ -4667,7 +4667,8 @@ async def miniapp_rate_limit(request: web.Request, handler):
     return await handler(request)
 
 
-async def start_web_server():
+def create_web_app():
+    """Build the authenticated Mini App HTTP application for runtime and integration tests."""
     async def serve_index(request: web.Request):
         return web.FileResponse(WEB_DIR / "index.html")
 
@@ -4703,13 +4704,17 @@ async def start_web_server():
     app.router.add_post("/api/social", api_social)
     app.router.add_post("/api/premium-shop", api_premium_shop)
     app.router.add_get("/healthz", healthz)
+    return app
+
+
+async def start_web_server():
+    app = create_web_app()
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, WEB_HOST, WEB_PORT)
     await site.start()
     log.info("Mini App web server listening on %s:%s", WEB_HOST, WEB_PORT)
     return runner
-
 
 async def main():
     if not TOKEN:
