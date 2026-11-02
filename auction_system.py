@@ -325,7 +325,13 @@ async def cancel_listing(db, seller_id, listing_id, now=None):
     await _settle_due(db, now)
     try:
         await db.execute("BEGIN IMMEDIATE")
-        cur = await db.execute("SELECT * FROM auction_listings WHERE listing_id=? AND status='active'", (listing_id,))
+        cur = await db.execute(
+            _for_update(
+                db,
+                "SELECT * FROM auction_listings WHERE listing_id=? AND status='active'",
+            ),
+            (listing_id,),
+        )
         row = await cur.fetchone()
         if not row or row["seller_id"] != seller_id:
             raise AuctionError("Active auction not found for your account.")
