@@ -16,6 +16,7 @@ from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
 from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
 from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
+from world_system import WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -369,6 +370,113 @@ class PostgresEvolutionServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_evolution_schema_initialization_is_idempotent(self):
         await init_evolution_tables(self.db)
         await init_evolution_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresWorldServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS world_discoveries")
+        await self.db.execute("DROP TABLE IF EXISTS player_worlds")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 potions BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES(801)")
+        await self.db.commit()
+        await init_world_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS world_discoveries")
+        await self.db.execute("DROP TABLE IF EXISTS player_worlds")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_current_world_and_fast_travel_roundtrip(self):
+        self.assertEqual(await get_current_world(self.db, 801, 1), 1)
+        result = await travel_to_world(self.db, 801, 21, 3)
+        self.assertEqual(result["world_id"], 3)
+        choices = await get_world_choices(self.db, 801, 21)
+        self.assertTrue(choices[2]["current"])
+        self.assertFalse(choices[3]["unlocked"])
+
+    async def test_landmark_reward_is_idempotent(self):
+        reward = await discover_world_landmark(self.db, 801, 1, 1)
+        self.assertEqual(reward["coins"], 125)
+        self.assertEqual(reward["potions"], 1)
+        with self.assertRaises(WorldError):
+            await discover_world_landmark(self.db, 801, 1, 1)
+
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (801,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (125, 1))
+        landmark = await get_world_landmark(self.db, 801, 1)
+        self.assertTrue(landmark["discovered"])
+
+    async def test_world_travel_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await travel_to_world(self.db, 801, 21, 3)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM player_worlds WHERE user_id=?", (801,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_landmark_reward_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await discover_world_landmark(self.db, 801, 1, 1)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (801,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (0, 0))
+        cursor = await self.db.execute(
+            "SELECT 1 FROM world_discoveries WHERE user_id=?", (801,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_missing_player_does_not_keep_landmark_discovery(self):
+        await self.db.execute("DELETE FROM players WHERE user_id=?", (801,))
+        await self.db.commit()
+        with self.assertRaisesRegex(WorldError, "Player account not found"):
+            await discover_world_landmark(self.db, 801, 1, 1)
+        cursor = await self.db.execute(
+            "SELECT 1 FROM world_discoveries WHERE user_id=?", (801,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_concurrent_duplicate_landmark_claim_awards_once(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                discover_world_landmark(self.db, 801, 1, 1),
+                discover_world_landmark(second, 801, 1, 1),
+                return_exceptions=True,
+            )
+            successes = [item for item in results if isinstance(item, dict)]
+            failures = [item for item in results if isinstance(item, WorldError)]
+            self.assertEqual(len(successes), 1)
+            self.assertEqual(len(failures), 1)
+            cursor = await self.db.execute(
+                "SELECT coins,potions FROM players WHERE user_id=?", (801,)
+            )
+            self.assertEqual(tuple((await cursor.fetchone()).values()), (125, 1))
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_world_schema_initialization_is_idempotent(self):
+        await init_world_tables(self.db)
+        await init_world_tables(self.db)
         await self.db.commit()
 
 
