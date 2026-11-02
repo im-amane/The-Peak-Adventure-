@@ -85,6 +85,7 @@ async def init_guild_features(db):
         if _is_postgres(db)
         else "INTEGER PRIMARY KEY AUTOINCREMENT"
     )
+    attack_timestamp_type = "TIMESTAMPTZ" if _is_postgres(db) else "TEXT"
     statements = (
         f"""CREATE TABLE IF NOT EXISTS guild_invites(
           invite_id {identity},guild_id BIGINT NOT NULL,
@@ -118,8 +119,8 @@ async def init_guild_features(db):
           raid_id BIGINT NOT NULL,user_id BIGINT NOT NULL,damage INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(raid_id,user_id)
         )""",
-        """CREATE TABLE IF NOT EXISTS guild_raid_cooldowns(
-          raid_id BIGINT NOT NULL,user_id BIGINT NOT NULL,last_attack_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        f"""CREATE TABLE IF NOT EXISTS guild_raid_cooldowns(
+          raid_id BIGINT NOT NULL,user_id BIGINT NOT NULL,last_attack_at {attack_timestamp_type} NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(raid_id,user_id)
         )""",
         f"""CREATE TABLE IF NOT EXISTS guild_wars(
@@ -480,7 +481,12 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
     cur=await db.execute("SELECT * FROM guild_raids WHERE guild_id=? AND status='active' ORDER BY raid_id DESC LIMIT 1",(guild_id,))
     raid=await cur.fetchone()
     if not raid: raise GuildFeatureError("There is no active guild raid.")
-    cur=await db.execute("SELECT 1 FROM guild_raid_cooldowns WHERE raid_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)",(raid["raid_id"],user_id))
+    cooldown_sql = (
+        "SELECT 1 FROM guild_raid_cooldowns WHERE raid_id=? AND user_id=? AND CURRENT_TIMESTAMP-last_attack_at<INTERVAL '5 seconds'"
+        if _is_postgres(db)
+        else "SELECT 1 FROM guild_raid_cooldowns WHERE raid_id=? AND user_id=? AND julianday(CURRENT_TIMESTAMP)-julianday(last_attack_at)<(5.0/86400)"
+    )
+    cur=await db.execute(cooldown_sql,(raid["raid_id"],user_id))
     if await cur.fetchone(): raise GuildFeatureError("Guild raid cooldown: wait 5 seconds before attacking again.")
     dealt=min(damage,raid["hp"]); hp=raid["hp"]-dealt; status="won" if hp==0 else "active"
     cur = await db.execute("UPDATE guild_raids SET hp=?,status=? WHERE raid_id=? AND status='active' AND hp=?", (hp, status, raid["raid_id"], raid["hp"]))
