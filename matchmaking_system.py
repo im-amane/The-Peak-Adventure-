@@ -150,6 +150,16 @@ async def init_matchmaking_tables(db: Any) -> None:
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_search ON matchmaking_queue(mode,status,queued_at)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_rating ON matchmaking_queue(mode,status,rating,player_level)",
         "CREATE INDEX IF NOT EXISTS idx_matchmaking_matches_players ON matchmaking_matches(player_one_id,player_two_id,status)",
+        """INSERT INTO matchmaking_battles(
+             match_id,player_one_hp,player_one_max_hp,player_two_hp,player_two_max_hp,
+             turn_user_id,updated_at
+           )
+           SELECT m.match_id,p1.max_hp,p1.max_hp,p2.max_hp,p2.max_hp,m.player_one_id,m.created_at
+           FROM matchmaking_matches m
+           JOIN players p1 ON p1.user_id=m.player_one_id
+           JOIN players p2 ON p2.user_id=m.player_two_id
+           WHERE m.status='matched'
+           ON CONFLICT(match_id) DO NOTHING""",
     )
     nested = await _begin_atomic(db, "matchmaking_init")
     try:
@@ -465,6 +475,11 @@ async def complete_matchmaking_match(
         """UPDATE matchmaking_matches SET status='completed',completed_at=?,winner_id=?
            WHERE match_id=?""",
         (stamp, winner_id, match_id),
+    )
+    await db.execute(
+        """UPDATE matchmaking_battles SET status='finished',winner_id=?,turn_user_id=NULL,
+           turn_count=turn_count+1,updated_at=? WHERE match_id=? AND status='active'""",
+        (winner_id, stamp, match_id),
     )
     await db.execute(
         """UPDATE matchmaking_queue SET status='completed',updated_at=?
