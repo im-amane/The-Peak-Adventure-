@@ -247,6 +247,26 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT COUNT(*) FROM guild_raids WHERE guild_id=6")
   self.assertEqual((await cur.fetchone())[0],1)
 
+
+ async def test_last_guild_disband_rolls_back_if_account_delete_fails(self):
+  await self.db.execute("DELETE FROM guild_members WHERE user_id=2")
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(5,1,999)")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(5,1,'must survive rollback')")
+  await self.db.execute("CREATE TRIGGER block_last_leader_delete BEFORE DELETE ON players WHEN OLD.user_id=1 BEGIN SELECT RAISE(ABORT,'blocked'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
+  self.assertEqual((await cur.fetchone())["leader_id"],1)
+  cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["role"],"leader")
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_invites WHERE guild_id=5")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_chat_messages WHERE guild_id=5")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
+
  async def test_delete_account_removes_guild_chat_history(self):
   await self.db.execute("INSERT INTO guild_chat_messages VALUES(1,5,1,'private guild text')")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
