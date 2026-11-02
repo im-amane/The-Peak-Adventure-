@@ -44,6 +44,11 @@ from party_system import (
     get_party_info, init_party_tables, invite_to_party, leave_party,
     respond_to_party_invite, reward_party_battle, start_party_battle,
 )
+from account_system import (
+    AccountError, delete_player_account, get_settings,
+    init_account_tables, update_settings,
+)
+
 
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
@@ -1808,3 +1813,209 @@ class PartyPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         party, members = await get_party_info(self.db, self.member_id)
         self.assertEqual(party["leader_id"], self.member_id)
         self.assertEqual([row["user_id"] for row in members], [self.member_id])
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class AccountPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 5_000_000_000_000_301
+    bidder_id = 5_000_000_000_000_302
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        tables = (
+            "player_settings", "guild_chat_messages", "guild_war_duel_events",
+            "duels", "auction_listings", "auction_stash", "trades",
+            "premium_wallets", "guild_members", "group_profiles", "group_admins",
+            "group_players", "group_missions", "group_raids", "group_bans",
+            "guild_invites", "guild_announcements", "guild_raid_contributions",
+            "guild_raid_cooldowns", "friend_requests", "party_invites",
+            "party_battle_contributions", "party_battle_cooldowns",
+            "party_battle_rewards", "party_members", "parties", "party_battles",
+            "group_raid_contributions", "group_raid_cooldowns", "battles",
+            "daily_claims", "boss_defeats", "monster_discoveries",
+            "quest_progress", "achievement_progress", "character_appearance",
+            "dungeon_runs", "dungeon_rewards", "player_materials",
+            "crafted_items", "player_worlds", "player_presence",
+            "world_discoveries", "player_story", "story_flags",
+            "story_reward_claims", "players",
+        )
+        for table in tables:
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY, username TEXT,
+                 level INTEGER NOT NULL DEFAULT 1,
+                 xp INTEGER NOT NULL DEFAULT 0,
+                 coins BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id,username,level,coins) VALUES(?,?,10,0),(?,?,5,100)",
+            (self.user_id, "Ash", self.bidder_id, "Mira"),
+        )
+        statements = (
+            "CREATE TABLE guild_members(user_id BIGINT,guild_id BIGINT,role TEXT,joined_at TEXT)",
+            "CREATE TABLE group_profiles(chat_id BIGINT,owner_id BIGINT)",
+            "CREATE TABLE group_admins(chat_id BIGINT,user_id BIGINT,role TEXT)",
+            "CREATE TABLE group_players(chat_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE group_missions(chat_id BIGINT,mission_id TEXT)",
+            "CREATE TABLE group_raids(raid_id BIGINT,chat_id BIGINT)",
+            "CREATE TABLE group_bans(chat_id BIGINT,user_id BIGINT,actor_id BIGINT)",
+            "CREATE TABLE guild_invites(guild_id BIGINT,inviter_id BIGINT,target_id BIGINT)",
+            "CREATE TABLE guild_announcements(guild_id BIGINT,author_id BIGINT)",
+            "CREATE TABLE guild_raid_contributions(raid_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE guild_raid_cooldowns(raid_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE friend_requests(user_low BIGINT,user_high BIGINT)",
+            "CREATE TABLE party_invites(inviter_id BIGINT,target_id BIGINT)",
+            "CREATE TABLE party_battle_contributions(battle_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE party_battle_cooldowns(battle_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE party_battle_rewards(battle_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE party_members(user_id BIGINT,party_id BIGINT)",
+            "CREATE TABLE parties(party_id BIGINT,leader_id BIGINT)",
+            "CREATE TABLE party_battles(battle_id BIGINT,party_id BIGINT)",
+            "CREATE TABLE group_raid_contributions(raid_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE group_raid_cooldowns(raid_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE guild_chat_messages(guild_id BIGINT,user_id BIGINT,message TEXT)",
+            "CREATE TABLE guild_war_duel_events(duel_id BIGINT,war_id BIGINT,winner_id BIGINT)",
+            "CREATE TABLE duels(duel_id BIGINT,challenger_id BIGINT,opponent_id BIGINT)",
+            "CREATE TABLE auction_listings(listing_id BIGINT,seller_id BIGINT,current_bid BIGINT,highest_bidder BIGINT,status TEXT)",
+            "CREATE TABLE auction_stash(stash_id BIGINT,user_id BIGINT)",
+            "CREATE TABLE trades(initiator_id BIGINT,partner_id BIGINT)",
+            "CREATE TABLE premium_wallets(user_id BIGINT,balance BIGINT)",
+        )
+        for statement in statements:
+            await self.db.execute(statement)
+        generic_user_tables = (
+            "battles", "daily_claims", "boss_defeats", "monster_discoveries",
+            "quest_progress", "achievement_progress", "character_appearance",
+            "dungeon_runs", "dungeon_rewards", "player_materials",
+            "crafted_items", "player_worlds", "player_presence",
+            "world_discoveries", "player_story", "story_flags",
+            "story_reward_claims",
+        )
+        for table in generic_user_tables:
+            await self.db.execute(
+                f"CREATE TABLE {table}(user_id BIGINT)"
+            )
+        await self.db.commit()
+        await init_account_tables(self.db)
+
+    async def asyncTearDown(self):
+        tables = (
+            "player_settings", "guild_chat_messages", "guild_war_duel_events",
+            "duels", "auction_listings", "auction_stash", "trades",
+            "premium_wallets", "guild_members", "group_profiles", "group_admins",
+            "group_players", "group_missions", "group_raids", "group_bans",
+            "guild_invites", "guild_announcements", "guild_raid_contributions",
+            "guild_raid_cooldowns", "friend_requests", "party_invites",
+            "party_battle_contributions", "party_battle_cooldowns",
+            "party_battle_rewards", "party_members", "parties", "party_battles",
+            "group_raid_contributions", "group_raid_cooldowns", "battles",
+            "daily_claims", "boss_defeats", "monster_discoveries",
+            "quest_progress", "achievement_progress", "character_appearance",
+            "dungeon_runs", "dungeon_rewards", "player_materials",
+            "crafted_items", "player_worlds", "player_presence",
+            "world_discoveries", "player_story", "story_flags",
+            "story_reward_claims", "players",
+        )
+        for table in tables:
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_settings_use_bigint_ids_and_postgres_catalog_migration(self):
+        self.assertEqual(
+            await get_settings(self.db, self.user_id),
+            {
+                "notifications_enabled": 1,
+                "profile_visibility": "public",
+                "sound_enabled": 1,
+            },
+        )
+        updated = await update_settings(
+            self.db, self.user_id, notifications_enabled=False,
+            profile_visibility="friends", sound_enabled=False,
+        )
+        self.assertEqual(
+            updated,
+            {
+                "notifications_enabled": 0,
+                "profile_visibility": "friends",
+                "sound_enabled": 0,
+            },
+        )
+
+        await self.db.execute("DROP TABLE player_settings")
+        await self.db.execute(
+            """CREATE TABLE player_settings(
+                 user_id BIGINT PRIMARY KEY,
+                 notifications_enabled INTEGER NOT NULL DEFAULT 1,
+                 profile_visibility TEXT NOT NULL DEFAULT 'public',
+                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+               )"""
+        )
+        await self.db.commit()
+        await init_account_tables(self.db)
+        cursor = await self.db.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name='player_settings'"
+        )
+        columns = {row["column_name"] for row in await cursor.fetchall()}
+        self.assertIn("sound_enabled", columns)
+
+    async def test_account_deletion_uses_postgres_catalog_and_cleans_optional_data(self):
+        await self.db.execute(
+            "INSERT INTO guild_chat_messages VALUES(5,?,'private guild text')",
+            (self.user_id,),
+        )
+        await self.db.execute(
+            "INSERT INTO duels VALUES(101,?,?)", (self.user_id, self.bidder_id)
+        )
+        await self.db.execute(
+            "INSERT INTO guild_war_duel_events VALUES(101,50,?)", (self.bidder_id,)
+        )
+        await self.db.execute(
+            "INSERT INTO auction_listings VALUES(1,?,75,?,'active')",
+            (self.user_id, self.bidder_id),
+        )
+        await self.db.execute(
+            "INSERT INTO auction_stash VALUES(1,?)", (self.user_id,)
+        )
+        await self.db.execute(
+            "INSERT INTO trades VALUES(?,?)", (self.user_id, self.bidder_id)
+        )
+        await self.db.execute(
+            "INSERT INTO premium_wallets VALUES(?,500)", (self.user_id,)
+        )
+        await self.db.commit()
+
+        self.assertTrue(await delete_player_account(self.db, self.user_id))
+
+        cursor = await self.db.execute(
+            "SELECT 1 FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.bidder_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 175)
+        for table in (
+            "guild_chat_messages", "guild_war_duel_events", "duels",
+            "auction_stash", "trades", "premium_wallets",
+        ):
+            cursor = await self.db.execute(f"SELECT COUNT(*) AS total FROM {table}")
+            self.assertEqual((await cursor.fetchone())["total"], 0, table)
+        cursor = await self.db.execute(
+            "SELECT status FROM auction_listings WHERE listing_id=1"
+        )
+        self.assertEqual((await cursor.fetchone())["status"], "cancelled")
+
+    async def test_account_deletion_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await delete_player_account(self.db, self.user_id)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT 1 FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertIsNotNone(await cursor.fetchone())
