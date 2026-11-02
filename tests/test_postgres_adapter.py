@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import unittest
 
 from psycopg.errors import UniqueViolation
@@ -51,6 +52,10 @@ from account_system import (
 from auction_system import (
     AuctionError, cancel_listing, create_listing, equip_stashed_item,
     init_auction_tables, list_active_auctions, list_stash, place_bid,
+)
+from premium_system import (
+    PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase,
+    get_premium_balance, get_premium_packages, init_premium_tables,
 )
 
 
