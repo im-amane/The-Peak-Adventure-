@@ -91,6 +91,18 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
  async def test_only_target_leader_can_accept_war(self):
   war=await declare_guild_war(self.db,10,1,20)
   with self.assertRaises(GuildFeatureError): await respond_guild_war(self.db,war,2,True)
+ async def test_repeated_guild_war_callback_scores_one_duel_only(self):
+  war=await declare_guild_war(self.db,10,1,20)
+  await respond_guild_war(self.db,war,4,True)
+  first=await record_guild_war_duel(self.db,1,4,1,duel_id=7001)
+  duplicate=await record_guild_war_duel(self.db,1,4,1,duel_id=7001)
+  self.assertEqual(first["challenger_score"],1)
+  self.assertIsNone(duplicate)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE duel_id=7001")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT challenger_score,target_score FROM guild_wars WHERE war_id=?",(war,))
+  scores=await cur.fetchone()
+  self.assertEqual((scores["challenger_score"],scores["target_score"]),(1,0))
  async def test_guild_war_completes_after_three_wins(self):
   war=await declare_guild_war(self.db,10,1,20)
   await respond_guild_war(self.db,war,4,True)
