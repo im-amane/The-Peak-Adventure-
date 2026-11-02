@@ -1,8 +1,9 @@
-"""Small Psycopg 3 adapter proof-of-concept for the SQLite migration.
+"""Async Psycopg 3 compatibility adapter for the optional PostgreSQL game runtime.
 
-This is not yet wired into the game runtime. It demonstrates only the connection,
-cursor, row-mapping, transaction-state and legacy qmark-placeholder surface needed
-for a staged PostgreSQL migration.
+The adapter exposes the supported subset of the aiosqlite connection/cursor API,
+translates legacy qmark placeholders and SQLite idioms, and coordinates player
+mutations with dedicated PostgreSQL advisory-lock sessions. SQLite remains the
+default runtime unless DATABASE_URL explicitly selects PostgreSQL.
 """
 from __future__ import annotations
 
@@ -276,7 +277,7 @@ def qmark_to_pyformat(sql: str) -> str:
 
 
 class PostgresConnection:
-    """Minimal async connection wrapper used only by the migration proof-of-concept."""
+    """Expose the supported async database API and cross-process player locks."""
 
     dialect = "postgres"
 
