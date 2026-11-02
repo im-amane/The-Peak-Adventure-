@@ -200,5 +200,73 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(await cur.fetchone(), table)
 
 
+
+class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
+    async def test_configured_postgres_url_selects_postgres_connection(self):
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.closed = False
+
+            async def close(self):
+                self.closed = True
+
+        connection = FakePostgresConnection()
+        with patch.object(main, "DATABASE_URL", "postgresql://example.invalid/game"), \
+             patch.object(main.PostgresConnection, "connect", new=__import__("unittest").mock.AsyncMock(return_value=connection)) as connect, \
+             patch.object(main, "init_game_schema", new=__import__("unittest").mock.AsyncMock()) as initialize:
+            previous_db = main.db
+            try:
+                await main.init_db()
+                connect.assert_awaited_once_with("postgresql://example.invalid/game")
+                initialize.assert_awaited_once_with(connection)
+                self.assertIs(main.db, connection)
+                self.assertEqual(main.db.dialect, "postgres")
+            finally:
+                main.db = previous_db
+
+    async def test_schema_failure_closes_connection_and_clears_global(self):
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.closed = False
+
+            async def close(self):
+                self.closed = True
+
+        connection = FakePostgresConnection()
+        with patch.object(main, "DATABASE_URL", "postgresql://example.invalid/game"), \
+             patch.object(main.PostgresConnection, "connect", new=__import__("unittest").mock.AsyncMock(return_value=connection)), \
+             patch.object(main, "init_game_schema", new=__import__("unittest").mock.AsyncMock(side_effect=RuntimeError("schema failed"))):
+            previous_db = main.db
+            try:
+                with self.assertRaisesRegex(RuntimeError, "schema failed"):
+                    await main.init_db()
+                self.assertTrue(connection.closed)
+                self.assertIsNone(main.db)
+            finally:
+                main.db = previous_db
+
+    async def test_postgres_backup_loop_never_runs_sqlite_file_backup(self):
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+        previous_db = main.db
+        try:
+            main.db = FakePostgresConnection()
+            with patch.object(main, "create_backup") as create_backup, \
+                 patch.object(main.runtime_monitor, "record_backup_failure") as record_failure, \
+                 patch.object(main.asyncio, "sleep", side_effect=asyncio.CancelledError):
+                with self.assertRaises(asyncio.CancelledError):
+                    await main.database_backup_loop()
+            create_backup.assert_not_called()
+            record_failure.assert_called_once()
+            self.assertIn("PostgreSQL", record_failure.call_args.args[0])
+        finally:
+            main.db = previous_db
+
+
 if __name__ == "__main__":
     unittest.main()
