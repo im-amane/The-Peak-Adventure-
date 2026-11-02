@@ -1,23 +1,24 @@
 """Small in-memory sliding-window limiter for authenticated game API traffic."""
 from __future__ import annotations
 
+import asyncio
 import time
 import math
-import asyncio
 import weakref
 from collections import deque
 
 
-_CONNECTION_LOCKS = weakref.WeakKeyDictionary()
+_DATABASE_CONNECTION_LOCKS = weakref.WeakKeyDictionary()
 
 
 def _connection_lock(db):
-    """Return one async lock shared by all limiter instances using this connection."""
-    lock = _CONNECTION_LOCKS.get(db)
+    """Serialize transaction scopes that share one async DB connection."""
+    lock = _DATABASE_CONNECTION_LOCKS.get(db)
     if lock is None:
         lock = asyncio.Lock()
-        _CONNECTION_LOCKS[db] = lock
+        _DATABASE_CONNECTION_LOCKS[db] = lock
     return lock
+
 
 
 class SlidingWindowRateLimiter:
@@ -133,13 +134,10 @@ class DatabaseSlidingWindowRateLimiter:
         current = time.time() if now is None else now
         if isinstance(current, bool) or not isinstance(current, (int, float)) or not math.isfinite(current):
             raise ValueError("now must be a finite timestamp")
-
         async with _connection_lock(db):
             return await self._allow_locked(db, key, limit, current)
 
-    async def _allow_locked(
-        self, db, key: str, limit: int, current: float
-    ) -> tuple[bool, int]:
+    async def _allow_locked(self, db, key: str, limit: int, current: float) -> tuple[bool, int]:
         nested = db.in_transaction
         savepoint = "api_rate_limit_check"
         if nested:
