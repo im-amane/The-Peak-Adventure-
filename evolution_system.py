@@ -36,7 +36,7 @@ async def _rollback_transaction(db, nested, savepoint):
 
 async def init_evolution_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_monster_mastery(
-      user_id INTEGER NOT NULL,
+      user_id BIGINT NOT NULL,
       monster_level INTEGER NOT NULL CHECK(monster_level BETWEEN 1 AND 100),
       defeats INTEGER NOT NULL DEFAULT 0 CHECK(defeats >= 0),
       evolved_at TIMESTAMPTZ,
