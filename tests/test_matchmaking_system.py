@@ -21,6 +21,7 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.execute(
             """CREATE TABLE players(
                  user_id INTEGER PRIMARY KEY,
+                 username TEXT,
                  level INTEGER NOT NULL DEFAULT 1,
                  pvp_wins INTEGER NOT NULL DEFAULT 0,
                  pvp_losses INTEGER NOT NULL DEFAULT 0,
