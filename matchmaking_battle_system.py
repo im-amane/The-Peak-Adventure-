@@ -197,10 +197,10 @@ async def perform_matchmaking_battle_action(
                 else row["player_one_id"]
             )
             await _settle_battle(db, row, timeout_winner, stamp)
-            await _commit(db, nested, savepoint)
             state = await get_matchmaking_battle(db, user_id, match_id, now=stamp)
             if state is None:
                 raise MatchmakingBattleError("Match state could not be loaded.")
+            await _commit(db, nested, savepoint)
             state["last_action"] = "timeout"
             state["damage"] = 0
             state["timed_out"] = True
