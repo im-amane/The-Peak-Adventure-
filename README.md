@@ -32,14 +32,14 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - aiohttp
 - aiosqlite / SQLite for local development and current prototype persistence
 
-**Heroku deployment is not ready yet:** the current runtime uses SQLite. Heroku dyno filesystems are ephemeral, so production player data must move to a shared persistent database such as Heroku Postgres before deployment.
+**Heroku deployment is not ready yet:** SQLite remains the default local-development database. The runtime can opt into the Psycopg 3 PostgreSQL adapter by setting `DATABASE_URL`; an invalid PostgreSQL connection or schema initialization fails startup rather than silently falling back to SQLite. This is not yet a production-ready migration: remaining SQLite-specific SQL, versioned migrations, external durable backups, process separation and full PostgreSQL verification must be completed before Heroku deployment.
 - python-dotenv
 - Phaser 3 (loaded by the Mini App)
 
 ## Setup
 1. Create a Telegram bot with @BotFather.
 2. Copy `.env.example` to `.env`.
-3. Set `BOT_TOKEN`, `WEBAPP_URL`, and `ADMIN_IDS`. `WEBAPP_URL` should be the Cloudflare Worker URL once the Python backend is deployed.
+3. Set `BOT_TOKEN`, `WEBAPP_URL`, and `ADMIN_IDS`. `WEBAPP_URL` should be the Cloudflare Worker URL once the Python backend is deployed. For local SQLite development, leave `DATABASE_URL` unset and use `DATABASE_PATH`; PostgreSQL is selected only when `DATABASE_URL` is explicitly configured.
 4. Install Python 3.11+.
 5. Install dependencies and start the combined bot + web server:
 
