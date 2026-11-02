@@ -47,5 +47,5 @@ Deliver the first complete, playable version of The Peak Adventure. The prototyp
 
 - Keep Telegram Stars purchases disabled unless the owner explicitly authorizes live payment testing.
 - Do not provision paid hosting or deploy production resources without explicit authorization.
-- Keep PR #9 open and unmerged until the owner makes the merge decision.
+- PR #9 has been merged after the account-deletion and guild-ownership audit; PR #10 has also been merged after HTTP-level Mini App integration checks.
 - Prototype completion and production readiness are separate statuses. Passing CI alone does not prove live Telegram, mobile-browser, persistence, concurrency, or load readiness.
