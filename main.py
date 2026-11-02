@@ -146,7 +146,13 @@ class DatabaseLockMiddleware:
                     elif callback is not None:
                         await callback.answer("Your game account is suspended.", show_alert=True)
                     return None
-            return await handler(event, data)
+            try:
+                return await handler(event, data)
+            except Exception:
+                # A failed update must not leave partial writes for the next serialized handler to commit.
+                if db is not None and db.in_transaction:
+                    await db.rollback()
+                raise
 
 
 dp.update.outer_middleware(DatabaseLockMiddleware())
@@ -4282,135 +4288,140 @@ async def api_action(request: web.Request):
         return web.json_response({"error": "Unknown battle action."}, status=400)
     user_id = user["id"]
     async with db_lock:
-      async with player_locks[user_id]:
-        cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
-        battle = await cur.fetchone()
-        if not battle:
-            return web.json_response({"error": "There is no active battle."}, status=409)
-        p = await get_player(user_id, user.get("username"))
-        monster = build_battle_monster(battle)
-        class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
-        if action == "flee":
-            message = await finish_battle(user_id, False, escaped=True)
-            return web.json_response({"message": message, "state": await miniapp_state(user)})
-        if action == "potion":
-            if p["potions"] <= 0:
-                return web.json_response({"error": "You have no health potions."}, status=409)
-            heal_amount = min(80, p["max_hp"] - p["hp"])
-            if heal_amount <= 0:
-                return web.json_response({"error": "Your HP is already full."}, status=409)
-            await db.execute(
-                "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
-                (heal_amount, user_id),
-            )
-            damage = 0
-            action_line = f"You recover {heal_amount} HP."
-        else:
-            if action == "skill":
-                if p["skill_cd"] > 0:
-                    return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
-                try:
-                    await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
-                except ManaError as exc:
-                    return web.json_response({"error": str(exc)}, status=409)
-                await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
-            damage, damage_effects = resolve_player_attack(
-                action,
-                player_level=p["level"],
-                class_attack=class_stats["attack"],
-                weapon_attack=p["weapon_attack"],
-                monster_defense=monster["defense"],
-                class_element=class_stats["element"],
-                monster_element=monster["element"],
-                monster_weakness=monster["weakness"],
-                trait_effect=monster["trait_effect"],
-                next_turn=battle["turn_count"] + 1,
-                random_bonus=random.randint(5, 18) if action == "attack" else 0,
-            )
-            if action == "skill":
-                action_line = f"{class_stats['skill']} deals {damage} damage."
-            else:
-                action_line = f"You strike for {damage} damage."
-            for effect in damage_effects:
-                action_line += {
-                    "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
-                    "resisted": f" {monster['element']} resists your matching element.",
-                    "armored": " Its armor absorbs part of the hit.",
-                    "shield": " Its shield blocks part of this strike.",
-                }[effect]
-        new_enemy_hp = max(0, battle["monster_hp"] - damage)
-        turn_count = battle["turn_count"] + 1
-        if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
-            new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
-        if new_enemy_hp == 0:
-            await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
-            await db.execute(
-                "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-                (user_id,),
-            )
-            message = await finish_battle(user_id, True)
-            return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
-        p = await get_player(user_id)
-        combat_result = resolve_enemy_turn(
-            trait_effect=monster["trait_effect"],
-            turn_count=turn_count,
-            monster_hp_before=battle["monster_hp"],
-            monster_hp_after_action=new_enemy_hp,
-            monster_max_hp=monster["hp"],
-            monster_attack_power=monster["attack_power"],
-            monster_speed=monster["speed"],
-            player_hp=p["hp"],
-            player_max_hp=p["max_hp"],
-            player_level=p["level"],
-            armor_defense=p["armor_defense"],
-            class_defense=class_stats["defense"],
-            class_speed=class_stats["speed"],
-            player_damage=damage,
-            action=action,
-            random_bonus=random.randint(-3, 6),
-            dodge_roll=random.randint(1, 100),
-            is_boss=monster["boss"],
-            boss_name=monster["name"],
-            hero_class=p["hero_class"],
-        )
-        new_enemy_hp = combat_result["monster_hp"]
-        enemy_damage = combat_result["enemy_damage"]
-        evaded = combat_result["evaded"]
-        special_turn = combat_result["special_turn"]
-        reflect_damage = combat_result["reflect_damage"]
-        poison_damage = combat_result["poison_damage"]
-        new_hp = combat_result["player_hp"]
-        effect_notes = combat_result["effect_notes"]
-        effect_text = " " + " ".join(effect_notes) if effect_notes else ""
-        await db.execute(
-            "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
-            (new_enemy_hp, turn_count, user_id),
-        )
-        await db.execute(
-            "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-            (new_hp, user_id),
-        )
-        await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
-        if new_hp == 0:
-            message = await finish_battle(user_id, False)
-            return web.json_response({
-                "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
-                "state": await miniapp_state(user),
-            })
-        await db.commit()
-        enemy_text = (
-            f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
-            if evaded else (
-                f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
-                if special_turn else f"{monster['name']} hits you for {enemy_damage}."
-            )
-        )
-        enemy_text += effect_text
-        return web.json_response({
-            "message": f"{action_line} {enemy_text}",
-            "state": await miniapp_state(user),
-        })
+      try:
+        async with player_locks[user_id]:
+          cur = await db.execute("SELECT * FROM battles WHERE user_id=?", (user_id,))
+          battle = await cur.fetchone()
+          if not battle:
+              return web.json_response({"error": "There is no active battle."}, status=409)
+          p = await get_player(user_id, user.get("username"))
+          monster = build_battle_monster(battle)
+          class_stats = HERO_CLASSES.get(p["hero_class"], HERO_CLASSES["Knight"])
+          if action == "flee":
+              message = await finish_battle(user_id, False, escaped=True)
+              return web.json_response({"message": message, "state": await miniapp_state(user)})
+          if action == "potion":
+              if p["potions"] <= 0:
+                  return web.json_response({"error": "You have no health potions."}, status=409)
+              heal_amount = min(80, p["max_hp"] - p["hp"])
+              if heal_amount <= 0:
+                  return web.json_response({"error": "Your HP is already full."}, status=409)
+              await db.execute(
+                  "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
+                  (heal_amount, user_id),
+              )
+              damage = 0
+              action_line = f"You recover {heal_amount} HP."
+          else:
+              if action == "skill":
+                  if p["skill_cd"] > 0:
+                      return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
+                  try:
+                      await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
+                  except ManaError as exc:
+                      return web.json_response({"error": str(exc)}, status=409)
+                  await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
+              damage, damage_effects = resolve_player_attack(
+                  action,
+                  player_level=p["level"],
+                  class_attack=class_stats["attack"],
+                  weapon_attack=p["weapon_attack"],
+                  monster_defense=monster["defense"],
+                  class_element=class_stats["element"],
+                  monster_element=monster["element"],
+                  monster_weakness=monster["weakness"],
+                  trait_effect=monster["trait_effect"],
+                  next_turn=battle["turn_count"] + 1,
+                  random_bonus=random.randint(5, 18) if action == "attack" else 0,
+              )
+              if action == "skill":
+                  action_line = f"{class_stats['skill']} deals {damage} damage."
+              else:
+                  action_line = f"You strike for {damage} damage."
+              for effect in damage_effects:
+                  action_line += {
+                      "weakness": f" Super effective: {class_stats['element']} hits its weakness.",
+                      "resisted": f" {monster['element']} resists your matching element.",
+                      "armored": " Its armor absorbs part of the hit.",
+                      "shield": " Its shield blocks part of this strike.",
+                  }[effect]
+          new_enemy_hp = max(0, battle["monster_hp"] - damage)
+          turn_count = battle["turn_count"] + 1
+          if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
+              new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
+          if new_enemy_hp == 0:
+              await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
+              await db.execute(
+                  "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+                  (user_id,),
+              )
+              message = await finish_battle(user_id, True)
+              return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
+          p = await get_player(user_id)
+          combat_result = resolve_enemy_turn(
+              trait_effect=monster["trait_effect"],
+              turn_count=turn_count,
+              monster_hp_before=battle["monster_hp"],
+              monster_hp_after_action=new_enemy_hp,
+              monster_max_hp=monster["hp"],
+              monster_attack_power=monster["attack_power"],
+              monster_speed=monster["speed"],
+              player_hp=p["hp"],
+              player_max_hp=p["max_hp"],
+              player_level=p["level"],
+              armor_defense=p["armor_defense"],
+              class_defense=class_stats["defense"],
+              class_speed=class_stats["speed"],
+              player_damage=damage,
+              action=action,
+              random_bonus=random.randint(-3, 6),
+              dodge_roll=random.randint(1, 100),
+              is_boss=monster["boss"],
+              boss_name=monster["name"],
+              hero_class=p["hero_class"],
+          )
+          new_enemy_hp = combat_result["monster_hp"]
+          enemy_damage = combat_result["enemy_damage"]
+          evaded = combat_result["evaded"]
+          special_turn = combat_result["special_turn"]
+          reflect_damage = combat_result["reflect_damage"]
+          poison_damage = combat_result["poison_damage"]
+          new_hp = combat_result["player_hp"]
+          effect_notes = combat_result["effect_notes"]
+          effect_text = " " + " ".join(effect_notes) if effect_notes else ""
+          await db.execute(
+              "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
+              (new_enemy_hp, turn_count, user_id),
+          )
+          await db.execute(
+              "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
+              (new_hp, user_id),
+          )
+          await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
+          if new_hp == 0:
+              message = await finish_battle(user_id, False)
+              return web.json_response({
+                  "message": f"{action_line} {monster['name']} hits you for {enemy_damage}.{effect_text} {message}",
+                  "state": await miniapp_state(user),
+              })
+          await db.commit()
+          enemy_text = (
+              f"You evade {monster['name']}'s attack with your {p['hero_class']} speed!"
+              if evaded else (
+                  f"{monster['name']} uses {monster['special_move']} and hits for {enemy_damage}!"
+                  if special_turn else f"{monster['name']} hits you for {enemy_damage}."
+              )
+          )
+          enemy_text += effect_text
+          return web.json_response({
+              "message": f"{action_line} {enemy_text}",
+              "state": await miniapp_state(user),
+          })
 
+      except Exception:
+        if db.in_transaction:
+          await db.rollback()
+        raise
 
 async def database_backup_loop():
     """Take a verified SQLite snapshot on startup and every configured interval."""
