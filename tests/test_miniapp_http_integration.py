@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -105,6 +106,34 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["routes"]["/healthz"]["requests"], 1)
         self.assertIsNotNone(payload["database"]["last_success_at"])
         self.assertNotIn(str(self.user_id), json.dumps(payload))
+
+    async def test_operations_alert_loop_notifies_admin_on_failure_and_recovery(self):
+        from unittest.mock import AsyncMock
+
+        main.ADMIN_IDS = {self.user_id}
+        calls = 0
+
+        async def fake_healthcheck():
+            nonlocal calls
+            calls += 1
+            main.runtime_monitor.record_database_probe(
+                calls > 1,
+                None if calls > 1 else "test outage",
+            )
+            return calls > 1
+
+        bot = type("FakeBot", (), {"send_message": AsyncMock()})()
+        sleep = AsyncMock(side_effect=[None, asyncio.CancelledError()])
+        with patch("main.database_healthcheck", new=fake_healthcheck), patch(
+            "main.asyncio.sleep", new=sleep
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await main.operations_alert_loop(bot)
+
+        self.assertEqual(bot.send_message.await_count, 2)
+        messages = [call.args[1] for call in bot.send_message.await_args_list]
+        self.assertIn("database is unavailable", messages[0])
+        self.assertIn("database connection recovered", messages[1])
 
     async def test_authenticated_http_exploration_persists_active_battle(self):
         response = await self.client.post(
