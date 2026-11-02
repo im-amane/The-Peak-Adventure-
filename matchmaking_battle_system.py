@@ -118,7 +118,7 @@ async def perform_matchmaking_battle_action(
     """Apply one validated player turn and settle match/rating counters atomically."""
     if not _valid_id(user_id) or not _valid_id(match_id):
         raise MatchmakingBattleError("Invalid player or match.")
-    if action not in {"attack", "skill", "surrender"}:
+    if not isinstance(action, str) or action not in {"attack", "skill", "surrender"}:
         raise MatchmakingBattleError("Choose attack, skill, or surrender.")
     random_source = rng or random
     savepoint = "matchmaking_battle_action"
@@ -174,8 +174,8 @@ async def perform_matchmaking_battle_action(
         if winner_id is not None:
             await db.execute(
                 """UPDATE matchmaking_battles SET status='finished',winner_id=?,
-                   turn_user_id=NULL,turn_count=turn_count+1 WHERE match_id=?""",
-                (winner_id, match_id),
+                   turn_user_id=NULL,turn_count=turn_count+1,updated_at=? WHERE match_id=?""",
+                (winner_id, int(time.time()), match_id),
             )
             await db.execute(
                 """UPDATE matchmaking_matches SET status='completed',completed_at=?,
