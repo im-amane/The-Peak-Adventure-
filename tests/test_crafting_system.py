@@ -16,7 +16,39 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    def random(self):return next(self.values)
   result=await award_material_drop(self.db,1,{"level":1,"boss":False},Fixed())
   self.assertEqual(result["id"],"iron_ore")
+  self.assertEqual(result["rarity"],"common")
+  self.assertEqual(result["rarity_label"],"Common")
   self.assertEqual((await get_materials(self.db,1))["iron_ore"],1)
+ async def test_material_drops_follow_level_rarity_bands(self):
+  class Fixed:
+   def __init__(self,choice):self.values=iter([0.0,choice])
+   def random(self):return next(self.values)
+  cases=[
+   (1,0.8,"ember_shard","uncommon"),
+   (25,0.0,"frost_crystal","rare"),
+   (50,0.0,"void_essence","epic"),
+   (80,0.0,"star_dust","legendary"),
+  ]
+  for level,choice,material,rarity in cases:
+   with self.subTest(level=level,material=material):
+    result=await award_material_drop(
+     self.db,1,{"level":level,"boss":False},Fixed(choice)
+    )
+    self.assertEqual((result["id"],result["rarity"]),(material,rarity))
+    self.assertEqual(result["minimum_level"]<=level,True)
+
+ async def test_recipe_listing_exposes_rarity_and_label(self):
+  recipes=await list_recipes(100)
+  self.assertEqual(
+   [(recipe["id"],recipe["rarity"],recipe["rarity_label"]) for recipe in recipes],
+   [
+    ("iron_sword","uncommon","Uncommon"),
+    ("frost_armor","rare","Rare"),
+    ("rift_blade","epic","Epic"),
+    ("celestial_mail","legendary","Legendary"),
+   ],
+  )
+
  async def test_craft_requires_materials(self):
   with self.assertRaises(CraftingError):await craft_item(self.db,1,10,"iron_sword")
  async def test_craft_requires_level(self):
@@ -39,6 +71,7 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    def random(self):return next(self.values)
   result=await award_material_drop(self.db,1,{"level":10,"boss":True},Fixed())
   self.assertEqual(result["quantity"],2)
+  self.assertEqual(result["rarity"],"common")
  async def test_boolean_and_out_of_range_player_levels_are_rejected(self):
   await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
   for level in (True,False,0,101,1.5):
