@@ -61,4 +61,52 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
  async def test_abandoned_dungeon_can_be_reentered(self):
   await enter_dungeon(self.db,1,1,1);await abandon_dungeon(self.db,1)
   self.assertEqual((await enter_dungeon(self.db,1,1,1))["status"],"active")
+
+ async def test_enter_preserves_outer_transaction(self):
+  await self.db.execute("UPDATE players SET coins=coins+5 WHERE user_id=1")
+  await enter_dungeon(self.db,1,1,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM dungeon_runs WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["coins"],0)
+
+ async def test_advance_preserves_outer_transaction(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  await self.db.commit()
+  await self.db.execute("UPDATE players SET coins=coins+5 WHERE user_id=1")
+  await advance_dungeon(self.db,1,state["target_level"])
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual((await get_dungeon_state(self.db,1))["room"],1)
+
+ async def test_reward_claim_preserves_outer_transaction(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  for _ in range(3):
+   state=await get_dungeon_state(self.db,1)
+   await advance_dungeon(self.db,1,state["target_level"])
+  await self.db.commit()
+  await self.db.execute("UPDATE players SET coins=coins+5 WHERE user_id=1")
+  await claim_dungeon_reward(self.db,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM dungeon_rewards WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["coins"],0)
+
+ async def test_abandon_preserves_outer_transaction(self):
+  await enter_dungeon(self.db,1,1,1)
+  await self.db.commit()
+  await self.db.execute("UPDATE players SET coins=coins+5 WHERE user_id=1")
+  await abandon_dungeon(self.db,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual((await get_dungeon_state(self.db,1))["status"],"active")
+
+ async def test_invalid_user_is_rejected_by_state_and_abandon(self):
+  with self.assertRaises(DungeonError): await get_dungeon_state(self.db,True)
+  with self.assertRaises(DungeonError): await abandon_dungeon(self.db,0)
+
 if __name__=="__main__":unittest.main()
