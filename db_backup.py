@@ -64,6 +64,13 @@ def restore_backup(backup_path: str | Path, database_path: str | Path) -> Path:
     destination = Path(database_path)
     if not verify_backup(source):
         raise sqlite3.DatabaseError("Refusing to restore an invalid or unreadable backup")
+    if source.resolve() == destination.resolve():
+        raise sqlite3.OperationalError("Backup source and restore destination must be different files")
+    sidecars = (Path(str(destination) + "-wal"), Path(str(destination) + "-shm"))
+    if any(path.exists() for path in sidecars):
+        raise sqlite3.OperationalError(
+            "Refusing to restore while SQLite WAL/SHM sidecar files exist; stop all database users and resolve the sidecars first"
+        )
     destination.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary_name = tempfile.mkstemp(prefix=".restore-", suffix=".tmp", dir=destination.parent)
     os.close(fd)
