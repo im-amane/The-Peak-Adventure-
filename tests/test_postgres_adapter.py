@@ -3072,6 +3072,7 @@ class PostgresMainRuntimeSmokeTests(unittest.IsolatedAsyncioTestCase):
             "first_name": "PostgresHero",
             "username": "postgreshero",
         })
+        await main.refresh_achievement_progress(self.user_id)
         self.assertEqual(state["first_name"], "PostgresHero")
         self.assertEqual(state["hero_class"], "Knight")
         self.assertEqual(state["social"]["friends"], [])
