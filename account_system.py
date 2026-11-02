@@ -1,5 +1,6 @@
 """Player privacy settings and explicit account deletion."""
 import aiosqlite
+from guild_system import disband_guild
 
 class AccountError(ValueError):
     pass
@@ -89,7 +90,8 @@ async def _delete_player_account_unlocked(db,user_id):
                 await db.execute("UPDATE guild_members SET role='member' WHERE guild_id=?",(guild_id,))
                 await db.execute("UPDATE guild_members SET role='leader' WHERE user_id=?",(successor["user_id"],))
                 await db.execute("UPDATE guilds SET leader_id=? WHERE guild_id=?",(successor["user_id"],guild_id))
-            else: await db.execute("DELETE FROM guilds WHERE guild_id=?",(guild_id,))
+            else:
+                await disband_guild(db,guild_id,user_id)
         await db.execute("DELETE FROM guild_members WHERE user_id=?",(user_id,))
     cur=await db.execute("SELECT chat_id FROM group_profiles WHERE owner_id=?",(user_id,))
     for group in await cur.fetchall():
