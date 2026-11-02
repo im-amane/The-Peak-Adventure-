@@ -5,6 +5,8 @@ from group_system import *
 class GroupTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
   self.db=await aiosqlite.connect(":memory:"); self.db.row_factory=aiosqlite.Row
+  await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY,coins INTEGER NOT NULL DEFAULT 0)")
+  await self.db.executemany("INSERT INTO players(user_id,coins) VALUES(?,0)",[(101,),(202,)])
   await init_group_tables(self.db); await register_group(self.db,-1001,"Peak Raiders",101)
   await set_group_admin(self.db,-1001,202,"admin")
   await record_group_player(self.db,-1001,101,"Ash",10)
