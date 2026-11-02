@@ -12,8 +12,13 @@
         !Number.isFinite(goal.x) || !Number.isFinite(goal.y) || width <= 0 || height <= minY ||
         !Array.isArray(obstacles)) return [];
 
-    // Normalize obstacle geometry once. The same expanded rectangles are
-    // reused by endpoint checks, grid construction and segment collision tests.
+    const cols = Math.ceil(width / cellSize);
+    const rows = Math.ceil(height / cellSize);
+    const totalCells = cols * rows;
+
+    // Normalize obstacle geometry once and discard rectangles that cannot
+    // intersect any valid point in this map. Off-map scenery must not make
+    // every movement-edge collision query more expensive.
     const obstacleRects = obstacles
       .filter(obstacle => obstacle && Number.isFinite(obstacle.x) && Number.isFinite(obstacle.y))
       .map(obstacle => {
@@ -25,7 +30,28 @@
           top: obstacle.y - halfHeight,
           bottom: obstacle.y + halfHeight,
         };
-      });
+      })
+      .filter(rect => rect.right >= 0 && rect.left <= width &&
+        rect.bottom >= minY && rect.top <= height);
+
+    // Build a conservative uniform-grid broadphase for segment collision.
+    // Every rectangle is indexed into all cells touched by its bounds; each
+    // segment queries the cells covered by its bounding box plus one-cell
+    // padding, then the exact clipping test below decides real collisions.
+    const obstacleBuckets = Array.from({ length: totalCells }, () => []);
+    obstacleRects.forEach((rect, obstacleIndex) => {
+      const firstX = Math.max(0, Math.floor(rect.left / cellSize) - 1);
+      const lastX = Math.min(cols - 1, Math.floor(rect.right / cellSize) + 1);
+      const firstY = Math.max(0, Math.floor(rect.top / cellSize) - 1);
+      const lastY = Math.min(rows - 1, Math.floor(rect.bottom / cellSize) + 1);
+      for (let y = firstY; y <= lastY; y++) {
+        for (let x = firstX; x <= lastX; x++) {
+          obstacleBuckets[y * cols + x].push(obstacleIndex);
+        }
+      }
+    });
+    const obstacleSeen = new Uint32Array(obstacleRects.length);
+    let segmentQueryId = 0;
 
     const pointBlocked = point => {
       if (point.x < 0 || point.x > width || point.y < minY || point.y > height) return true;
@@ -39,34 +65,52 @@
     // Grid-cell centers alone are not enough for collision safety: a diagonal
     // edge can clip a thin obstacle even when both adjacent cells are walkable.
     // Use a segment-vs-expanded-rectangle test for every movement edge.
-    const segmentBlocked = (from, to) => obstacleRects.some(rect => {
+    const segmentBlocked = (from, to) => {
+      segmentQueryId++;
+      if (segmentQueryId === 0xffffffff) {
+        obstacleSeen.fill(0);
+        segmentQueryId = 1;
+      }
+      const minX = Math.max(0, Math.floor(Math.min(from.x, to.x) / cellSize) - 1);
+      const maxX = Math.min(cols - 1, Math.floor(Math.max(from.x, to.x) / cellSize) + 1);
+      const minYCell = Math.max(0, Math.floor(Math.min(from.y, to.y) / cellSize) - 1);
+      const maxYCell = Math.min(rows - 1, Math.floor(Math.max(from.y, to.y) / cellSize) + 1);
       const dx = to.x - from.x;
       const dy = to.y - from.y;
-      let enter = 0;
-      let leave = 1;
-      const p = [-dx, dx, -dy, dy];
-      const q = [
-        from.x - rect.left,
-        rect.right - from.x,
-        from.y - rect.top,
-        rect.bottom - from.y,
-      ];
-      for (let index = 0; index < 4; index++) {
-        if (p[index] === 0) {
-          if (q[index] < 0) return false;
-          continue;
+      for (let y = minYCell; y <= maxYCell; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const bucket = obstacleBuckets[y * cols + x];
+          for (const obstacleIndex of bucket) {
+            if (obstacleSeen[obstacleIndex] === segmentQueryId) continue;
+            obstacleSeen[obstacleIndex] = segmentQueryId;
+            const rect = obstacleRects[obstacleIndex];
+            let enter = 0;
+            let leave = 1;
+            const p = [-dx, dx, -dy, dy];
+            const q = [
+              from.x - rect.left,
+              rect.right - from.x,
+              from.y - rect.top,
+              rect.bottom - from.y,
+            ];
+            let intersects = true;
+            for (let index = 0; index < 4; index++) {
+              if (p[index] === 0) {
+                if (q[index] < 0) { intersects = false; break; }
+                continue;
+              }
+              const ratio = q[index] / p[index];
+              if (p[index] < 0) enter = Math.max(enter, ratio);
+              else leave = Math.min(leave, ratio);
+              if (enter > leave) { intersects = false; break; }
+            }
+            if (intersects) return true;
+          }
         }
-        const ratio = q[index] / p[index];
-        if (p[index] < 0) enter = Math.max(enter, ratio);
-        else leave = Math.min(leave, ratio);
-        if (enter > leave) return false;
       }
-      return true;
-    });
+      return false;
+    };
 
-    const cols = Math.ceil(width / cellSize);
-    const rows = Math.ceil(height / cellSize);
-    const totalCells = cols * rows;
     const toCell = point => ({
       x: Math.max(0, Math.min(cols - 1, Math.floor(point.x / cellSize))),
       y: Math.max(0, Math.min(rows - 1, Math.floor(point.y / cellSize))),
