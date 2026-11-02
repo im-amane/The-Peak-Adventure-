@@ -21,6 +21,7 @@ class QuestClaimTests(unittest.IsolatedAsyncioTestCase):
             (self.quest["target"], self.user_id),
         )
         await main.db.commit()
+        await main.refresh_quest_progress(self.user_id)
 
     async def asyncTearDown(self):
         if main.db is not None:
