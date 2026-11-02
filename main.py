@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import aiosqlite
+from postgres_adapter import PostgresConnection
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, BufferedInputFile, LabeledPrice, PreCheckoutQuery
@@ -58,6 +59,8 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 PREMIUM_PAYMENTS_ENABLED = os.getenv("ENABLE_TELEGRAM_STARS", "false").strip().lower() in {"1", "true", "yes", "on"}
 ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", ""))
+# PostgreSQL is opt-in; an invalid URL must fail startup rather than silently falling back.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", str(Path(DB_PATH).parent / "backups"))
 BACKUP_INTERVAL_SECONDS = max(3600, int(os.getenv("BACKUP_INTERVAL_SECONDS", "21600")))
@@ -399,10 +402,22 @@ async def init_game_schema(connection) -> None:
 
 
 async def init_db():
+    """Open the explicitly configured database and initialize the game schema."""
     global db
-    db = await aiosqlite.connect(DB_PATH)
-    db.row_factory = aiosqlite.Row
-    await init_game_schema(db)
+    if DATABASE_URL:
+        connection = await PostgresConnection.connect(DATABASE_URL)
+    else:
+        connection = await aiosqlite.connect(DB_PATH)
+        connection.row_factory = aiosqlite.Row
+
+    db = connection
+    try:
+        await init_game_schema(connection)
+    except Exception:
+        # Do not leave a half-initialized connection available to request handlers.
+        db = None
+        await connection.close()
+        raise
 
 async def get_player(user_id: int, username: str | None = None):
     """Read/update a player without committing a transaction owned by the caller."""
@@ -4833,17 +4848,25 @@ async def api_action(request: web.Request):
         raise
 
 async def database_backup_loop():
-    """Take a verified SQLite snapshot on startup and every configured interval."""
+    """Back up SQLite locally; never misrepresent a local file as a PostgreSQL backup."""
     while True:
-        try:
-            backup_path = await asyncio.to_thread(
-                create_backup, DB_PATH, BACKUP_DIR, BACKUP_RETENTION
+        if getattr(db, "dialect", "sqlite") == "postgres":
+            message = (
+                "PostgreSQL is active, but no durable PostgreSQL backup provider is "
+                "configured; local SQLite snapshots are intentionally disabled."
             )
-            runtime_monitor.record_backup_success(str(backup_path))
-            log.info("Verified database backup created: %s", backup_path)
-        except Exception as exc:
-            runtime_monitor.record_backup_failure(f"{type(exc).__name__}: {exc}")
-            log.exception("Database backup failed; live game database remains untouched")
+            runtime_monitor.record_backup_failure(message)
+            log.error(message)
+        else:
+            try:
+                backup_path = await asyncio.to_thread(
+                    create_backup, DB_PATH, BACKUP_DIR, BACKUP_RETENTION
+                )
+                runtime_monitor.record_backup_success(str(backup_path))
+                log.info("Verified database backup created: %s", backup_path)
+            except Exception as exc:
+                runtime_monitor.record_backup_failure(f"{type(exc).__name__}: {exc}")
+                log.exception("Database backup failed; live game database remains untouched")
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
 
 
