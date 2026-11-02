@@ -1038,11 +1038,11 @@ async def create_trade(message: Message):
         await message.answer("One of these players already has a pending or open trade.")
         return
     cur = await db.execute(
-        "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
+        "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending') RETURNING trade_id",
         (message.chat.id, initiator_id, partner_id),
     )
+    trade_id = (await cur.fetchone())["trade_id"]
     await db.commit()
-    trade_id = cur.lastrowid
     await message.answer(
         f"🤝 <b>Trade invitation #{trade_id}</b>\n"
         f"{escape(initiator['username'] or 'Player 1')} wants to trade with "
