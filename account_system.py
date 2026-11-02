@@ -116,9 +116,24 @@ async def _delete_player_account_unlocked(db,user_id):
         cur=await db.execute("SELECT user_id FROM group_admins WHERE chat_id=? AND user_id!=? ORDER BY role DESC,user_id LIMIT 1",(chat_id,user_id))
         successor=await cur.fetchone()
         if successor:
-            await db.execute("UPDATE group_admins SET role='admin' WHERE chat_id=? AND role='owner'",(chat_id,))
-            await db.execute("UPDATE group_admins SET role='owner' WHERE chat_id=? AND user_id=?",(chat_id,successor["user_id"]))
-            await db.execute("UPDATE group_profiles SET owner_id=? WHERE chat_id=?",(successor["user_id"],chat_id))
+            cur=await db.execute(
+                "UPDATE group_admins SET role='admin' WHERE chat_id=? AND user_id=? AND role='owner'",
+                (chat_id,user_id),
+            )
+            if cur.rowcount!=1:
+                raise AccountError("Group ownership changed during account deletion.")
+            cur=await db.execute(
+                "UPDATE group_admins SET role='owner' WHERE chat_id=? AND user_id=? AND role='admin'",
+                (chat_id,successor["user_id"]),
+            )
+            if cur.rowcount!=1:
+                raise AccountError("Group owner successor could not be promoted.")
+            cur=await db.execute(
+                "UPDATE group_profiles SET owner_id=? WHERE chat_id=? AND owner_id=?",
+                (successor["user_id"],chat_id,user_id),
+            )
+            if cur.rowcount!=1:
+                raise AccountError("Group ownership record could not be updated.")
         else:
             await db.execute("DELETE FROM group_raid_contributions WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
             await db.execute("DELETE FROM group_raid_cooldowns WHERE raid_id IN (SELECT raid_id FROM group_raids WHERE chat_id=?)",(chat_id,))
@@ -145,7 +160,13 @@ async def _delete_player_account_unlocked(db,user_id):
         if party_row and party_row["leader_id"]==user_id:
             cur=await db.execute("SELECT user_id FROM party_members WHERE party_id=? AND user_id!=? ORDER BY joined_at,user_id LIMIT 1",(party_id,user_id))
             successor=await cur.fetchone()
-            if successor: await db.execute("UPDATE parties SET leader_id=? WHERE party_id=?",(successor["user_id"],party_id))
+            if successor:
+                cur=await db.execute(
+                    "UPDATE parties SET leader_id=? WHERE party_id=? AND leader_id=?",
+                    (successor["user_id"],party_id,user_id),
+                )
+                if cur.rowcount!=1:
+                    raise AccountError("Party leadership changed during account deletion.")
             else:
                 await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)",(party_id,))
                 await db.execute("DELETE FROM party_battle_cooldowns WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)",(party_id,))
