@@ -228,6 +228,32 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         cur=await main.db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
         self.assertIsNone(await cur.fetchone())
 
+    async def test_miniapp_exploration_is_blocked_during_active_pvp_match(self):
+        user_id = self.user["id"]
+        opponent_id = user_id + 1
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.get_player(opponent_id, "PvpOpponent")
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+            (opponent_id,),
+        )
+        await main.db.commit()
+        await main.join_matchmaking(main.db, user_id, "casual")
+        await main.join_matchmaking(main.db, opponent_id, "casual")
+
+        before = await main.get_stamina(main.db, user_id)
+        response = await self._call(main.api_explore, {})
+        after = await main.get_stamina(main.db, user_id)
+
+        self.assertEqual(response.status, 409)
+        self.assertIn("active PvP match", json.loads(response.text)["error"])
+        self.assertEqual(after["stamina"], before["stamina"])
+        cur = await main.db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+        self.assertIsNone(await cur.fetchone())
+
     async def test_miniapp_exploration_rolls_back_stamina_when_battle_insert_fails(self):
         user_id = self.user["id"]
         await main.db.execute(
