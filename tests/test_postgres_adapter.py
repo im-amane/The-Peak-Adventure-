@@ -3358,3 +3358,61 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses, {"queued", "matched"})
         cursor = await self.db_one.execute("SELECT COUNT(*) AS count FROM matchmaking_matches")
         self.assertEqual((await cursor.fetchone())["count"], 1)
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresPremiumShopConcurrencyTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db_one = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.db_two = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_premium_shop_" + uuid.uuid4().hex[:12]
+        await self.db_one.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.db_one.commit()
+        for db in (self.db_one, self.db_two):
+            await db.execute(f'SET search_path TO "{self.schema}"')
+            await db.commit()
+        await main.init_game_schema(self.db_one)
+        await self.db_one.execute(
+            "INSERT INTO players(user_id,username,potions) VALUES(?,?,2)",
+            (9_200_000_001, "PremiumBuyer"),
+        )
+        await init_premium_tables(self.db_one)
+        await self.db_one.execute(
+            "INSERT INTO premium_wallets(user_id,balance) VALUES(?,?)",
+            (9_200_000_001, 40),
+        )
+        await self.db_one.commit()
+
+    async def asyncTearDown(self):
+        for db in (self.db_one, self.db_two):
+            if db.in_transaction:
+                await db.rollback()
+        await self.db_one.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.db_one.commit()
+        await self.db_one.close()
+        await self.db_two.close()
+
+    async def test_concurrent_shop_purchases_cannot_spend_same_wallet_balance_twice(self):
+        outcomes = await asyncio.gather(
+            buy_premium_item(self.db_one, 9_200_000_001, "potion_bundle"),
+            buy_premium_item(self.db_two, 9_200_000_001, "potion_bundle"),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(isinstance(item, dict) for item in outcomes), 1)
+        self.assertEqual(sum(isinstance(item, PremiumError) for item in outcomes), 1)
+
+        cursor = await self.db_one.execute(
+            "SELECT balance FROM premium_wallets WHERE user_id=?",
+            (9_200_000_001,),
+        )
+        self.assertEqual((await cursor.fetchone())["balance"], 0)
+        cursor = await self.db_one.execute(
+            "SELECT potions FROM players WHERE user_id=?",
+            (9_200_000_001,),
+        )
+        self.assertEqual((await cursor.fetchone())["potions"], 7)
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM premium_shop_purchases WHERE user_id=?",
+            (9_200_000_001,),
+        )
+        self.assertEqual((await cursor.fetchone())["count"], 1)

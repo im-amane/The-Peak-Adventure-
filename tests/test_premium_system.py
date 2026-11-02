@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 import sqlite3
 import aiosqlite
 from unittest.mock import patch
@@ -6,7 +7,7 @@ from unittest.mock import patch
 from premium_system import (
     PREMIUM_SHOP_ITEMS, PremiumError, buy_premium_item, consume_xp_boost,
     credit_premium_purchase, get_premium_balance, get_premium_packages,
-    init_premium_tables, make_invoice_payload, parse_invoice_payload,
+    init_premium_tables, make_invoice_payload, parse_invoice_payload, _for_update,
 )
 
 
@@ -56,6 +57,11 @@ class PremiumSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await get_premium_balance(self.db, 101), package["gems"])
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM premium_transactions")
         self.assertEqual((await cur.fetchone())["total"], 1)
+
+    async def test_wallet_lock_is_added_only_for_postgres_shop_transactions(self):
+        query = "SELECT balance FROM premium_wallets WHERE user_id=?"
+        self.assertEqual(_for_update(SimpleNamespace(dialect="sqlite"), query), query)
+        self.assertEqual(_for_update(SimpleNamespace(dialect="postgres"), query), query + " FOR UPDATE")
 
     async def test_shop_purchases_apply_effects_and_deduct_gems(self):
         await self.db.execute("INSERT INTO premium_wallets(user_id,balance) VALUES(101,200)")
