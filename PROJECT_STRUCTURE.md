@@ -244,12 +244,13 @@ Coverage is implementation-checklist progress, not proof of live production read
 6. Mark a feature fully complete only after the required verification has passed.
 
 ## Latest automated verification
-- GitHub Actions run: **#992 — SUCCESS**.
-- Python suite: **374 tests passed**.
+- GitHub Actions PR run: **#1130 — SUCCESS** on the HTTP integration-test branch.
+- Python suite: **518 tests passed**.
 - Mini App pathfinding Node tests: **10 passed**.
 - Cloudflare Worker Node tests: **35 passed**.
 - Python compile and `import main`: passed.
 - Cloudflare embedded asset parity and JavaScript syntax checks: passed.
+- HTTP-level Mini App checks: Telegram initData HMAC auth, unauthenticated rejection, health endpoint, static entrypoint, rate limiting, exploration and persisted active-battle state.
 
 ## Remaining launch validation
 - Mini App browser and real Android Telegram device QA.
