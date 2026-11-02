@@ -1282,15 +1282,21 @@ async def party_command(message: Message):
             if existing_battle and existing_battle["status"] == "active":
                 raise PartyError("Your party already has an active co-op encounter.")
             try:
-                await consume_stamina(db, user_id, EXPLORE_COST)
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
+                    battle_id = await start_party_battle(
+                        db, party["party_id"], user_id, monster_level, monster["name"],
+                        monster["hp"] * max(2, len(members) * 2),
+                    )
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    raise
             except StaminaError as exc:
                 state = await get_stamina(db, user_id)
                 await message.answer(escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}.")
                 return
-            battle_id = await start_party_battle(
-                db, party["party_id"], user_id, monster_level, monster["name"],
-                monster["hp"] * max(2, len(members) * 2),
-            )
             notice = (
                 f"🧭 <b>Party expedition #{battle_id}</b>\\n"
                 f"{escape(monster['name'])} · Lv.{monster_level} · World {world_id}\\n"
