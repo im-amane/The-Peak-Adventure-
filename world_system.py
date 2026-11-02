@@ -1,6 +1,4 @@
 """Unlockable regions and safe fast travel for The Peak Adventure."""
-import sqlite3
-
 from game_rules import nearby_monster_levels
 
 WORLD_NAMES=(
@@ -69,10 +67,10 @@ async def init_world_tables(db):
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS player_worlds(
           user_id INTEGER PRIMARY KEY,current_world INTEGER NOT NULL DEFAULT 1 CHECK(current_world BETWEEN 1 AND 10),
-          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
         await db.execute("""CREATE TABLE IF NOT EXISTS world_discoveries(
-          user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          user_id INTEGER NOT NULL,world_id INTEGER NOT NULL,discovered_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           PRIMARY KEY(user_id,world_id)
         )""")
         await _commit_transaction(db, nested, "init_world_tables")
@@ -159,10 +157,13 @@ async def discover_world_landmark(db,user_id,player_level,world_id):
         raise WorldError("This landmark is beyond your unlocked worlds.")
     nested=await _begin_transaction(db,"discover_world_landmark")
     try:
-        await db.execute(
-            "INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)",
+        cur=await db.execute(
+            """INSERT INTO world_discoveries(user_id,world_id) VALUES(?,?)
+               ON CONFLICT(user_id,world_id) DO NOTHING""",
             (user_id,world_id),
         )
+        if cur.rowcount!=1:
+            raise WorldError("You have already discovered this landmark.")
         reward=100+world_id*25
         potions=1 if world_id%2 else 2
         cur=await db.execute(
@@ -173,9 +174,6 @@ async def discover_world_landmark(db,user_id,player_level,world_id):
             raise WorldError("Player account not found.")
         await _commit_transaction(db,nested,"discover_world_landmark")
         return {"landmark":WORLD_LANDMARKS[world_id-1][0],"coins":reward,"potions":potions}
-    except sqlite3.IntegrityError as exc:
-        await _rollback_transaction(db,nested,"discover_world_landmark")
-        raise WorldError("You have already discovered this landmark.") from exc
     except Exception:
         await _rollback_transaction(db,nested,"discover_world_landmark")
         raise
