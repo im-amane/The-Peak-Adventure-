@@ -55,6 +55,31 @@ async def _has_active_battle(db, user_id):
     cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
     return await cur.fetchone() is not None
 
+async def _return_listing_item(db, seller_id, slot, item_name, item_stat, listing_id, now):
+    """Return escrowed gear without overwriting equipment acquired during listing."""
+    stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
+    cur = await db.execute(
+        f"SELECT {slot},{stat_column} FROM players WHERE user_id=?",
+        (seller_id,),
+    )
+    equipped = await cur.fetchone()
+    if not equipped:
+        return False
+    current_name, current_stat = equipped[slot], equipped[stat_column]
+    if (current_name, current_stat) != DEFAULTS[slot]:
+        await db.execute(
+            """INSERT INTO auction_stash
+               (user_id,slot,item_name,item_stat,source_listing_id,created_at)
+               VALUES(?,?,?,?,?,?)""",
+            (seller_id, slot, current_name, current_stat, listing_id, now),
+        )
+    await db.execute(
+        f"UPDATE players SET {slot}=?,{stat_column}=? WHERE user_id=?",
+        (item_name, item_stat, seller_id),
+    )
+    return True
+
+
 async def _settle_due(db, now):
     nested = db.in_transaction
     savepoint = "auction_expiry_settlement"
@@ -125,16 +150,19 @@ async def _settle_due(db, now):
                             "UPDATE players SET coins=coins+? WHERE user_id=?",
                             (row["current_bid"], row["highest_bidder"]),
                         )
+                    if seller_exists:
+                        await _return_listing_item(
+                            db, row["seller_id"], row["slot"], row["item_name"],
+                            row["item_stat"], row["listing_id"], now,
+                        )
                     await db.execute(
                         "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
                         (row["listing_id"],),
                     )
             else:
-                column = "weapon" if row["slot"] == "weapon" else "armor"
-                stat_column = "weapon_attack" if row["slot"] == "weapon" else "armor_defense"
-                await db.execute(
-                    f"UPDATE players SET {column}=?, {stat_column}=? WHERE user_id=?",
-                    (row["item_name"], row["item_stat"], row["seller_id"]),
+                await _return_listing_item(
+                    db, row["seller_id"], row["slot"], row["item_name"],
+                    row["item_stat"], row["listing_id"], now,
                 )
                 await db.execute(
                     "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
@@ -233,9 +261,10 @@ async def cancel_listing(db, seller_id, listing_id, now=None):
             raise AuctionError("Active auction not found for your account.")
         if row["highest_bidder"] is not None:
             raise AuctionError("An auction with bids cannot be cancelled.")
-        column = row["slot"]
-        stat_column = "weapon_attack" if column == "weapon" else "armor_defense"
-        await db.execute(f"UPDATE players SET {column}=?,{stat_column}=? WHERE user_id=?", (row["item_name"],row["item_stat"],seller_id))
+        await _return_listing_item(
+            db, seller_id, row["slot"], row["item_name"], row["item_stat"],
+            row["listing_id"], now,
+        )
         await db.execute("UPDATE auction_listings SET status='cancelled' WHERE listing_id=?", (listing_id,))
         await db.commit()
     except Exception:
