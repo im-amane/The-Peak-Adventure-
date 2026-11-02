@@ -122,7 +122,8 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             )
             return calls > 1
 
-        bot = type("FakeBot", (), {"send_message": AsyncMock()})()
+        bot = type("FakeBot", (), {})()
+        bot.send_message = AsyncMock()
         sleep = AsyncMock(side_effect=[None, asyncio.CancelledError()])
         with patch("main.database_healthcheck", new=fake_healthcheck), patch(
             "main.asyncio.sleep", new=sleep
