@@ -4510,13 +4510,13 @@ async def api_matchmaking(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Matchmaking payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or payload.get("action") not in {"join", "cancel"}:
+    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in {"join", "cancel"}:
         return web.json_response({"error": "Choose a valid matchmaking action."}, status=400)
     action = payload["action"]
     expected = {"action", "mode"} if action == "join" else {"action"}
     if set(payload) != expected:
         return web.json_response({"error": "Unexpected matchmaking request fields."}, status=400)
-    if action == "join" and payload.get("mode") not in {"casual", "ranked"}:
+    if action == "join" and (not isinstance(payload.get("mode"), str) or payload["mode"] not in {"casual", "ranked"}):
         return web.json_response({"error": "Choose casual or ranked matchmaking."}, status=400)
     user_id = user["id"]
     try:
