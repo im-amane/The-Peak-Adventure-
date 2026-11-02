@@ -343,7 +343,7 @@ async def get_player(user_id: int, username: str | None = None):
         await db.execute("SAVEPOINT get_player")
     try:
         await db.execute(
-            "INSERT OR IGNORE INTO players(user_id, username) VALUES (?, ?)",
+            "INSERT INTO players(user_id, username) VALUES (?, ?) ON CONFLICT(user_id) DO NOTHING",
             (user_id, username or "Adventurer"),
         )
         if username:
@@ -520,7 +520,7 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         await db.execute("INSERT INTO battles(user_id, monster_level, monster_hp, is_elite, is_evolved) VALUES (?, ?, ?, ?, ?)",
                          (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)))
         await db.execute(
-            "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+            "INSERT INTO monster_discoveries(user_id, monster_level) VALUES (?, ?) ON CONFLICT(user_id,monster_level) DO NOTHING",
             (user_id, monster_level),
         )
         await db.commit()
@@ -847,7 +847,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         max_hp=?, hp=min(?, ?) WHERE user_id=?""",
         (new_xp, new_level, reward_coins, new_max, p["hp"] + 25, new_max, user_id))
     if m["boss"]:
-        await db.execute("INSERT OR IGNORE INTO boss_defeats(user_id, monster_level) VALUES (?, ?)", (user_id, m["level"]))
+        await db.execute("INSERT INTO boss_defeats(user_id, monster_level) VALUES (?, ?) ON CONFLICT(user_id,monster_level) DO NOTHING", (user_id, m["level"]))
     cur = await db.execute("SELECT guild_id FROM guild_members WHERE user_id=?", (user_id,))
     membership = await cur.fetchone()
     if membership:
@@ -3906,7 +3906,7 @@ async def api_explore(request: web.Request):
                     (user_id, monster_level, battle_monster["hp"], int(elite), int(evolved)),
                 )
                 await db.execute(
-                    "INSERT OR IGNORE INTO monster_discoveries(user_id, monster_level) VALUES (?, ?)",
+                    "INSERT INTO monster_discoveries(user_id, monster_level) VALUES (?, ?) ON CONFLICT(user_id,monster_level) DO NOTHING",
                     (user_id, monster_level),
                 )
                 await db.commit()
