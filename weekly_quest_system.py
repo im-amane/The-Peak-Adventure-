@@ -46,13 +46,19 @@ def current_week_key(now=None):
 
 
 async def init_weekly_tables(db):
-    await db.execute("""CREATE TABLE IF NOT EXISTS player_weekly_quests(
+    savepoint = "init_weekly_tables"
+    nested = await _begin_transaction(db, savepoint)
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS player_weekly_quests(
       user_id BIGINT NOT NULL,week_key TEXT NOT NULL,quest_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0 CHECK(progress>=0),
       claimed INTEGER NOT NULL DEFAULT 0 CHECK(claimed IN (0,1)),
       PRIMARY KEY(user_id,week_key,quest_id)
     )""")
-    await db.commit()
+        await _commit_transaction(db, nested, savepoint)
+    except Exception:
+        await _rollback_transaction(db, nested, savepoint)
+        raise
 
 
 async def _ensure_week(db, user_id, week_key):

@@ -988,6 +988,25 @@ class PostgresQuestServiceTests(unittest.IsolatedAsyncioTestCase):
         await init_weekly_tables(self.db)
         await self.db.commit()
 
+    async def test_quest_schema_initialization_preserves_outer_transaction(self):
+        await self.db.execute("DROP TABLE player_daily_missions")
+        await self.db.execute("DROP TABLE player_weekly_quests")
+        await self.db.commit()
+
+        await self.db.execute("BEGIN")
+        await init_daily_mission_tables(self.db)
+        await init_weekly_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+
+        for table in ("player_daily_missions", "player_weekly_quests"):
+            cursor = await self.db.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema=current_schema() AND table_name=?",
+                (table,),
+            )
+            self.assertIsNone(await cursor.fetchone(), table)
+
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
 class PostgresReportServiceTests(unittest.IsolatedAsyncioTestCase):
