@@ -142,9 +142,9 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(MatchmakingBattleError, "Not enough mana"):
             await perform_matchmaking_battle_action(
                 self.db, 1, match_id, "skill",
-                {"Knight": {"attack": 8, "defense": 12}},
+                {"Knight": {"attack": 8, "defense": 12}}, now=1002,
             )
-        battle = await get_matchmaking_battle(self.db, 1, match_id)
+        battle = await get_matchmaking_battle(self.db, 1, match_id, now=1002)
         self.assertTrue(battle["is_my_turn"])
         self.assertEqual(battle["opponent_hp"], 100)
         cursor = await self.db.execute("SELECT mana FROM player_mana WHERE user_id=1")
