@@ -2230,6 +2230,10 @@ class PremiumPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         row = await cursor.fetchone()
         self.assertGreater(row["transaction_id"], 0)
         self.assertEqual((row["user_id"], row["telegram_charge_id"]), (self.user_id, "pg-charge-001"))
+        await self.db.execute(
+            "INSERT INTO players(user_id,potions) VALUES(?,0)", (self.user_id + 1,)
+        )
+        await self.db.commit()
         with self.assertRaisesRegex(PremiumError, "different purchase"):
             await credit_premium_purchase(
                 self.db, self.user_id + 1, "crest", package["stars"], "pg-charge-001"
