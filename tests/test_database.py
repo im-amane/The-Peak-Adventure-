@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from pathlib import Path
 
 import main
@@ -215,7 +215,7 @@ class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
 
         connection = FakePostgresConnection()
         with patch.object(main, "DATABASE_URL", "postgresql://example.invalid/game"), \
-             patch.object(main.PostgresConnection, "connect", new=__import__("unittest").mock.AsyncMock(return_value=connection)) as connect, \
+             patch.object(main.PostgresConnection, "connect", new=AsyncMock(return_value=connection)) as connect, \
              patch.object(main, "init_game_schema", new=__import__("unittest").mock.AsyncMock()) as initialize:
             previous_db = main.db
             try:
