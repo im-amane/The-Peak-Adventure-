@@ -4,6 +4,8 @@ import time
 import unittest
 import uuid
 
+import aiosqlite
+
 from psycopg.errors import UniqueViolation
 
 from postgres_adapter import PostgresConnection, qmark_to_pyformat
@@ -2983,3 +2985,61 @@ class PostgresBattleScalarSqlTests(unittest.IsolatedAsyncioTestCase):
         )
         row = await cursor.fetchone()
         self.assertEqual(row["progress"], 5)
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.sqlite = await aiosqlite.connect(":memory:")
+        self.sqlite.row_factory = aiosqlite.Row
+        await main.init_game_schema(self.sqlite)
+
+        self.postgres = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.schema = "peak_parity_" + uuid.uuid4().hex[:12]
+        await self.postgres.execute(f'CREATE SCHEMA "{self.schema}"')
+        await self.postgres.commit()
+        await self.postgres.execute(f'SET search_path TO "{self.schema}"')
+        await main.init_game_schema(self.postgres)
+
+    async def asyncTearDown(self):
+        if self.postgres.in_transaction:
+            await self.postgres.rollback()
+        await self.postgres.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
+        await self.postgres.commit()
+        await self.postgres.close()
+        await self.sqlite.close()
+
+    async def test_all_service_tables_and_columns_match_between_sqlite_and_postgres(self):
+        cursor = await self.sqlite.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        sqlite_tables = {row["name"] for row in await cursor.fetchall()}
+        sqlite_columns = {}
+        for table in sqlite_tables:
+            cursor = await self.sqlite.execute(f'PRAGMA table_info("{table}")')
+            sqlite_columns[table] = {row["name"] for row in await cursor.fetchall()}
+
+        cursor = await self.postgres.execute(
+            """SELECT table_name,column_name FROM information_schema.columns
+               WHERE table_schema=current_schema()"""
+        )
+        postgres_columns = {}
+        for row in await cursor.fetchall():
+            postgres_columns.setdefault(row["table_name"], set()).add(row["column_name"])
+        postgres_tables = set(postgres_columns)
+
+        self.assertEqual(
+            sqlite_tables,
+            postgres_tables,
+            "SQLite/PostgreSQL table mismatch: "
+            f"SQLite-only={sorted(sqlite_tables - postgres_tables)}, "
+            f"PostgreSQL-only={sorted(postgres_tables - sqlite_tables)}",
+        )
+        for table in sorted(sqlite_tables):
+            self.assertEqual(
+                sqlite_columns[table],
+                postgres_columns[table],
+                f"Column mismatch for {table}: "
+                f"SQLite-only={sorted(sqlite_columns[table] - postgres_columns[table])}, "
+                f"PostgreSQL-only={sorted(postgres_columns[table] - sqlite_columns[table])}",
+            )
