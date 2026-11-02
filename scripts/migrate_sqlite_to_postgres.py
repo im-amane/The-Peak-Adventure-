@@ -37,12 +37,19 @@ def _inspect_sqlite_schema(source: sqlite3.Connection) -> dict[str, list[dict[st
         table = row["name"]
         quoted_table = _quote_identifier(table)
         columns = source.execute(f"PRAGMA table_info({quoted_table})").fetchall()
+        table_sql_row = source.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        has_autoincrement = "AUTOINCREMENT" in ((table_sql_row["sql"] or "").upper())
         schema[table] = [
             {
                 "name": column["name"],
                 "declared_type": column["type"] or "",
                 "not_null": bool(column["notnull"]) or bool(column["pk"]),
                 "primary_key_position": int(column["pk"]),
+                "default": column["dflt_value"],
+                "is_autoincrement": bool(column["pk"] and has_autoincrement),
             }
             for column in columns
         ]
@@ -118,13 +125,27 @@ async def _inspect_schema_constraints(
     shared_tables = set(sqlite_schema) & set(postgres_schema)
     sqlite_primary_keys: dict[str, tuple[str, ...]] = {}
     sqlite_foreign_keys = set()
-    sqlite_unique_indexes = set()
+    sqlite_indexes = set()
+    sqlite_check_counts: dict[str, int] = {}
 
     for table in shared_tables:
         quoted_table = _quote_identifier(table)
         columns = source.execute(f"PRAGMA table_info({quoted_table})").fetchall()
         sqlite_primary_keys[table] = tuple(
             row["name"] for row in sorted(columns, key=lambda item: item["pk"]) if row["pk"]
+        )
+        table_sql_row = source.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        ).fetchone()
+        table_sql = table_sql_row["sql"] or ""
+        without_quoted_literals = re.sub(
+            r"'(?:''|[^'])*'",
+            "",
+            table_sql,
+        )
+        sqlite_check_counts[table] = len(
+            re.findall(r"\bCHECK\s*\(", without_quoted_literals, re.IGNORECASE)
         )
         for fk in source.execute(f"PRAGMA foreign_key_list({quoted_table})").fetchall():
             referenced_column = fk["to"]
@@ -146,17 +167,26 @@ async def _inspect_schema_constraints(
                 fk["on_update"].upper(), fk["on_delete"].upper(),
             ))
         for index in source.execute(f"PRAGMA index_list({quoted_table})").fetchall():
-            if not index["unique"] or index["origin"] == "pk":
-                continue
             index_columns = source.execute(
                 f"PRAGMA index_info({_quote_identifier(index['name'])})"
             ).fetchall()
             if not index_columns or not all(column["name"] for column in index_columns):
                 continue
-            signature = tuple(sorted(column["name"] for column in index_columns))
-            if signature == tuple(sorted(sqlite_primary_keys[table])):
+            ordered_columns = tuple(column["name"] for column in index_columns)
+            if index["unique"] and tuple(sorted(ordered_columns)) == tuple(
+                sorted(sqlite_primary_keys[table])
+            ):
+                # Ignore redundant UNIQUE constraints identical to the primary key.
                 continue
-            sqlite_unique_indexes.add((table, signature))
+            signature = (
+                table,
+                bool(index["unique"]),
+                tuple(sorted(ordered_columns)) if index["unique"] else ordered_columns,
+                bool(index["partial"]),
+            )
+            if index["origin"] != "pk":
+                sqlite_indexes.add(signature)
+
 
     cursor = await target.execute(
         """SELECT tc.table_name,kcu.column_name,kcu.ordinal_position
@@ -207,7 +237,8 @@ async def _inspect_schema_constraints(
     }
 
     cursor = await target.execute(
-        """SELECT t.relname AS table_name,
+        """SELECT t.relname AS table_name,i.indisunique AS is_unique,
+                  i.indpred IS NOT NULL AS is_partial,
                   array_agg(a.attname ORDER BY key.ordinality) AS columns
            FROM pg_index i
            JOIN pg_class t ON t.oid=i.indrelid
@@ -215,15 +246,21 @@ async def _inspect_schema_constraints(
            JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS key(attnum,ordinality)
              ON key.ordinality <= i.indnkeyatts
            JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=key.attnum
-           WHERE n.nspname=current_schema() AND i.indisunique
-             AND NOT i.indisprimary AND i.indexprs IS NULL
+           WHERE n.nspname=current_schema() AND NOT i.indisprimary
+             AND i.indexprs IS NULL
            GROUP BY t.relname,i.indexrelid"""
     )
-    postgres_unique_indexes = {
-        (row["table_name"], tuple(sorted(row["columns"])))
-        for row in await cursor.fetchall()
-        if row["table_name"] in shared_tables
-    }
+    postgres_indexes = set()
+    for row in await cursor.fetchall():
+        if row["table_name"] not in shared_tables:
+            continue
+        index_columns = tuple(row["columns"])
+        if row["is_unique"]:
+            index_columns = tuple(sorted(index_columns))
+        postgres_indexes.add((
+            row["table_name"], bool(row["is_unique"]), index_columns, bool(row["is_partial"])
+        ))
+
 
     differences: list[str] = []
     for table in sorted(shared_tables):
@@ -262,6 +299,51 @@ async def _inspect_schema_constraints(
                     f"nullability mismatch {table}.{column}: "
                     f"SQLite not_null={source_not_null} vs PostgreSQL not_null={target_not_null}"
                 )
+            source_default = source_column.get("default")
+            target_default = target_column.get("column_default")
+            source_has_default = (
+                source_default is not None
+                and str(source_default).strip().upper() not in {"NULL", "(NULL)"}
+            )
+            target_has_default = (
+                target_default is not None
+                and str(target_default).strip().upper() not in {"NULL", "(NULL)"}
+            )
+            source_generated = bool(source_column.get("is_autoincrement"))
+            target_generated = (
+                target_column.get("is_identity") == "YES"
+                or bool(target_default and "nextval(" in str(target_default).lower())
+            )
+            if source_generated != target_generated:
+                differences.append(
+                    f"generated-key mismatch {table}.{column}: "
+                    f"SQLite autoincrement={source_generated} vs PostgreSQL identity/sequence={target_generated}"
+                )
+            if not source_generated and source_has_default != target_has_default:
+                differences.append(
+                    f"default availability mismatch {table}.{column}: "
+                    f"SQLite has_default={source_has_default} vs PostgreSQL has_default={target_has_default}"
+                )
+
+    cursor = await target.execute(
+        """SELECT c.relname AS table_name,COUNT(*) AS check_count
+           FROM pg_constraint con
+           JOIN pg_class c ON c.oid=con.conrelid
+           JOIN pg_namespace n ON n.oid=c.relnamespace
+           WHERE con.contype='c' AND n.nspname=current_schema()
+           GROUP BY c.relname"""
+    )
+    postgres_check_counts = {
+        row["table_name"]: int(row["check_count"]) for row in await cursor.fetchall()
+    }
+    for table in sorted(shared_tables):
+        source_count = sqlite_check_counts.get(table, 0)
+        target_count = postgres_check_counts.get(table, 0)
+        if source_count != target_count:
+            differences.append(
+                f"check constraint count mismatch {table}: "
+                f"SQLite={source_count} vs PostgreSQL={target_count}"
+            )
 
     postgres_primary_key_tuples = {
         table: tuple(columns) for table, columns in postgres_primary_keys.items()
@@ -284,14 +366,14 @@ async def _inspect_schema_constraints(
         for item in sorted(postgres_foreign_keys - sqlite_foreign_keys):
             differences.append(f"PostgreSQL has extra foreign key {item}")
 
-    sqlite_unique_indexes = {
-        item for item in sqlite_unique_indexes if item[0] in shared_tables
-    }
-    if sqlite_unique_indexes != postgres_unique_indexes:
-        for item in sorted(sqlite_unique_indexes - postgres_unique_indexes):
-            differences.append(f"PostgreSQL missing unique index {item}")
-        for item in sorted(postgres_unique_indexes - sqlite_unique_indexes):
-            differences.append(f"PostgreSQL has extra unique index {item}")
+    sqlite_indexes = {item for item in sqlite_indexes if item[0] in shared_tables}
+    if sqlite_indexes != postgres_indexes:
+        for item in sorted(sqlite_indexes - postgres_indexes):
+            label = "unique index" if item[1] else "index"
+            differences.append(f"PostgreSQL missing {label} {item}")
+        for item in sorted(postgres_indexes - sqlite_indexes):
+            label = "unique index" if item[1] else "index"
+            differences.append(f"PostgreSQL has extra {label} {item}")
     return differences
 
 
@@ -426,7 +508,10 @@ async def migrate_sqlite_to_postgres(
                 "column_nullability",
                 "primary_keys",
                 "foreign_keys_and_actions",
-                "unique_indexes",
+                "default_availability",
+                "generated_key_semantics",
+                "check_constraint_counts",
+                "indexes_and_partial_flags",
             ],
             "tables": table_reports,
             "total_source_rows": sum(item["source_rows"] for item in table_reports),

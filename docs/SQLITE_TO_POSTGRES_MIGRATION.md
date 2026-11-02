@@ -10,7 +10,7 @@ The migration utility is intentionally read-only by default. Do not run the appl
 
 - Reads a SQLite database file in read-only mode.
 - Compares source tables and columns with an already-initialized PostgreSQL schema.
-- Checks compatible column type affinity, nullability, ordered primary keys, foreign-key mappings/actions, and unique-index column signatures before allowing an apply.
+- Checks compatible column type affinity, nullability, default availability, generated-key semantics, ordered primary keys, foreign-key mappings/actions, CHECK constraint counts, and index column signatures/uniqueness/partial flags before allowing an apply.
 - Reports row counts on both sides.
 - Refuses to apply if source tables are missing in PostgreSQL or required target columns cannot be populated.
 - Requires every PostgreSQL target table to be empty before applying.
@@ -75,7 +75,7 @@ Review the JSON report. Continue only when:
 - All expected source row counts are present.
 - Every target table has zero rows.
 
-The audit also checks type affinity, nullability, primary keys, foreign-key mappings/actions, and unique-index column signatures. It does not yet compare CHECK constraint expressions, default expressions, partial-index predicates, non-unique index definitions, triggers, or views. It also does not prove every stored SQLite value can be converted to its PostgreSQL target type. A representative copy in a disposable database is required before any production migration.
+The audit checks type affinity, nullability, default availability, generated-key semantics, primary keys, foreign-key mappings/actions, CHECK constraint counts, and simple index column signatures/uniqueness/partial flags. It does not compare exact CHECK expressions, default expressions, partial-index predicates, expression indexes, triggers, or views. It also does not prove every stored SQLite value can be converted to its PostgreSQL target type. A representative copy in a disposable database is required before any production migration.
 
 ## 4. Apply only with explicit authorization
 
@@ -139,7 +139,7 @@ Official references:
 - No production or user database has been migrated.
 - No PostgreSQL runtime switch has occurred.
 - The migration tool does not perform backup/restore or live replication.
-- The compatibility gate does not yet compare CHECK constraints, default expressions, partial-index predicates, or non-unique index definitions.
+- The compatibility gate compares CHECK constraint counts, not expressions; it compares default availability, not exact default expressions; and it compares partial-index flags, not predicates. Expression indexes, triggers, and views are not audited.
 - Data type conversion edge cases require a representative dry-run/copy.
 - SQLite triggers, views and custom indexes are not copied by the tool.
 - Foreign-key dependency cycles are rejected rather than guessed.
