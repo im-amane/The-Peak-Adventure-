@@ -70,6 +70,7 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
             "/api/daily-mission/claim": 10,
             "/api/weekly-quest/claim": 10,
             "/api/matchmaking": 8,
+            "/api/settings": 10,
         }
         for path, limit in route_limits.items():
             with self.subTest(path=path):
@@ -86,7 +87,7 @@ class MiniAppRateLimitTests(unittest.IsolatedAsyncioTestCase):
         expected = {
             "/api/action", "/api/explore", "/api/social", "/api/premium-shop",
             "/api/world", "/api/dungeon", "/api/appearance", "/api/story",
-            "/api/quest/claim", "/api/daily-mission/claim", "/api/weekly-quest/claim",
+            "/api/quest/claim", "/api/daily-mission/claim", "/api/weekly-quest/claim", "/api/settings",
         }
         self.assertTrue(expected.issubset(main.API_ROUTE_LIMITS))
 
