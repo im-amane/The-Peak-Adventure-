@@ -76,6 +76,54 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                 main.db = previous_db
                 main.DB_PATH = previous_path
 
+    async def test_telegram_lethal_attack_keeps_turn_and_mana_atomic(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            previous_path, previous_db = main.DB_PATH, main.db
+            main.DB_PATH = str(Path(temp_dir) / "combat-rollback-test.db")
+            main.db = None
+            try:
+                await main.init_db()
+                user_id = 987654322
+                await main.get_player(user_id, "CombatRollbackTester")
+                await main.db.execute(
+                    "UPDATE players SET class_selected=1,hp=100,max_hp=100 WHERE user_id=?",
+                    (user_id,),
+                )
+                await main.db.execute(
+                    """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+                       VALUES(?,1,1,0,0,0)""",
+                    (user_id,),
+                )
+                await main.db.commit()
+                call = SimpleNamespace(
+                    from_user=SimpleNamespace(id=user_id, username="CombatRollbackTester"),
+                    data="battle:attack",
+                    answer=AsyncMock(),
+                    message=SimpleNamespace(edit_text=AsyncMock()),
+                )
+                with unittest.mock.patch(
+                    "main.finish_battle",
+                    side_effect=RuntimeError("simulated Telegram reward failure"),
+                ):
+                    with self.assertRaisesRegex(RuntimeError,"simulated Telegram reward failure"):
+                        await main._battle_action_unlocked(call)
+                self.assertTrue(main.db.in_transaction)
+                await main.db.rollback()
+                cur=await main.db.execute(
+                    "SELECT monster_hp,turn_count FROM battles WHERE user_id=?",(user_id,)
+                )
+                battle=await cur.fetchone()
+                self.assertEqual((battle["monster_hp"],battle["turn_count"]),(1,0))
+                player=await main.get_player(user_id)
+                self.assertEqual(player["hp"],100)
+                cur=await main.db.execute("SELECT 1 FROM player_mana WHERE user_id=?",(user_id,))
+                self.assertIsNone(await cur.fetchone())
+            finally:
+                if main.db is not None:
+                    await main.db.close()
+                main.db = previous_db
+                main.DB_PATH = previous_path
+
     def test_player_defence_reduces_monster_damage(self):
         base = calculate_enemy_damage(60, 5, 0, 0, 0, 0)
         guarded = calculate_enemy_damage(60, 5, 12, 8, 0, 0)
