@@ -10,6 +10,7 @@ The migration utility is intentionally read-only by default. Do not run the appl
 
 - Reads a SQLite database file in read-only mode.
 - Compares source tables and columns with an already-initialized PostgreSQL schema.
+- Checks compatible column type affinity, nullability, ordered primary keys, foreign-key mappings/actions, and unique-index column signatures before allowing an apply.
 - Reports row counts on both sides.
 - Refuses to apply if source tables are missing in PostgreSQL or required target columns cannot be populated.
 - Requires every PostgreSQL target table to be empty before applying.
@@ -69,10 +70,12 @@ Review the JSON report. Continue only when:
 - `sqlite_only_tables` is empty.
 - `missing_postgres_columns` is empty.
 - `missing_required_sqlite_columns` is empty.
+- `schema_differences` is empty.
+- The report's `schema_checks` list contains the expected compatibility checks.
 - All expected source row counts are present.
 - Every target table has zero rows.
 
-The audit checks table/column compatibility and required-column availability. It does not prove every SQLite value can be converted to its PostgreSQL target type. A representative copy in a disposable database is required before any production migration.
+The audit also checks type affinity, nullability, primary keys, foreign-key mappings/actions, and unique-index column signatures. It does not yet compare CHECK constraint expressions, default expressions, partial-index predicates, non-unique index definitions, triggers, or views. It also does not prove every stored SQLite value can be converted to its PostgreSQL target type. A representative copy in a disposable database is required before any production migration.
 
 ## 4. Apply only with explicit authorization
 
@@ -136,6 +139,7 @@ Official references:
 - No production or user database has been migrated.
 - No PostgreSQL runtime switch has occurred.
 - The migration tool does not perform backup/restore or live replication.
+- The compatibility gate does not yet compare CHECK constraints, default expressions, partial-index predicates, or non-unique index definitions.
 - Data type conversion edge cases require a representative dry-run/copy.
 - SQLite triggers, views and custom indexes are not copied by the tool.
 - Foreign-key dependency cycles are rejected rather than guessed.
