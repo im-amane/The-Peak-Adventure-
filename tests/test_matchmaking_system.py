@@ -105,6 +105,28 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(turn["turn_count"], 1)
         self.assertLess(turn["opponent_hp"], 100)
 
+    async def test_pvp_damage_uses_combat_stats_snapshotted_at_match_start(self):
+        await self.db.execute("UPDATE players SET hero_class='Mage' WHERE user_id=1")
+        await join_matchmaking(self.db, 1, "casual", now=1000)
+        matched = await join_matchmaking(self.db, 2, "casual", now=1001)
+        match_id = matched["match_id"]
+
+        await self.db.execute("UPDATE players SET weapon_attack=500 WHERE user_id=1")
+        await self.db.execute("UPDATE players SET armor_defense=200 WHERE user_id=2")
+        await self.db.commit()
+
+        classes = {
+            "Knight": {"attack": 8, "defense": 12},
+            "Mage": {"attack": 18, "defense": 0},
+            "Archer": {"attack": 12, "defense": 4},
+            "Berserker": {"attack": 22, "defense": -3},
+        }
+        result = await perform_matchmaking_battle_action(
+            self.db, 1, match_id, "attack", classes,
+            rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+        )
+        self.assertEqual(result["damage"], 86)
+
     async def test_pvp_skill_consumes_mana_and_obeys_class_cooldown(self):
         await self.db.execute("UPDATE players SET max_hp=1000 WHERE user_id IN (1,2)")
         await self.db.commit()
