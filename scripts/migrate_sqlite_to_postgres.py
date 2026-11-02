@@ -229,6 +229,8 @@ async def migrate_sqlite_to_postgres(
                         [tuple(row[column] for column in source_columns) for row in rows],
                     )
 
+            schema_cursor = await target.execute("SELECT current_schema() AS schema_name")
+            schema_name = (await schema_cursor.fetchone())["schema_name"]
             for table in ordered_tables:
                 identity_columns = [
                     column["name"]
@@ -240,19 +242,17 @@ async def migrate_sqlite_to_postgres(
                     )
                 ]
                 quoted_table = _quote_identifier(table)
+                qualified_table = f"{schema_name}.{table}"
                 for column in identity_columns:
                     quoted_column = _quote_identifier(column)
                     await target.execute(
                         f"""SELECT setval(
-                               pg_get_serial_sequence(
-                                 quote_ident(current_schema()) || '.' || quote_ident(?),
-                                 ?
-                               ),
+                               pg_get_serial_sequence(?, ?),
                                COALESCE(MAX({quoted_column}),1),
                                MAX({quoted_column}) IS NOT NULL
                              )
                              FROM {quoted_table}""",
-                        (table, column),
+                        (qualified_table, column),
                     )
             await target.commit()
         except Exception:
