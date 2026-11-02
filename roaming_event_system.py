@@ -1,5 +1,6 @@
 """Shared world roaming events with contribution-based, one-time rewards."""
 import time
+from functools import wraps
 
 
 class RoamingEventError(ValueError):
@@ -10,33 +11,79 @@ def _valid_id(value):
     return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
+def _valid_timestamp(value):
+    return isinstance(value,int) and not isinstance(value,bool) and value>=0
+
+
+async def _begin_atomic(db,savepoint):
+    nested=db.in_transaction
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    return nested
+
+
+async def _commit_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.commit()
+
+
+async def _rollback_atomic(db,nested,savepoint):
+    if nested:
+        await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+        await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+    else:
+        await db.rollback()
+
+
+def _transactional(function):
+    """Keep roaming-event writes atomic and preserve caller-owned transactions."""
+    @wraps(function)
+    async def wrapped(db,*args,**kwargs):
+        savepoint="roaming_"+function.__name__
+        nested=await _begin_atomic(db,savepoint)
+        try:
+            result=await function(db,*args,**kwargs)
+            await _commit_atomic(db,nested,savepoint)
+            return result
+        except Exception:
+            await _rollback_atomic(db,nested,savepoint)
+            raise
+    return wrapped
+
+
+@_transactional
 async def init_roaming_event_tables(db):
-    await db.executescript("""
-    CREATE TABLE IF NOT EXISTS roaming_events(
-      event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-      world_id INTEGER NOT NULL CHECK(world_id BETWEEN 1 AND 10),
-      monster_level INTEGER NOT NULL CHECK(monster_level BETWEEN 1 AND 100),
-      monster_name TEXT NOT NULL,
-      max_hp INTEGER NOT NULL CHECK(max_hp > 0),
-      hp INTEGER NOT NULL CHECK(hp >= 0),
-      status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','expired')),
-      created_at INTEGER NOT NULL,
-      ends_at INTEGER NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_roaming_events_world_status
-      ON roaming_events(world_id,status,ends_at);
-    CREATE TABLE IF NOT EXISTS roaming_event_participants(
-      event_id INTEGER NOT NULL,
-      user_id INTEGER NOT NULL,
-      damage INTEGER NOT NULL DEFAULT 0 CHECK(damage >= 0),
-      last_attack_at INTEGER NOT NULL DEFAULT 0,
-      reward_claimed INTEGER NOT NULL DEFAULT 0 CHECK(reward_claimed IN (0,1)),
-      PRIMARY KEY(event_id,user_id)
-    );
-    """)
-    await db.commit()
+    statements=(
+        """CREATE TABLE IF NOT EXISTS roaming_events(
+          event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          world_id INTEGER NOT NULL CHECK(world_id BETWEEN 1 AND 10),
+          monster_level INTEGER NOT NULL CHECK(monster_level BETWEEN 1 AND 100),
+          monster_name TEXT NOT NULL,
+          max_hp INTEGER NOT NULL CHECK(max_hp > 0),
+          hp INTEGER NOT NULL CHECK(hp >= 0),
+          status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','completed','expired')),
+          created_at INTEGER NOT NULL,
+          ends_at INTEGER NOT NULL
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_roaming_events_world_status ON roaming_events(world_id,status,ends_at)",
+        """CREATE TABLE IF NOT EXISTS roaming_event_participants(
+          event_id INTEGER NOT NULL,
+          user_id INTEGER NOT NULL,
+          damage INTEGER NOT NULL DEFAULT 0 CHECK(damage >= 0),
+          last_attack_at INTEGER NOT NULL DEFAULT 0,
+          reward_claimed INTEGER NOT NULL DEFAULT 0 CHECK(reward_claimed IN (0,1)),
+          PRIMARY KEY(event_id,user_id)
+        )""",
+    )
+    for statement in statements:
+        await db.execute(statement)
 
 
+@_transactional
 async def get_or_create_roaming_event(
     db, world_id, monster_level, monster_name, monster_hp, now=None, duration_seconds=3600
 ):
@@ -51,123 +98,122 @@ async def get_or_create_roaming_event(
         raise RoamingEventError("Event monster name is required.")
     if not isinstance(duration_seconds, int) or isinstance(duration_seconds, bool) or not 60 <= duration_seconds <= 86400:
         raise RoamingEventError("Event duration must be between one minute and 24 hours.")
-    stamp = int(time.time() if now is None else now)
-    try:
-        await db.execute("BEGIN IMMEDIATE")
-        await db.execute(
-            "UPDATE roaming_events SET status='expired' WHERE status='active' AND ends_at<=?",
-            (stamp,),
-        )
-        cur = await db.execute(
-            "SELECT * FROM roaming_events WHERE world_id=? AND status='active' AND ends_at>? ORDER BY event_id DESC LIMIT 1",
-            (world_id, stamp),
-        )
-        event = await cur.fetchone()
-        if event:
-            await db.commit()
-            return event
-        hp = monster_hp * 20
-        cur = await db.execute(
-            """INSERT INTO roaming_events(world_id,monster_level,monster_name,max_hp,hp,created_at,ends_at)
-               VALUES(?,?,?,?,?,?,?)""",
-            (world_id, monster_level, name, hp, hp, stamp, stamp + duration_seconds),
-        )
-        cur = await db.execute("SELECT * FROM roaming_events WHERE event_id=?", (cur.lastrowid,))
-        event = await cur.fetchone()
-        await db.commit()
+    stamp = int(time.time()) if now is None else now
+    if not _valid_timestamp(stamp):
+        raise RoamingEventError("Invalid event timestamp.")
+    await db.execute(
+        "UPDATE roaming_events SET status='expired' WHERE status='active' AND ends_at<=?",
+        (stamp,),
+    )
+    cur = await db.execute(
+        "SELECT * FROM roaming_events WHERE world_id=? AND status='active' AND ends_at>? ORDER BY event_id DESC LIMIT 1",
+        (world_id, stamp),
+    )
+    event = await cur.fetchone()
+    if event:
         return event
-    except Exception:
-        await db.rollback()
-        raise
+    hp = monster_hp * 20
+    cur = await db.execute(
+        """INSERT INTO roaming_events(world_id,monster_level,monster_name,max_hp,hp,created_at,ends_at)
+           VALUES(?,?,?,?,?,?,?)""",
+        (world_id, monster_level, name, hp, hp, stamp, stamp + duration_seconds),
+    )
+    cur = await db.execute("SELECT * FROM roaming_events WHERE event_id=?", (cur.lastrowid,))
+    return await cur.fetchone()
 
 
+@_transactional
 async def attack_roaming_event(db, event_id, user_id, damage, now=None, cooldown_seconds=30):
     if not _valid_id(event_id) or not _valid_id(user_id):
         raise RoamingEventError("Invalid event or player account.")
     if not isinstance(damage, int) or isinstance(damage, bool) or not 1 <= damage <= 10000:
         raise RoamingEventError("Event damage must be between 1 and 10,000.")
-    stamp = int(time.time() if now is None else now)
-    try:
-        await db.execute("BEGIN IMMEDIATE")
-        cur = await db.execute("SELECT * FROM roaming_events WHERE event_id=?", (event_id,))
-        event = await cur.fetchone()
-        if not event or event["status"] != "active" or event["ends_at"] <= stamp:
-            raise RoamingEventError("This roaming event is no longer active.")
-        cur = await db.execute(
-            "SELECT last_attack_at FROM roaming_event_participants WHERE event_id=? AND user_id=?",
-            (event_id, user_id),
-        )
-        participant = await cur.fetchone()
-        if participant and stamp - participant["last_attack_at"] < cooldown_seconds:
-            wait = cooldown_seconds - (stamp - participant["last_attack_at"])
-            raise RoamingEventError(f"Event attack cooldown: wait {wait} seconds.")
-        hp = max(0, event["hp"] - damage)
-        dealt = event["hp"] - hp
-        status = "completed" if hp == 0 else "active"
-        await db.execute(
-            "UPDATE roaming_events SET hp=?,status=? WHERE event_id=? AND status='active'",
-            (hp, status, event_id),
-        )
-        await db.execute(
-            """INSERT INTO roaming_event_participants(event_id,user_id,damage,last_attack_at)
-               VALUES(?,?,?,?) ON CONFLICT(event_id,user_id) DO UPDATE SET
-               damage=damage+excluded.damage,last_attack_at=excluded.last_attack_at""",
-            (event_id, user_id, dealt, stamp),
-        )
-        cur = await db.execute(
-            "SELECT COUNT(*) AS total FROM roaming_event_participants WHERE event_id=?",
-            (event_id,),
-        )
-        participant_count = (await cur.fetchone())["total"]
-        await db.commit()
-        return {"event_id": event_id, "hp": hp, "max_hp": event["max_hp"],
-                "damage": dealt, "status": status, "participants": participant_count}
-    except Exception:
-        await db.rollback()
-        raise
+    if not isinstance(cooldown_seconds,int) or isinstance(cooldown_seconds,bool) or not 1<=cooldown_seconds<=3600:
+        raise RoamingEventError("Invalid event attack cooldown.")
+    stamp = int(time.time()) if now is None else now
+    if not _valid_timestamp(stamp):
+        raise RoamingEventError("Invalid event timestamp.")
+    cur = await db.execute("SELECT * FROM roaming_events WHERE event_id=?", (event_id,))
+    event = await cur.fetchone()
+    if not event or event["status"] != "active" or event["ends_at"] <= stamp:
+        raise RoamingEventError("This roaming event is no longer active.")
+    cur = await db.execute(
+        "SELECT last_attack_at FROM roaming_event_participants WHERE event_id=? AND user_id=?",
+        (event_id, user_id),
+    )
+    participant = await cur.fetchone()
+    if participant and stamp - participant["last_attack_at"] < cooldown_seconds:
+        wait = cooldown_seconds - (stamp - participant["last_attack_at"])
+        raise RoamingEventError(f"Event attack cooldown: wait {wait} seconds.")
+    hp = max(0, event["hp"] - damage)
+    dealt = event["hp"] - hp
+    status = "completed" if hp == 0 else "active"
+    cur = await db.execute(
+        """UPDATE roaming_events SET hp=?,status=?
+           WHERE event_id=? AND status='active' AND hp=? AND ends_at>?""",
+        (hp, status, event_id, event["hp"], stamp),
+    )
+    if cur.rowcount != 1:
+        raise RoamingEventError("The roaming event changed; retry your attack.")
+    cur = await db.execute(
+        """INSERT INTO roaming_event_participants(event_id,user_id,damage,last_attack_at)
+           VALUES(?,?,?,?) ON CONFLICT(event_id,user_id) DO UPDATE SET
+           damage=damage+excluded.damage,last_attack_at=excluded.last_attack_at""",
+        (event_id, user_id, dealt, stamp),
+    )
+    if cur.rowcount != 1:
+        raise RoamingEventError("Your roaming event contribution could not be recorded.")
+    cur = await db.execute(
+        "SELECT COUNT(*) AS total FROM roaming_event_participants WHERE event_id=?",
+        (event_id,),
+    )
+    participant_count = (await cur.fetchone())["total"]
+    return {"event_id": event_id, "hp": hp, "max_hp": event["max_hp"],
+            "damage": dealt, "status": status, "participants": participant_count}
 
 
+@_transactional
 async def claim_roaming_event_reward(db, event_id, user_id):
     if not _valid_id(event_id) or not _valid_id(user_id):
         raise RoamingEventError("Invalid event or player account.")
-    try:
-        await db.execute("BEGIN IMMEDIATE")
-        cur = await db.execute("SELECT status,monster_level FROM roaming_events WHERE event_id=?", (event_id,))
-        event = await cur.fetchone()
-        if not event or event["status"] != "completed":
-            raise RoamingEventError("The roaming event has not been defeated.")
-        cur = await db.execute(
-            "SELECT damage,reward_claimed FROM roaming_event_participants WHERE event_id=? AND user_id=?",
-            (event_id, user_id),
-        )
-        participant = await cur.fetchone()
-        if not participant or participant["damage"] <= 0:
-            raise RoamingEventError("Only players who contributed damage can claim this reward.")
-        if participant["reward_claimed"]:
-            raise RoamingEventError("Your roaming event reward has already been claimed.")
-        cur = await db.execute("SELECT level,xp,hp,hero_class FROM players WHERE user_id=?", (user_id,))
-        player = await cur.fetchone()
-        if not player:
-            raise RoamingEventError("Player account not found.")
-        from game_rules import xp_required
-        coins = 100 + event["monster_level"] * 12
-        xp = 80 + event["monster_level"] * 15
-        level, total_xp = player["level"], player["xp"] + xp
-        while level < 100 and total_xp >= xp_required(level):
-            total_xp -= xp_required(level)
-            level += 1
-        class_hp_bonus = {"Knight": 40, "Mage": 0, "Archer": 10, "Berserker": 25}.get(player["hero_class"], 40)
-        max_hp = 120 + (level - 1) * 20 + class_hp_bonus
-        await db.execute(
-            "UPDATE players SET coins=coins+?,level=?,xp=?,max_hp=?,hp=MIN(hp,?) WHERE user_id=?",
-            (coins, level, total_xp, max_hp, max_hp, user_id),
-        )
-        await db.execute(
-            "UPDATE roaming_event_participants SET reward_claimed=1 WHERE event_id=? AND user_id=?",
-            (event_id, user_id),
-        )
-        await db.commit()
-        return {"coins": coins, "xp": xp, "level": level}
-    except Exception:
-        await db.rollback()
-        raise
+    cur = await db.execute("SELECT status,monster_level FROM roaming_events WHERE event_id=?", (event_id,))
+    event = await cur.fetchone()
+    if not event or event["status"] != "completed":
+        raise RoamingEventError("The roaming event has not been defeated.")
+    cur = await db.execute(
+        "SELECT damage,reward_claimed FROM roaming_event_participants WHERE event_id=? AND user_id=?",
+        (event_id, user_id),
+    )
+    participant = await cur.fetchone()
+    if not participant or participant["damage"] <= 0:
+        raise RoamingEventError("Only players who contributed damage can claim this reward.")
+    if participant["reward_claimed"]:
+        raise RoamingEventError("Your roaming event reward has already been claimed.")
+    cur = await db.execute("SELECT level,xp,hp,hero_class FROM players WHERE user_id=?", (user_id,))
+    player = await cur.fetchone()
+    if not player:
+        raise RoamingEventError("Player account not found.")
+    from game_rules import xp_required
+    coins = 100 + event["monster_level"] * 12
+    xp = 80 + event["monster_level"] * 15
+    level, total_xp = player["level"], player["xp"] + xp
+    while level < 100 and total_xp >= xp_required(level):
+        total_xp -= xp_required(level)
+        level += 1
+    class_hp_bonus = {"Knight": 40, "Mage": 0, "Archer": 10, "Berserker": 25}.get(player["hero_class"], 40)
+    max_hp = 120 + (level - 1) * 20 + class_hp_bonus
+    cur = await db.execute(
+        """UPDATE roaming_event_participants SET reward_claimed=1
+           WHERE event_id=? AND user_id=? AND reward_claimed=0 AND damage>0""",
+        (event_id, user_id),
+    )
+    if cur.rowcount != 1:
+        raise RoamingEventError("Your roaming event reward has already been claimed.")
+    cur = await db.execute(
+        """UPDATE players SET coins=coins+?,level=?,xp=?,max_hp=?,hp=MIN(hp,?)
+           WHERE user_id=?""",
+        (coins, level, total_xp, max_hp, max_hp, user_id),
+    )
+    if cur.rowcount != 1:
+        raise RoamingEventError("Your roaming event reward could not be credited.")
+    return {"coins": coins, "xp": xp, "level": level}
