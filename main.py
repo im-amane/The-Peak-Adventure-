@@ -25,7 +25,7 @@ from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
-from matchmaking_system import init_matchmaking_tables
+from matchmaking_system import (MatchmakingError, cancel_matchmaking, get_matchmaking_status, init_matchmaking_tables, join_matchmaking)
 from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
@@ -3817,6 +3817,7 @@ async def miniapp_state(user: dict):
         "hero_class": p["hero_class"],
         "appearance": appearance,
         "quests": quest_state,
+        "matchmaking": await get_matchmaking_status(db, user_id),
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
                     "pending_trades": pending_trades, "pending_trade_count": pending_trade_count,
@@ -4498,6 +4499,57 @@ async def api_social(request: web.Request):
     return web.json_response({"message": "Social action completed.", "result": result, "state": state})
 
 
+async def api_matchmaking(request: web.Request):
+    try:
+        user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
+    except ValueError as exc:
+        return web.json_response({"error": str(exc)}, status=401)
+    if request.content_length is not None and request.content_length > 1024:
+        return web.json_response({"error": "Matchmaking request is too large."}, status=413)
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "Matchmaking payload must be valid JSON."}, status=400)
+    if not isinstance(payload, dict) or payload.get("action") not in {"join", "cancel"}:
+        return web.json_response({"error": "Choose a valid matchmaking action."}, status=400)
+    action = payload["action"]
+    expected = {"action", "mode"} if action == "join" else {"action"}
+    if set(payload) != expected:
+        return web.json_response({"error": "Unexpected matchmaking request fields."}, status=400)
+    if action == "join" and payload.get("mode") not in {"casual", "ranked"}:
+        return web.json_response({"error": "Choose casual or ranked matchmaking."}, status=400)
+    user_id = user["id"]
+    try:
+        async with db_lock:
+            async with player_locks[user_id]:
+                player = await get_player(
+                    user_id, user.get("username") or user.get("first_name") or "Adventurer"
+                )
+                if action == "join":
+                    if not player["class_selected"]:
+                        return web.json_response(
+                            {"error": "Choose a hero class before joining matchmaking."},
+                            status=409,
+                        )
+                    battle_cur = await db.execute(
+                        "SELECT 1 FROM battles WHERE user_id=?", (user_id,)
+                    )
+                    if await battle_cur.fetchone():
+                        return web.json_response(
+                            {"error": "Finish your active monster battle before joining matchmaking."},
+                            status=409,
+                        )
+                    result = await join_matchmaking(db, user_id, payload["mode"])
+                else:
+                    result = {"cancelled": await cancel_matchmaking(db, user_id)}
+                state = await miniapp_state(user)
+    except MatchmakingError as exc:
+        return web.json_response({"error": str(exc)}, status=409)
+    return web.json_response(
+        {"message": "Matchmaking updated.", "result": result, "state": state}
+    )
+
+
 async def api_settings(request: web.Request):
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
@@ -4731,6 +4783,7 @@ API_ROUTE_LIMITS = {
     "/api/action": 20,
     "/api/explore": 15,
     "/api/social": 20,
+    "/api/matchmaking": 8,
     "/api/premium-shop": 6,
     "/api/world": 15,
     "/api/dungeon": 15,
@@ -4831,6 +4884,7 @@ def create_web_app():
     app.router.add_post("/api/weekly-quest/claim", api_weekly_quest_claim)
     app.router.add_post("/api/world", api_world)
     app.router.add_post("/api/social", api_social)
+    app.router.add_post("/api/matchmaking", api_matchmaking)
     app.router.add_post("/api/premium-shop", api_premium_shop)
     app.router.add_get("/healthz", healthz)
     return app
