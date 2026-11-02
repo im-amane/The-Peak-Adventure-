@@ -145,13 +145,17 @@ async def perform_matchmaking_battle_action(
             winner_id = opponent_id
         else:
             attacker_cursor = await db.execute(
-                "SELECT level,hero_class,weapon_attack,skill_cd FROM players WHERE user_id=?",
-                (user_id,),
+                """SELECT s.player_level AS level,s.hero_class,s.weapon_attack,p.skill_cd
+                   FROM matchmaking_battle_stats s
+                   JOIN players p ON p.user_id=s.user_id
+                   WHERE s.match_id=? AND s.user_id=?""",
+                (match_id, user_id),
             )
             attacker = await attacker_cursor.fetchone()
             defender_cursor = await db.execute(
-                "SELECT hero_class,armor_defense FROM players WHERE user_id=?",
-                (opponent_id,),
+                """SELECT hero_class,armor_defense FROM matchmaking_battle_stats
+                   WHERE match_id=? AND user_id=?""",
+                (match_id, opponent_id),
             )
             defender = await defender_cursor.fetchone()
             if not attacker or not defender:
