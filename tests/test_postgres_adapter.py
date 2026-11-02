@@ -2062,6 +2062,43 @@ class PartyPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["coins"], 75)
 
+    async def test_concurrent_rewards_from_different_battles_preserve_player_xp(self):
+        party_id = await create_party(self.db, self.leader_id)
+        first_battle = await start_party_battle(
+            self.db, party_id, self.leader_id, 10, "First Warden", 100
+        )
+        await self.db.execute(
+            "UPDATE party_battles SET status='won' WHERE battle_id=?",
+            (first_battle,),
+        )
+        await self.db.commit()
+        second_battle = await start_party_battle(
+            self.db, party_id, self.leader_id, 10, "Second Warden", 100
+        )
+        await self.db.execute(
+            "UPDATE party_battles SET status='won' WHERE battle_id=?",
+            (second_battle,),
+        )
+        await self.db.commit()
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                reward_party_battle(self.db, first_battle, self.leader_id, 10, 10),
+                reward_party_battle(other_db, second_battle, self.leader_id, 20, 20),
+            )
+            self.assertEqual([result["xp"] for result in results], [10, 20])
+            cursor = await self.db.execute(
+                "SELECT level,xp,coins FROM players WHERE user_id=?",
+                (self.leader_id,),
+            )
+            player = await cursor.fetchone()
+            self.assertEqual(
+                (player["level"], player["xp"], player["coins"]),
+                (4, 30, 30),
+            )
+        finally:
+            await other_db.close()
+
     async def test_concurrent_invite_accepts_cannot_exceed_party_capacity(self):
         party_id = await create_party(self.db, self.leader_id)
         first_invite = await invite_to_party(
