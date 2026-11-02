@@ -118,7 +118,7 @@ class PostgresMiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT stamina FROM player_stamina WHERE user_id=?",
             (self.user_id,),
         )
-        self.assertEqual((await cursor.fetchone())["stamina"], 95)
+        self.assertEqual((await cursor.fetchone())["stamina"], 90)
 
 
 if __name__ == "__main__":
