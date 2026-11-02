@@ -2148,6 +2148,39 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cursor.fetchone())["status"], "expired")
 
+    async def test_concurrent_bids_serialize_on_the_listing_row(self):
+        listing_id = await create_listing(
+            self.db, self.seller_id, "weapon", 100, 1, now=1000
+        )
+        second_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            outcomes = await asyncio.gather(
+                place_bid(self.db, self.buyer_id, listing_id, 100, now=1001),
+                place_bid(second_db, self.seller_id + 100, listing_id, 110, now=1001),
+                return_exceptions=True,
+            )
+            accepted = [value for value in outcomes if not isinstance(value, Exception)]
+            rejected = [value for value in outcomes if isinstance(value, AuctionError)]
+            self.assertGreaterEqual(len(accepted), 1)
+            self.assertEqual(len(accepted) + len(rejected), 2)
+            cursor = await self.db.execute(
+                "SELECT current_bid,highest_bidder FROM auction_listings WHERE listing_id=?",
+                (listing_id,),
+            )
+            listing = await cursor.fetchone()
+            self.assertIn(listing["current_bid"], (100, 110))
+            self.assertIn(listing["highest_bidder"], (self.buyer_id, self.seller_id + 100))
+            cursor = await self.db.execute(
+                "SELECT coins FROM players WHERE user_id=?", (self.buyer_id,)
+            )
+            buyer_balance = (await cursor.fetchone())["coins"]
+            self.assertEqual(
+                buyer_balance + (listing["current_bid"] if listing["highest_bidder"] == self.buyer_id else 0),
+                1000,
+            )
+        finally:
+            await second_db.close()
+
     async def test_missing_seller_refunds_existing_buyer(self):
         listing_id = await create_listing(
             self.db, self.seller_id, "weapon", 100, 1, now=1000
