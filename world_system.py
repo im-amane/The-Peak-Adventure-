@@ -83,6 +83,8 @@ async def get_world_choices(db,user_id,player_level):
 def world_encounter_levels(player_level,world_id,boss_defeated=False):
     if not isinstance(player_level,int) or isinstance(player_level,bool) or not 1<=player_level<=100:
         raise WorldError("Player level must be between 1 and 100.")
+    if type(boss_defeated) is not bool:
+        raise WorldError("Boss completion state must be boolean.")
     world_min=world_min_level(world_id)
     world_max=world_id*10
     effective=min(world_max,max(world_min,player_level))
