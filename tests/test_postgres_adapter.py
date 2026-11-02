@@ -39,6 +39,12 @@ from group_system import (
     record_group_activity, record_group_player, register_group, set_group_admin,
     set_group_ban, start_group_raid,
 )
+from party_system import (
+    PartyError, attack_party_battle, create_party, get_party_battle,
+    get_party_info, init_party_tables, invite_to_party, leave_party,
+    respond_to_party_invite, reward_party_battle, start_party_battle,
+)
+
 from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
@@ -1694,3 +1700,111 @@ class GroupPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.db, self.chat_id, self.admin_id, self.target_id, False
         )
         self.assertFalse(await is_group_banned(self.db, self.chat_id, self.target_id))
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PartyPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    leader_id = 5_000_000_000_000_201
+    member_id = 5_000_000_000_000_202
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in (
+            "party_battle_rewards", "party_battle_cooldowns",
+            "party_battle_contributions", "party_battles",
+            "party_invites", "party_members", "parties", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY, username TEXT,
+                 level INTEGER NOT NULL DEFAULT 1,
+                 xp INTEGER NOT NULL DEFAULT 0,
+                 coins BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,4),(?,?,8)",
+            (self.leader_id, "Ash", self.member_id, "Mira"),
+        )
+        await self.db.commit()
+        await init_party_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in (
+            "party_battle_rewards", "party_battle_cooldowns",
+            "party_battle_contributions", "party_battles",
+            "party_invites", "party_members", "parties", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_party_battle_contributions_and_rewards_support_bigint_ids(self):
+        party_id = await create_party(self.db, self.leader_id)
+        invite_id = await invite_to_party(
+            self.db, party_id, self.leader_id, self.member_id
+        )
+        await respond_to_party_invite(self.db, invite_id, self.member_id, True)
+        party, members = await get_party_info(self.db, self.leader_id)
+        self.assertEqual(party["member_count"], 2)
+        self.assertEqual(
+            {row["user_id"] for row in members},
+            {self.leader_id, self.member_id},
+        )
+
+        battle_id = await start_party_battle(
+            self.db, party_id, self.leader_id, 10, "Root Warden", 50
+        )
+        first = await attack_party_battle(self.db, party_id, self.leader_id, 10)
+        self.assertEqual(first["hp"], 40)
+        await self.db.execute(
+            "UPDATE party_battle_cooldowns SET last_attack_at=CURRENT_TIMESTAMP-INTERVAL '10 seconds' WHERE battle_id=? AND user_id=?",
+            (battle_id, self.leader_id),
+        )
+        await self.db.commit()
+        result = await attack_party_battle(self.db, party_id, self.leader_id, 40)
+        self.assertEqual(result["status"], "won")
+
+        cursor = await self.db.execute(
+            "SELECT damage FROM party_battle_contributions WHERE battle_id=? AND user_id=?",
+            (battle_id, self.leader_id),
+        )
+        self.assertEqual((await cursor.fetchone())["damage"], 50)
+
+        leader_reward = await reward_party_battle(
+            self.db, battle_id, self.leader_id, 75, 100
+        )
+        member_reward = await reward_party_battle(
+            self.db, battle_id, self.member_id, 75, 100
+        )
+        self.assertEqual(leader_reward["coins"], 75)
+        self.assertEqual(member_reward["coins"], 75)
+        with self.assertRaisesRegex(PartyError, "already claimed"):
+            await reward_party_battle(
+                self.db, battle_id, self.leader_id, 75, 100
+            )
+        cursor = await self.db.execute(
+            "SELECT coins FROM players WHERE user_id=?", (self.leader_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["coins"], 75)
+
+    async def test_party_attack_cooldown_uses_postgres_timestamps(self):
+        party_id = await create_party(self.db, self.leader_id)
+        await start_party_battle(
+            self.db, party_id, self.leader_id, 10, "Root Warden", 1000
+        )
+        await attack_party_battle(self.db, party_id, self.leader_id, 10)
+        with self.assertRaisesRegex(PartyError, "cooldown"):
+            await attack_party_battle(self.db, party_id, self.leader_id, 10)
+
+    async def test_leader_departure_transfers_party_leadership(self):
+        party_id = await create_party(self.db, self.leader_id)
+        invite_id = await invite_to_party(
+            self.db, party_id, self.leader_id, self.member_id
+        )
+        await respond_to_party_invite(self.db, invite_id, self.member_id, True)
+        self.assertEqual(await leave_party(self.db, self.leader_id), self.member_id)
+        party, members = await get_party_info(self.db, self.member_id)
+        self.assertEqual(party["leader_id"], self.member_id)
+        self.assertEqual([row["user_id"] for row in members], [self.member_id])
