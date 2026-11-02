@@ -245,3 +245,12 @@ button:disabled{opacity:.55}
   .social-tabs [role="tab"]{min-height:42px;font-size:11px}
   .social-card-grid{grid-template-columns:1fr}
 }
+
+
+/* Consistent rarity accents across the crafting inventory */
+.material-chip{font-weight:650}
+.material-chip[data-rarity="common"]{border-color:#7f8d98;color:#d4dce2}
+.material-chip[data-rarity="uncommon"]{border-color:#55a878;color:#bde8ca}
+.material-chip[data-rarity="rare"]{border-color:#4d9bd0;color:#c4e7ff}
+.material-chip[data-rarity="epic"]{border-color:#9670d0;color:#e0ccff}
+.material-chip[data-rarity="legendary"]{border-color:#c99a3f;color:#ffe4a5}
