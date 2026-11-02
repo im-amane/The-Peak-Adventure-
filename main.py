@@ -3235,7 +3235,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
                 await call.message.answer(f"⏳ Skill cooling down: {p['skill_cd']} turn(s).")
                 return
             try:
-                await consume_mana(db, user_id, SKILL_MANA_COST)
+                await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
             except ManaError as exc:
                 await call.message.answer("🔮 " + escape(str(exc)))
                 return
@@ -3270,7 +3270,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
         regen = max(1, m["hp"] // 50)
         new_enemy_hp = min(m["hp"], new_enemy_hp + regen)
     if new_enemy_hp == 0:
-        await restore_mana(db, user_id, TURN_MANA_REGEN)
+        await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
         await db.execute("UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?", (user_id,))
         result = await finish_battle(user_id, True)
         await call.message.edit_text(f"{action_line}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
@@ -3309,7 +3309,7 @@ async def _battle_action_unlocked(call: CallbackQuery):
     effect_text = " " + " ".join(effect_notes) if effect_notes else ""
     await db.execute("UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?", (new_enemy_hp, turn_count, user_id))
     await db.execute("UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?", (new_hp, user_id))
-    await restore_mana(db, user_id, TURN_MANA_REGEN)
+    await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
     if new_hp == 0:
         result = await finish_battle(user_id, False)
         await call.message.edit_text(f"{action_line}\n💥 {m['name']} hits you for {enemy_damage}.{effect_text}\n\n{result}", reply_markup=menu(include_webapp=call.message.chat.type == "private"))
@@ -4267,7 +4267,7 @@ async def api_action(request: web.Request):
                 if p["skill_cd"] > 0:
                     return web.json_response({"error": f"Skill cooling down: {p['skill_cd']} turn(s)."}, status=409)
                 try:
-                    await consume_mana(db, user_id, SKILL_MANA_COST)
+                    await consume_mana(db, user_id, SKILL_MANA_COST, commit=False)
                 except ManaError as exc:
                     return web.json_response({"error": str(exc)}, status=409)
                 await db.execute("UPDATE players SET skill_cd=? WHERE user_id=?", (skill_cooldown_for_class(p["hero_class"]), user_id))
@@ -4300,7 +4300,7 @@ async def api_action(request: web.Request):
         if new_enemy_hp > 0 and monster["trait_effect"] == "regenerate":
             new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
         if new_enemy_hp == 0:
-            await restore_mana(db, user_id, TURN_MANA_REGEN)
+            await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
             await db.execute(
                 "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
                 (user_id,),
@@ -4347,7 +4347,7 @@ async def api_action(request: web.Request):
             "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
             (new_hp, user_id),
         )
-        await restore_mana(db, user_id, TURN_MANA_REGEN)
+        await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
         if new_hp == 0:
             message = await finish_battle(user_id, False)
             return web.json_response({
