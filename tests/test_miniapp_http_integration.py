@@ -6,7 +6,7 @@ import unittest
 from urllib.parse import urlencode
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -98,7 +98,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state["battle"]["level"], 1)
 
     async def test_http_rate_limit_middleware_blocks_authenticated_request(self):
-        with patch.object(main.api_rate_limiter, "allow", return_value=(False, 9)):
+        with patch.object(main.database_api_rate_limiter, "allow", new=AsyncMock(return_value=(False, 9))):
             response = await self.client.get("/api/state", headers=self.headers)
         self.assertEqual(response.status, 429)
         self.assertEqual(response.headers.get("Retry-After"), "9")
