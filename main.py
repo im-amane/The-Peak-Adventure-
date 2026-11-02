@@ -26,7 +26,7 @@ from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
-from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
+from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
 from guild_system import GuildFeatureError, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
@@ -2375,8 +2375,10 @@ async def admin_command(message: Message):
         if not parts[0].isdigit() or len(parts)<2:
             await message.answer("Usage: /admin ban PLAYER_ID reason"); return
         try:
-            await ban_player(db,message.from_user.id,int(parts[0]),parts[1])
-            await record_admin_action(db,message.from_user.id,"player_ban",int(parts[0]),parts[1])
+            await perform_audited_action(
+                db,message.from_user.id,"player_ban",int(parts[0]),
+                lambda: ban_player(db,message.from_user.id,int(parts[0]),parts[1]),parts[1],
+            )
             await message.answer(f"⛔ Player <code>{parts[0]}</code> has been suspended.")
         except ModerationError as exc:
             await message.answer(escape(str(exc)))
@@ -2386,8 +2388,10 @@ async def admin_command(message: Message):
             await message.answer("Usage: /admin unban PLAYER_ID"); return
         target=int(args[2].strip())
         try:
-            await unban_player(db,message.from_user.id,target)
-            await record_admin_action(db,message.from_user.id,"player_unban",target)
+            await perform_audited_action(
+                db,message.from_user.id,"player_unban",target,
+                lambda: unban_player(db,message.from_user.id,target),
+            )
             await message.answer(f"✅ Player <code>{target}</code> has been reinstated.")
         except ModerationError as exc:
             await message.answer(escape(str(exc)))
@@ -2407,8 +2411,11 @@ async def admin_command(message: Message):
         if len(parts)<2 or not parts[0].isdigit():
             await message.answer("Usage: /admin resolve REPORT_ID reviewed|dismissed [note]"); return
         try:
-            await resolve_player_report(db,int(parts[0]),message.from_user.id,parts[1].lower(),parts[2] if len(parts)>2 else "")
-            await record_admin_action(db,message.from_user.id,"report_"+parts[1].lower(),int(parts[0]),parts[2] if len(parts)>2 else "")
+            await perform_audited_action(
+                db,message.from_user.id,"report_"+parts[1].lower(),int(parts[0]),
+                lambda: resolve_player_report(db,int(parts[0]),message.from_user.id,parts[1].lower(),parts[2] if len(parts)>2 else ""),
+                parts[2] if len(parts)>2 else "",
+            )
             await message.answer("✅ Report resolved.")
         except ReportError as exc:
             await message.answer(escape(str(exc)))
