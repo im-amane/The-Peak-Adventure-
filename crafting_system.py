@@ -113,17 +113,14 @@ async def craft_item(db,user_id,player_level,recipe_id):
         if equipped.rowcount!=1:
             raise CraftingError("Player account not found.")
         await db.execute(f"RELEASE SAVEPOINT {savepoint}")
-        await db.commit()
         return recipe
     except CraftingError:
         await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
         await db.execute(f"RELEASE SAVEPOINT {savepoint}")
-        await db.commit()
         raise
     except Exception as exc:
         await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
         await db.execute(f"RELEASE SAVEPOINT {savepoint}")
-        await db.commit()
         raise CraftingError("Crafting failed safely. No materials were consumed.") from exc
 
 async def list_recipes(player_level):
