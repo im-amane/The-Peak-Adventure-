@@ -18,6 +18,7 @@ from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_re
 from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
 from world_system import WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world
 from dungeon_system import DungeonError, advance_dungeon, abandon_dungeon, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
+from crafting_system import CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -656,6 +657,146 @@ class PostgresTelegramIdWidthTests(unittest.IsolatedAsyncioTestCase):
         })
         self.assertEqual((await discover_world_landmark(self.db, player_id, 21, 3))["coins"], 175)
         self.assertEqual((await enter_dungeon(self.db, player_id, 21, 3))["dungeon_id"], 3)
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresCraftingServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS crafted_items")
+        await self.db.execute("DROP TABLE IF EXISTS player_materials")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 weapon TEXT,
+                 weapon_attack BIGINT NOT NULL DEFAULT 0,
+                 armor TEXT,
+                 armor_defense BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES(1001)")
+        await self.db.commit()
+        await init_crafting_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS crafted_items")
+        await self.db.execute("DROP TABLE IF EXISTS player_materials")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def add_iron_sword_materials(self, user_id=1001):
+        await self.db.execute(
+            "INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)",
+            (user_id, "iron_ore", 3),
+        )
+        await self.db.execute(
+            "INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)",
+            (user_id, "ember_shard", 1),
+        )
+        await self.db.commit()
+
+    async def test_craft_item_consumes_materials_and_equips_upgrade(self):
+        await self.add_iron_sword_materials()
+        result = await craft_item(self.db, 1001, 5, "iron_sword")
+        self.assertEqual(result["name"], "Forged Iron Sword")
+        self.assertEqual(await get_materials(self.db, 1001), {
+            "iron_ore": 0, "ember_shard": 0
+        })
+        cursor = await self.db.execute(
+            "SELECT weapon,weapon_attack FROM players WHERE user_id=?", (1001,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), ("Forged Iron Sword", 12))
+        with self.assertRaisesRegex(CraftingError, "already crafted"):
+            await craft_item(self.db, 1001, 5, "iron_sword")
+
+    async def test_failed_craft_rolls_back_partial_material_debits(self):
+        await self.db.execute(
+            "INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)",
+            (1001, "iron_ore", 3),
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(CraftingError, "Missing materials"):
+            await craft_item(self.db, 1001, 5, "iron_sword")
+        self.assertEqual(await get_materials(self.db, 1001), {"iron_ore": 3})
+        cursor = await self.db.execute(
+            "SELECT 1 FROM crafted_items WHERE user_id=?", (1001,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_crafting_preserves_outer_transaction(self):
+        await self.add_iron_sword_materials()
+        await self.db.execute("BEGIN IMMEDIATE")
+        await craft_item(self.db, 1001, 5, "iron_sword")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await get_materials(self.db, 1001), {
+            "iron_ore": 3, "ember_shard": 1
+        })
+        cursor = await self.db.execute(
+            "SELECT 1 FROM crafted_items WHERE user_id=?", (1001,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+    async def test_material_drop_upsert_increments_quantity(self):
+        class FixedRng:
+            def __init__(self):
+                self.values = iter((0.1, 0.1))
+            def random(self):
+                return next(self.values)
+
+        await award_material_drop(
+            self.db, 1001, {"level": 10, "boss": False}, rng=FixedRng()
+        )
+        await award_material_drop(
+            self.db, 1001, {"level": 10, "boss": False}, rng=FixedRng()
+        )
+        self.assertEqual(await get_materials(self.db, 1001), {"iron_ore": 2})
+
+    async def test_concurrent_crafts_cannot_spend_the_same_materials_twice(self):
+        await self.add_iron_sword_materials()
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                craft_item(self.db, 1001, 5, "iron_sword"),
+                craft_item(second, 1001, 5, "iron_sword"),
+                return_exceptions=True,
+            )
+            successes = [item for item in results if isinstance(item, dict)]
+            failures = [item for item in results if isinstance(item, CraftingError)]
+            self.assertEqual(len(successes), 1)
+            self.assertEqual(len(failures), 1)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM crafted_items WHERE user_id=?", (1001,)
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 1)
+            self.assertEqual(await get_materials(self.db, 1001), {
+                "iron_ore": 0, "ember_shard": 0
+            })
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_crafting_schema_initialization_is_idempotent(self):
+        await init_crafting_tables(self.db)
+        await init_crafting_tables(self.db)
+        await self.db.commit()
+
+    async def test_crafting_supports_64_bit_telegram_player_ids(self):
+        player_id = 9_876_543_210
+        await self.db.execute("INSERT INTO players(user_id) VALUES(?)", (player_id,))
+        await self.db.execute(
+            "INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)",
+            (player_id, "iron_ore", 3),
+        )
+        await self.db.execute(
+            "INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)",
+            (player_id, "ember_shard", 1),
+        )
+        await self.db.commit()
+        await craft_item(self.db, player_id, 5, "iron_sword")
+        self.assertEqual((await get_materials(self.db, player_id))["iron_ore"], 0)
 
 
 if __name__ == "__main__":
