@@ -171,10 +171,15 @@ async def attack_roaming_event(db, event_id, user_id, damage, now=None, cooldown
     )
     if cur.rowcount != 1:
         raise RoamingEventError("The roaming event changed; retry your attack.")
+    damage_expression = (
+        "roaming_event_participants.damage+excluded.damage"
+        if _is_postgres(db)
+        else "damage+excluded.damage"
+    )
     cur = await db.execute(
-        """INSERT INTO roaming_event_participants(event_id,user_id,damage,last_attack_at)
+        f"""INSERT INTO roaming_event_participants(event_id,user_id,damage,last_attack_at)
            VALUES(?,?,?,?) ON CONFLICT(event_id,user_id) DO UPDATE SET
-           damage=damage+excluded.damage,last_attack_at=excluded.last_attack_at""",
+           damage={damage_expression},last_attack_at=excluded.last_attack_at""",
         (event_id, user_id, dealt, stamp),
     )
     if cur.rowcount != 1:
