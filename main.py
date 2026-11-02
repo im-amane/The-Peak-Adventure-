@@ -25,7 +25,7 @@ from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
-from group_system import GroupError, attack_group_raid_and_reward, award_group_xp, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
+from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, recent_admin_actions, record_admin_action
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
@@ -1035,8 +1035,7 @@ async def confirm_trade(message: Message):
         await db.commit()
         if trade["chat_id"] < 0:
             try:
-                await record_group_activity(db,trade["chat_id"],"trade")
-                await award_group_xp(db,trade["chat_id"],10)
+                await record_group_activity_reward(db,trade["chat_id"],"trade",10)
             except GroupError:
                 pass
         await record_player_guild_activity(trade["initiator_id"], "trade")
@@ -2081,8 +2080,7 @@ async def duel_action(call: CallbackQuery):
     duel = await cur.fetchone()
     if duel["status"] == "finished" and duel["chat_id"] < 0 and duel["winner_id"]:
         try:
-            await record_group_activity(db,duel["chat_id"],"battle")
-            await award_group_xp(db,duel["chat_id"],20)
+            await record_group_activity_reward(db,duel["chat_id"],"battle",20)
         except GroupError:
             pass
     war_result = None
