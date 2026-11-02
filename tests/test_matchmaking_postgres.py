@@ -55,7 +55,11 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_pvp_damage_uses_match_start_stats_after_equipment_changes(self):
         await self.db_one.execute(
-            "UPDATE players SET hero_class='Mage',level=10 WHERE user_id=?",
+            "UPDATE players SET level=10 WHERE user_id IN (?,?)",
+            (9_100_000_001, 9_100_000_002),
+        )
+        await self.db_one.execute(
+            "UPDATE players SET hero_class='Mage' WHERE user_id=?",
             (9_100_000_001,),
         )
         await self.db_one.commit()
