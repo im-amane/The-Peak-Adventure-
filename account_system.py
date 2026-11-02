@@ -1,5 +1,4 @@
 """Player privacy settings and explicit account deletion."""
-import aiosqlite
 from guild_system import disband_guild
 
 class AccountError(ValueError):
@@ -23,20 +22,50 @@ async def _atomic_rollback(db, name, nested):
         await db.rollback()
 
 
+def _is_postgres(db):
+    return getattr(db, "dialect", "sqlite") == "postgres"
+
+
+async def _table_exists(db, table):
+    if _is_postgres(db):
+        cur = await db.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=? AND table_type='BASE TABLE'",
+            (table,),
+        )
+    else:
+        cur = await db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        )
+    return await cur.fetchone() is not None
+
+
+async def _column_exists(db, table, column):
+    if _is_postgres(db):
+        cur = await db.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema=current_schema() AND table_name=? AND column_name=?",
+            (table, column),
+        )
+        return await cur.fetchone() is not None
+    cur = await db.execute(f"PRAGMA table_info({table})")
+    return column in {row["name"] for row in await cur.fetchall()}
+
+
 async def init_account_tables(db):
     name = "init_account_tables"
     nested = await _atomic_start(db, name)
+    user_id_type = "BIGINT" if _is_postgres(db) else "INTEGER"
     try:
-        await db.execute("""CREATE TABLE IF NOT EXISTS player_settings(
-          user_id INTEGER PRIMARY KEY,
+        await db.execute(f"""CREATE TABLE IF NOT EXISTS player_settings(
+          user_id {user_id_type} PRIMARY KEY,
           notifications_enabled INTEGER NOT NULL DEFAULT 1 CHECK(notifications_enabled IN (0,1)),
           profile_visibility TEXT NOT NULL DEFAULT 'public' CHECK(profile_visibility IN ('public','friends')),
           sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1)),
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
-        cur = await db.execute("PRAGMA table_info(player_settings)")
-        columns = {row["name"] for row in await cur.fetchall()}
-        if "sound_enabled" not in columns:
+        if not await _column_exists(db, "player_settings", "sound_enabled"):
             await db.execute("ALTER TABLE player_settings ADD COLUMN sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK(sound_enabled IN (0,1))")
         await _atomic_finish(db, name, nested)
     except Exception:
@@ -141,8 +170,7 @@ async def _delete_player_account_unlocked(db,user_id):
                 await db.execute(f"DELETE FROM {table} WHERE chat_id=?",(chat_id,))
     await db.execute("DELETE FROM guild_invites WHERE inviter_id=? OR target_id=?",(user_id,user_id))
     await db.execute("DELETE FROM guild_announcements WHERE author_id=?",(user_id,))
-    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='guild_chat_messages'")
-    if await cur.fetchone():
+    if await _table_exists(db, "guild_chat_messages"):
         await db.execute("DELETE FROM guild_chat_messages WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM guild_raid_contributions WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM guild_raid_cooldowns WHERE user_id=?",(user_id,))
@@ -179,8 +207,7 @@ async def _delete_player_account_unlocked(db,user_id):
     await db.execute("DELETE FROM group_bans WHERE user_id=? OR actor_id=?",(user_id,user_id))
     await db.execute("DELETE FROM group_raid_contributions WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM group_raid_cooldowns WHERE user_id=?",(user_id,))
-    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='guild_war_duel_events'")
-    if await cur.fetchone():
+    if await _table_exists(db, "guild_war_duel_events"):
         await db.execute(
             """DELETE FROM guild_war_duel_events
                WHERE winner_id=? OR duel_id IN (
@@ -190,8 +217,7 @@ async def _delete_player_account_unlocked(db,user_id):
         )
     await db.execute("DELETE FROM duels WHERE challenger_id=? OR opponent_id=?",(user_id,user_id))
     # Return escrow and close/reopen auctions before deleting the player's account.
-    cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auction_listings'")
-    if await cur.fetchone():
+    if await _table_exists(db, "auction_listings"):
         cur=await db.execute("SELECT listing_id,current_bid,highest_bidder FROM auction_listings WHERE seller_id=? AND status='active'",(user_id,))
         for listing in await cur.fetchall():
             if listing["highest_bidder"] is not None:
@@ -227,8 +253,7 @@ async def _delete_player_account_unlocked(db,user_id):
         ("player_stamina","user_id=?",(user_id,)),
         ("player_mana","user_id=?",(user_id,)),
     ):
-        cur=await db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",(table,))
-        if await cur.fetchone():
+        if await _table_exists(db, table):
             await db.execute(f"DELETE FROM {table} WHERE {where}",params)
     for table in ("battles","daily_claims","boss_defeats","monster_discoveries","quest_progress","achievement_progress","character_appearance","player_settings","dungeon_runs","dungeon_rewards","player_materials","crafted_items","player_worlds","player_presence","world_discoveries","player_story","story_flags","story_reward_claims"):
         await db.execute(f"DELETE FROM {table} WHERE user_id=?",(user_id,))
