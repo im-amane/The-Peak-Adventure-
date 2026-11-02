@@ -1944,7 +1944,6 @@ async def accept_duel(call: CallbackQuery):
         )
         if cur.rowcount != 1:
             await db.rollback()
-            await call.answer("This duel invitation is no longer active.", show_alert=True)
             return
         await db.commit()
     except Exception:
@@ -1983,7 +1982,6 @@ async def decline_duel(call: CallbackQuery):
         )
         if cur.rowcount != 1:
             await db.rollback()
-            await call.answer("This duel invitation is no longer active.", show_alert=True)
             return
         await db.commit()
     except Exception:
