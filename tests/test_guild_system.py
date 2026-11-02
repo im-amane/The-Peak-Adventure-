@@ -197,4 +197,57 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_cooldowns")
   self.assertEqual((await cur.fetchone())[0],0)
 
+
+ async def test_disband_removes_all_guild_owned_records_and_preserves_other_guild(self):
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(10,1,3)")
+  await self.db.execute("INSERT INTO guild_invites(guild_id,inviter_id,target_id) VALUES(20,4,2)")
+  await self.db.execute("INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(10,'Peak notice',1)")
+  await self.db.execute("INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(20,'Other notice',4)")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(10,2,'old message')")
+  await self.db.execute("INSERT INTO guild_chat_messages(guild_id,user_id,message) VALUES(20,4,'keep message')")
+  await self.db.execute("INSERT INTO guild_missions VALUES(10,'2026-11-02','battles',2,0)")
+  await self.db.execute("INSERT INTO guild_missions VALUES(20,'2026-11-02','battles',1,0)")
+  await self.db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(10,10,'Peak Boss',100,50)")
+  await self.db.execute("INSERT INTO guild_raids(guild_id,boss_level,boss_name,max_hp,hp) VALUES(20,10,'Other Boss',100,50)")
+  await self.db.execute("INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(1,2,50)")
+  await self.db.execute("INSERT INTO guild_raid_cooldowns(raid_id,user_id) VALUES(1,2)")
+  await self.db.execute("INSERT INTO guild_wars(war_id,challenger_guild,target_guild,status) VALUES(100,10,20,'completed')")
+  await self.db.execute("INSERT INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(700,100,1)")
+  await self.db.commit()
+
+  self.assertTrue(await disband_guild(self.db,10,1))
+  for table in ("guild_invites","guild_announcements","guild_chat_messages","guild_missions","guild_raids","guild_raid_contributions","guild_raid_cooldowns"):
+   cur=await self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE guild_id=10" if table not in {"guild_raid_contributions","guild_raid_cooldowns"} else
+     f"SELECT COUNT(*) FROM {table} WHERE raid_id=1")
+   self.assertEqual((await cur.fetchone())[0],0,table)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_wars WHERE challenger_guild=10 OR target_guild=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_war_duel_events WHERE war_id=100")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_members WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+  for table in ("guild_invites","guild_announcements","guild_chat_messages","guild_missions","guild_raids"):
+   cur=await self.db.execute(f"SELECT COUNT(*) FROM {table} WHERE guild_id=20")
+   self.assertEqual((await cur.fetchone())[0],1,table)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=20")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_non_leader_cannot_disband_guild(self):
+  with self.assertRaises(GuildFeatureError):
+   await disband_guild(self.db,10,2)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_disband_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await disband_guild(self.db,10,1)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_members WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],2)
+
 if __name__=="__main__": unittest.main()
