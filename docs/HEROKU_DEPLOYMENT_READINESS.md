@@ -9,7 +9,8 @@ Heroku is the selected hosting target for The Peak Adventure. This document reco
 - `Procfile` declares `web: python main.py`.
 - `main.py` reads the platform-provided `PORT` value for its aiohttp server.
 - The same process currently starts Telegram long polling and the HTTP server.
-- The game database is SQLite through `aiosqlite`; the configured path defaults to a local file.
+- SQLite through `aiosqlite` remains the default when `DATABASE_URL` is unset. Setting `DATABASE_URL` explicitly selects the Psycopg 3 PostgreSQL adapter; connection or schema initialization failures stop startup rather than silently falling back to a new SQLite file.
+- PostgreSQL runtime selection is now wired, but it is not production-verified. The existing adapter and service-level tests do not replace full schema, transaction, concurrency and migration validation on a representative database.
 - The automated backup loop creates SQLite snapshot files under the configured local backup directory.
 - The Cloudflare Worker is the Mini App edge gateway; its `BACKEND_ORIGIN` must point to the HTTPS Python backend.
 - The Mini App requires a public HTTPS `WEBAPP_URL` registered with BotFather.
@@ -21,7 +22,7 @@ Heroku is the selected hosting target for The Peak Adventure. This document reco
 Heroku dyno filesystems are ephemeral and isolated. Local files are not a durable database and are not shared between dynos. The current SQLite database and local backup snapshots therefore cannot be treated as production persistence.
 
 Required work:
-- Introduce a PostgreSQL persistence implementation and explicit schema migrations.
+- Complete the PostgreSQL persistence audit and explicit, versioned schema migrations. The runtime can now opt into the existing Psycopg adapter with `DATABASE_URL`, but the application still has SQLite-specific paths and compatibility gaps to resolve.
 - Audit SQLite-specific SQL and APIs, including placeholders, `PRAGMA`, `lastrowid`, row handling, transaction/savepoint semantics and locking.
 - Preserve transaction atomicity and idempotency across all gameplay, economy, trading, guild and multiplayer operations.
 - Add PostgreSQL integration tests and migration/rollback tests.
