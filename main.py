@@ -3091,48 +3091,87 @@ async def cb_shop(call: CallbackQuery):
     await call.message.answer("🛒 <b>Adventurer's Shop</b>\nChoose an item to buy:", reply_markup=shop_keyboard())
 
 
+async def buy_shop_item(user_id: int, item_id: str):
+    """Purchase a coin-shop item atomically, including its inventory effect."""
+    assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        raise ShopError("Invalid player account.")
+    item=SHOP_ITEMS.get(item_id) if isinstance(item_id,str) else None
+    if not item:
+        raise ShopError("That shop item does not exist.")
+    nested=db.in_transaction
+    savepoint="coin_shop_purchase"
+    if nested:
+        await db.execute(f"SAVEPOINT {savepoint}")
+    else:
+        await db.execute("BEGIN IMMEDIATE")
+    try:
+        player=await get_player(user_id)
+        if not player["class_selected"]:
+            raise ShopError("Choose your hero class first.")
+        cur=await db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
+        if await cur.fetchone():
+            raise ShopError("Finish or escape your current battle before shopping.")
+        if player["level"]<item["level"]:
+            raise ShopError(f"You need level {item['level']} to buy {item['name']}.")
+        if player["coins"]<item["cost"]:
+            raise ShopError(f"You need {item['cost']} coins for {item['name']}.")
+        if item["type"]=="weapon" and item["bonus"]<=player["weapon_attack"]:
+            raise ShopError("Your current weapon is already as strong or stronger.")
+        if item["type"]=="armor" and item["bonus"]<=player["armor_defense"]:
+            raise ShopError("Your current armor is already as strong or stronger.")
+        debit=await db.execute(
+            "UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?",
+            (item["cost"],user_id,item["cost"]),
+        )
+        if debit.rowcount!=1:
+            raise ShopError("You no longer have enough coins for this purchase.")
+        if item["type"]=="weapon":
+            effect=await db.execute(
+                "UPDATE players SET weapon=?,weapon_attack=? WHERE user_id=?",
+                (item["name"],item["bonus"],user_id),
+            )
+        elif item["type"]=="armor":
+            effect=await db.execute(
+                "UPDATE players SET armor=?,armor_defense=? WHERE user_id=?",
+                (item["name"],item["bonus"],user_id),
+            )
+        else:
+            effect=await db.execute(
+                "UPDATE players SET potions=potions+? WHERE user_id=?",
+                (item["bonus"],user_id),
+            )
+        if effect.rowcount!=1:
+            raise ShopError("The item could not be added to your inventory. No coins were deducted.")
+        if nested:
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.commit()
+        return item
+    except Exception:
+        if nested:
+            await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            await db.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            await db.rollback()
+        raise
+
+
+class ShopError(ValueError):
+    pass
+
+
 @dp.callback_query(F.data.startswith("buy:"))
 async def cb_buy_item(call: CallbackQuery):
     await call.answer()
     user_id = call.from_user.id
     item_id = call.data.split(":", 1)[1]
-    item = SHOP_ITEMS.get(item_id)
-    if not item:
-        await call.message.answer("That shop item does not exist.")
+    try:
+        item = await buy_shop_item(user_id, item_id)
+    except ShopError as exc:
+        await call.message.answer(str(exc))
         return
-    p = await get_player(user_id, call.from_user.username)
-    if not p["class_selected"]:
-        await call.message.answer("Choose your hero class first.")
-        return
-    active = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
-    if await active.fetchone():
-        await call.message.answer("Finish or escape your current battle before shopping.")
-        return
-    if p["level"] < item["level"]:
-        await call.message.answer(f"🔒 You need level {item['level']} to buy {item['name']}.")
-        return
-    if p["coins"] < item["cost"]:
-        await call.message.answer(f"🪙 You need {item['cost']} coins for {item['name']}.")
-        return
-    if item["type"] == "weapon" and item["bonus"] <= p["weapon_attack"]:
-        await call.message.answer("Your current weapon is already as strong or stronger.")
-        return
-    if item["type"] == "armor" and item["bonus"] <= p["armor_defense"]:
-        await call.message.answer("Your current armor is already as strong or stronger.")
-        return
-    debit = await db.execute("UPDATE players SET coins=coins-? WHERE user_id=? AND coins>=?", (item["cost"], user_id, item["cost"]))
-    if debit.rowcount == 0:
-        await call.message.answer("🪙 You no longer have enough coins for this purchase.")
-        return
-    if item["type"] == "weapon":
-        await db.execute("UPDATE players SET weapon=?, weapon_attack=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
-    elif item["type"] == "armor":
-        await db.execute("UPDATE players SET armor=?, armor_defense=? WHERE user_id=?", (item["name"], item["bonus"], user_id))
-    else:
-        await db.execute("UPDATE players SET potions=potions+? WHERE user_id=?", (item["bonus"], user_id))
-    await db.commit()
     await call.message.answer(f"✅ Purchased <b>{item['name']}</b> for {item['cost']} coins.")
-
 
 @dp.callback_query(F.data == "profile")
 async def cb_profile(call: CallbackQuery):
