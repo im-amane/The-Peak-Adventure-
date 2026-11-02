@@ -295,11 +295,13 @@ async def init_db():
             ("daily_claims", "user_id"), ("boss_defeats", "user_id"),
             ("monster_discoveries", "user_id"), ("quest_progress", "user_id"),
             ("achievement_progress", "user_id"), ("guild_members", "user_id"),
-            ("guild_members", "guild_id"), ("duels", "chat_id"),
-            ("duels", "challenger_id"), ("duels", "opponent_id"),
-            ("duels", "turn_user_id"), ("duels", "winner_id"),
-            ("guilds", "leader_id"), ("trades", "chat_id"),
-            ("trades", "initiator_id"), ("trades", "partner_id"),
+            ("guild_members", "guild_id"), ("duels", "duel_id"),
+            ("duels", "chat_id"), ("duels", "challenger_id"),
+            ("duels", "opponent_id"), ("duels", "turn_user_id"),
+            ("duels", "winner_id"), ("guilds", "guild_id"),
+            ("guilds", "leader_id"), ("trades", "trade_id"),
+            ("trades", "chat_id"), ("trades", "initiator_id"),
+            ("trades", "partner_id"),
         ):
             await db.execute(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE BIGINT")
     else:
