@@ -42,7 +42,7 @@ from guild_system import (
     declare_guild_war, get_guild_chat, get_guild_missions, guild_role,
     claim_guild_mission, init_guild_features, join_guild, record_guild_activity,
     record_guild_war_duel, respond_guild_invite,
-    respond_guild_war, send_guild_message, start_guild_raid, record_guild_activity,
+    respond_guild_war, send_guild_message, start_guild_raid,
 )
 from group_system import (
     GroupError, attack_group_raid, claim_group_mission_reward,
