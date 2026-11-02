@@ -2089,7 +2089,8 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT weapon,weapon_attack FROM players WHERE user_id=?",
             (self.buyer_id,),
         )
-        self.assertEqual(tuple(await cursor.fetchone()), ("Rusty Sword", 0))
+        row = await cursor.fetchone()
+        self.assertEqual((row["weapon"], row["weapon_attack"]), ("Rusty Sword", 0))
 
     async def test_buyer_in_active_battle_receives_item_in_stash(self):
         listing_id = await create_listing(
@@ -2123,7 +2124,8 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT weapon,weapon_attack FROM players WHERE user_id=?",
             (self.seller_id,),
         )
-        self.assertEqual(tuple(await cursor.fetchone()), ("Stormblade", 25))
+        row = await cursor.fetchone()
+        self.assertEqual((row["weapon"], row["weapon_attack"]), ("Stormblade", 25))
         stash = await list_stash(self.db, self.seller_id)
         self.assertEqual([(row["item_name"], row["item_stat"]) for row in stash], [("New Blade", 12)])
 
