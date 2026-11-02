@@ -114,4 +114,53 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2," ")
   with self.assertRaises(GuildFeatureError): await send_guild_message(self.db,10,2,"x"*501)
 
+ async def test_guild_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_guild_features(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='guild_invites'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
+ async def test_role_update_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await set_guild_role(self.db,10,1,2,"officer")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  self.assertEqual(await guild_role(self.db,10,2),"member")
+
+ async def test_mission_claim_preserves_outer_transaction(self):
+  await record_guild_activity(self.db,10,2,"battle",5)
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  await claim_guild_mission(self.db,10,1,"battles","2026-11-02")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT claimed FROM guild_missions WHERE guild_id=10 AND mission_date='2026-11-02' AND mission_id='battles'")
+  self.assertEqual((await cur.fetchone())["claimed"],0)
+  cur=await self.db.execute("SELECT guild_xp FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())["guild_xp"],0)
+
+ async def test_raid_reward_failure_rolls_back_attack(self):
+  await start_guild_raid(self.db,10,1,10,"Root Warden",100)
+  await self.db.execute("CREATE TRIGGER reject_guild_raid_xp BEFORE UPDATE OF guild_xp ON guilds BEGIN SELECT RAISE(ABORT,'xp unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await attack_guild_raid(self.db,10,2,100)
+  cur=await self.db.execute("SELECT hp,status FROM guild_raids WHERE guild_id=10")
+  raid=await cur.fetchone()
+  self.assertEqual((raid["hp"],raid["status"]),(100,"active"))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_contributions")
+  self.assertEqual((await cur.fetchone())[0],0)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guild_raid_cooldowns")
+  self.assertEqual((await cur.fetchone())[0],0)
+
 if __name__=="__main__": unittest.main()
