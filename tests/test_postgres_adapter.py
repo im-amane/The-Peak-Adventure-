@@ -3161,7 +3161,12 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.postgres.execute(
             """SELECT child.relname AS table_name,child_column.attname AS column_name,
                       parent.relname AS referenced_table,parent_column.attname AS referenced_column,
-                      rc.update_rule,rc.delete_rule
+                      CASE fk.confupdtype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+                           WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                           WHEN 'd' THEN 'SET DEFAULT' END AS update_rule,
+                      CASE fk.confdeltype WHEN 'a' THEN 'NO ACTION' WHEN 'r' THEN 'RESTRICT'
+                           WHEN 'c' THEN 'CASCADE' WHEN 'n' THEN 'SET NULL'
+                           WHEN 'd' THEN 'SET DEFAULT' END AS delete_rule
                FROM pg_constraint fk
                JOIN pg_class child ON child.oid=fk.conrelid
                JOIN pg_namespace child_schema ON child_schema.oid=child.relnamespace
@@ -3173,9 +3178,6 @@ class SqlitePostgresSchemaParityTests(unittest.IsolatedAsyncioTestCase):
                  ON child_column.attrelid=child.oid AND child_column.attnum=key.child_attnum
                JOIN pg_attribute parent_column
                  ON parent_column.attrelid=parent.oid AND parent_column.attnum=key.parent_attnum
-               JOIN information_schema.referential_constraints rc
-                 ON rc.constraint_schema=child_schema.nspname
-                AND rc.constraint_name=fk.conname
                WHERE fk.contype='f'
                  AND child_schema.nspname=current_schema()
                  AND parent_schema.nspname=current_schema()"""
