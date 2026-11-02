@@ -52,6 +52,11 @@ from auction_system import (
     AuctionError, cancel_listing, create_listing, equip_stashed_item,
     init_auction_tables, list_active_auctions, list_stash, place_bid,
 )
+from premium_system import (
+    PremiumError, buy_premium_item, consume_xp_boost, credit_premium_purchase,
+    get_premium_balance, get_premium_packages, init_premium_tables,
+)
+
 
 
 
@@ -2165,3 +2170,146 @@ class AuctionPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT status FROM auction_listings WHERE listing_id=?", (listing_id,)
         )
         self.assertEqual((await cursor.fetchone())["status"], "expired")
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PremiumPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
+    user_id = 5_000_000_000_000_501
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        for table in (
+            "premium_shop_purchases", "player_xp_boosts",
+            "premium_transactions", "premium_wallets",
+            "player_stamina", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.execute(
+            "CREATE TABLE players(user_id BIGINT PRIMARY KEY,potions INTEGER NOT NULL DEFAULT 0)"
+        )
+        await self.db.execute(
+            "CREATE TABLE player_stamina(user_id BIGINT PRIMARY KEY,stamina INTEGER NOT NULL,updated_at BIGINT NOT NULL)"
+        )
+        await self.db.execute(
+            "INSERT INTO players(user_id,potions) VALUES(?,2)",
+            (self.user_id,),
+        )
+        await self.db.execute(
+            "INSERT INTO player_stamina(user_id,stamina,updated_at) VALUES(?,30,?)",
+            (self.user_id, int(time.time())),
+        )
+        await self.db.commit()
+        await init_premium_tables(self.db)
+
+    async def asyncTearDown(self):
+        for table in (
+            "premium_shop_purchases", "player_xp_boosts",
+            "premium_transactions", "premium_wallets",
+            "player_stamina", "players",
+        ):
+            await self.db.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_stars_ledger_is_idempotent_with_bigint_player_ids(self):
+        package = get_premium_packages()["crest"]
+        first = await credit_premium_purchase(
+            self.db, self.user_id, "crest", package["stars"], "pg-charge-001"
+        )
+        second = await credit_premium_purchase(
+            self.db, self.user_id, "crest", package["stars"], "pg-charge-001"
+        )
+        self.assertTrue(first["credited"])
+        self.assertFalse(second["credited"])
+        self.assertEqual(first["gems"], package["gems"])
+        self.assertEqual(await get_premium_balance(self.db, self.user_id), 120)
+
+        cursor = await self.db.execute(
+            "SELECT transaction_id,user_id,telegram_charge_id FROM premium_transactions"
+        )
+        row = await cursor.fetchone()
+        self.assertGreater(row["transaction_id"], 0)
+        self.assertEqual((row["user_id"], row["telegram_charge_id"]), (self.user_id, "pg-charge-001"))
+        with self.assertRaisesRegex(PremiumError, "different purchase"):
+            await credit_premium_purchase(
+                self.db, self.user_id + 1, "crest", package["stars"], "pg-charge-001"
+            )
+
+    async def test_shop_items_apply_effects_and_xp_boosts(self):
+        for package_id in ("crest", "spark"):
+            package = get_premium_packages()[package_id]
+            await credit_premium_purchase(
+                self.db, self.user_id, package_id, package["stars"],
+                f"pg-charge-{package_id}",
+            )
+
+        potion = await buy_premium_item(self.db, self.user_id, "potion_bundle")
+        stamina = await buy_premium_item(self.db, self.user_id, "stamina_crystal")
+        charm = await buy_premium_item(self.db, self.user_id, "xp_charm")
+        self.assertEqual((potion["balance"], stamina["balance"], charm["balance"]), (130, 105, 45))
+
+        cursor = await self.db.execute(
+            "SELECT potions FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["potions"], 7)
+        cursor = await self.db.execute(
+            "SELECT stamina FROM player_stamina WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["stamina"], 80)
+
+        self.assertTrue(await consume_xp_boost(self.db, self.user_id))
+        self.assertTrue(await consume_xp_boost(self.db, self.user_id))
+        self.assertTrue(await consume_xp_boost(self.db, self.user_id))
+        self.assertFalse(await consume_xp_boost(self.db, self.user_id))
+        await self.db.commit()
+
+        cursor = await self.db.execute(
+            "SELECT purchase_id,user_id,item_id FROM premium_shop_purchases ORDER BY purchase_id"
+        )
+        purchases = await cursor.fetchall()
+        self.assertEqual(len(purchases), 3)
+        self.assertTrue(all(row["purchase_id"] > 0 and row["user_id"] == self.user_id for row in purchases))
+
+    async def test_failed_shop_log_rolls_back_item_effect_and_wallet_debit(self):
+        package = get_premium_packages()["crest"]
+        await credit_premium_purchase(
+            self.db, self.user_id, "crest", package["stars"], "pg-charge-rollback"
+        )
+        await self.db.execute(
+            """CREATE FUNCTION reject_premium_purchase_log() RETURNS trigger AS $$
+               BEGIN RAISE EXCEPTION 'purchase log unavailable'; END;
+               $$ LANGUAGE plpgsql"""
+        )
+        await self.db.execute(
+            """CREATE TRIGGER reject_premium_purchase_log
+               BEFORE INSERT ON premium_shop_purchases
+               FOR EACH ROW EXECUTE FUNCTION reject_premium_purchase_log()"""
+        )
+        await self.db.commit()
+
+        with self.assertRaises(Exception):
+            await buy_premium_item(self.db, self.user_id, "potion_bundle")
+        cursor = await self.db.execute(
+            "SELECT potions FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["potions"], 2)
+        self.assertEqual(await get_premium_balance(self.db, self.user_id), 120)
+        cursor = await self.db.execute("SELECT COUNT(*) AS total FROM premium_shop_purchases")
+        self.assertEqual((await cursor.fetchone())["total"], 0)
+
+    async def test_premium_schema_initialization_preserves_outer_transaction(self):
+        await self.db.execute("DROP TABLE premium_shop_purchases")
+        await self.db.commit()
+        await self.db.execute("UPDATE players SET potions=potions+1 WHERE user_id=?", (self.user_id,))
+        await init_premium_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT potions FROM players WHERE user_id=?", (self.user_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["potions"], 2)
+        cursor = await self.db.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name='premium_shop_purchases'"
+        )
+        self.assertIsNone(await cursor.fetchone())
