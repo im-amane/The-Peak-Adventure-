@@ -48,7 +48,7 @@ def current_day_key(now=None):
 
 async def init_daily_mission_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_daily_missions(
-      user_id INTEGER NOT NULL,day_key TEXT NOT NULL,mission_id TEXT NOT NULL,
+      user_id BIGINT NOT NULL,day_key TEXT NOT NULL,mission_id TEXT NOT NULL,
       progress INTEGER NOT NULL DEFAULT 0 CHECK(progress>=0),
       claimed INTEGER NOT NULL DEFAULT 0 CHECK(claimed IN (0,1)),
       PRIMARY KEY(user_id,day_key,mission_id)
@@ -58,7 +58,7 @@ async def init_daily_mission_tables(db):
 
 async def _ensure_day(db, user_id, day_key):
     await db.executemany(
-        "INSERT OR IGNORE INTO player_daily_missions(user_id,day_key,mission_id) VALUES(?,?,?)",
+        "INSERT INTO player_daily_missions(user_id,day_key,mission_id) VALUES(?,?,?) ON CONFLICT(user_id,day_key,mission_id) DO NOTHING",
         [(user_id, day_key, mission["id"]) for mission in DAILY_MISSIONS],
     )
 
@@ -78,8 +78,8 @@ async def record_daily_progress(db, user_id, kind, amount=1, now=None):
         for mission in DAILY_MISSIONS:
             if mission["kind"] == kind:
                 await db.execute(
-                    "UPDATE player_daily_missions SET progress=MIN(?,progress+?) WHERE user_id=? AND day_key=? AND mission_id=?",
-                    (mission["target"], amount, user_id, day_key, mission["id"]),
+                    "UPDATE player_daily_missions SET progress=CASE WHEN progress+? > ? THEN ? ELSE progress+? END WHERE user_id=? AND day_key=? AND mission_id=?",
+                    (amount, mission["target"], mission["target"], amount, user_id, day_key, mission["id"]),
                 )
         await _commit_transaction(db, nested, savepoint)
     except Exception:

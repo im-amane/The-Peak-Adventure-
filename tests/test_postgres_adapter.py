@@ -19,6 +19,8 @@ from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, in
 from world_system import WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world
 from dungeon_system import DungeonError, advance_dungeon, abandon_dungeon, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 from crafting_system import CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables
+from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
+from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -797,6 +799,147 @@ class PostgresCraftingServiceTests(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
         await craft_item(self.db, player_id, 5, "iron_sword")
         self.assertEqual((await get_materials(self.db, player_id))["iron_ore"], 0)
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresQuestServiceTests(unittest.IsolatedAsyncioTestCase):
+    player_id = 9_876_543_210
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS player_daily_missions")
+        await self.db.execute("DROP TABLE IF EXISTS player_weekly_quests")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 potions BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES(?)", (self.player_id,))
+        await self.db.commit()
+        await init_daily_mission_tables(self.db)
+        await init_weekly_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS player_daily_missions")
+        await self.db.execute("DROP TABLE IF EXISTS player_weekly_quests")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_daily_progress_claim_and_idempotency(self):
+        await record_daily_progress(self.db, self.player_id, "wins", 100, now=1000)
+        missions = await get_daily_missions(self.db, self.player_id, now=1000)
+        hunter = next(item for item in missions if item["id"] == "daily_hunter")
+        self.assertEqual(hunter["progress"], 3)
+        self.assertTrue(hunter["completed"])
+
+        reward = await claim_daily_mission(
+            self.db, self.player_id, "daily_hunter", now=1000
+        )
+        self.assertEqual((reward["coins"], reward["potions"]), (75, 1))
+        with self.assertRaises(DailyMissionError):
+            await claim_daily_mission(
+                self.db, self.player_id, "daily_hunter", now=1000
+            )
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.player_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (75, 1))
+
+    async def test_daily_progress_rolls_over_at_utc_day_boundary(self):
+        await record_daily_progress(self.db, self.player_id, "wins", 2, now=1000)
+        next_day = await get_daily_missions(
+            self.db, self.player_id, now=86400 + 1000
+        )
+        hunter = next(item for item in next_day if item["id"] == "daily_hunter")
+        self.assertEqual(hunter["progress"], 0)
+        self.assertFalse(hunter["claimed"])
+
+    async def test_weekly_progress_claim_and_idempotency(self):
+        await record_weekly_progress(self.db, self.player_id, "wins", 100, now=1)
+        quests = await get_weekly_quests(self.db, self.player_id, now=1)
+        hunter = next(item for item in quests if item["id"] == "weekly_hunter")
+        self.assertEqual(hunter["progress"], 15)
+        self.assertTrue(hunter["completed"])
+        self.assertTrue(hunter["week_key"].endswith("W01"))
+
+        reward = await claim_weekly_reward(
+            self.db, self.player_id, "weekly_hunter", now=1
+        )
+        self.assertEqual((reward["coins"], reward["potions"]), (300, 2))
+        with self.assertRaises(WeeklyQuestError):
+            await claim_weekly_reward(
+                self.db, self.player_id, "weekly_hunter", now=1
+            )
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.player_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (300, 2))
+
+    async def test_weekly_progress_rolls_over_at_utc_week_boundary(self):
+        await record_weekly_progress(self.db, self.player_id, "wins", 5, now=1)
+        next_week = await get_weekly_quests(
+            self.db, self.player_id, now=7 * 86400 + 1
+        )
+        hunter = next(item for item in next_week if item["id"] == "weekly_hunter")
+        self.assertEqual(hunter["progress"], 0)
+        self.assertFalse(hunter["claimed"])
+        self.assertTrue(hunter["week_key"].endswith("W02"))
+
+    async def test_daily_claim_preserves_outer_transaction(self):
+        await record_daily_progress(self.db, self.player_id, "wins", 3, now=1000)
+        await self.db.execute("BEGIN IMMEDIATE")
+        await claim_daily_mission(self.db, self.player_id, "daily_hunter", now=1000)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.player_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (0, 0))
+        missions = await get_daily_missions(self.db, self.player_id, now=1000)
+        hunter = next(item for item in missions if item["id"] == "daily_hunter")
+        self.assertFalse(hunter["claimed"])
+
+    async def test_weekly_claim_preserves_outer_transaction(self):
+        await record_weekly_progress(self.db, self.player_id, "wins", 15, now=1)
+        await self.db.execute("BEGIN IMMEDIATE")
+        await claim_weekly_reward(self.db, self.player_id, "weekly_hunter", now=1)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (self.player_id,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (0, 0))
+        quests = await get_weekly_quests(self.db, self.player_id, now=1)
+        hunter = next(item for item in quests if item["id"] == "weekly_hunter")
+        self.assertFalse(hunter["claimed"])
+
+    async def test_concurrent_daily_claims_award_once(self):
+        await record_daily_progress(self.db, self.player_id, "wins", 3, now=1000)
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                claim_daily_mission(self.db, self.player_id, "daily_hunter", now=1000),
+                claim_daily_mission(second, self.player_id, "daily_hunter", now=1000),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(x, dict) for x in results), 1)
+            self.assertEqual(sum(isinstance(x, DailyMissionError) for x in results), 1)
+            cursor = await self.db.execute(
+                "SELECT coins,potions FROM players WHERE user_id=?", (self.player_id,)
+            )
+            self.assertEqual(tuple((await cursor.fetchone()).values()), (75, 1))
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_quest_schemas_initialize_idempotently(self):
+        await init_daily_mission_tables(self.db)
+        await init_weekly_tables(self.db)
+        await self.db.commit()
 
 
 if __name__ == "__main__":
