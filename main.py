@@ -503,7 +503,7 @@ async def claim_daily_reward(user_id: int) -> bool:
         return True
 
 
-async def refresh_quest_progress(user_id: int):
+async def refresh_quest_progress(user_id: int, commit: bool = True):
     assert db is not None
     p = await get_player(user_id)
     for quest in QUESTS:
@@ -523,7 +523,8 @@ async def refresh_quest_progress(user_id: int):
             "completed=MAX(quest_progress.completed, excluded.completed)",
             (user_id, quest["id"], progress, int(progress >= quest["target"])),
         )
-    await db.commit()
+    if commit:
+        await db.commit()
 
 
 async def quest_view(user_id: int):
@@ -548,29 +549,65 @@ async def quest_view(user_id: int):
 
 async def claim_quest_reward(user_id: int, quest_id: str) -> str:
     assert db is not None
+    if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
+        return "Invalid player account."
+    if not isinstance(quest_id,str):
+        return "That quest does not exist."
     quest = next((q for q in QUESTS if q["id"] == quest_id), None)
     if not quest:
         return "That quest does not exist."
-    async with player_locks[user_id]:
-        await refresh_quest_progress(user_id)
-        cur = await db.execute(
-            "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
-            (user_id, quest_id),
-        )
-        state = await cur.fetchone()
-        if not state or not state["completed"]:
-            return "This quest is not complete yet."
-        if state["claimed"]:
-            return "You have already claimed this quest reward."
-        await db.execute(
-            "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
-            (quest["coins"], quest["potions"], user_id),
-        )
-        await db.execute(
-            "UPDATE quest_progress SET claimed=1 WHERE user_id=? AND quest_id=?",
-            (user_id, quest_id),
-        )
-        await db.commit()
+    savepoint = db.in_transaction
+    try:
+        if savepoint:
+            await db.execute("SAVEPOINT claim_quest_reward")
+        else:
+            await db.execute("BEGIN IMMEDIATE")
+        async with player_locks[user_id]:
+            await refresh_quest_progress(user_id, commit=False)
+            cur = await db.execute(
+                "SELECT completed, claimed FROM quest_progress WHERE user_id=? AND quest_id=?",
+                (user_id, quest_id),
+            )
+            state = await cur.fetchone()
+            if not state or not state["completed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+                else:
+                    await db.rollback()
+                return "This quest is not complete yet."
+            if state["claimed"]:
+                if savepoint:
+                    await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                    await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+                else:
+                    await db.rollback()
+                return "You have already claimed this quest reward."
+            cur = await db.execute(
+                "UPDATE players SET coins=coins+?, potions=potions+? WHERE user_id=?",
+                (quest["coins"], quest["potions"], user_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Quest reward wallet update failed.")
+            cur = await db.execute(
+                """UPDATE quest_progress SET claimed=1
+                   WHERE user_id=? AND quest_id=? AND completed=1 AND claimed=0""",
+                (user_id, quest_id),
+            )
+            if cur.rowcount != 1:
+                raise RuntimeError("Quest reward was already claimed.")
+        if savepoint:
+            await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+        else:
+            await db.commit()
+    except Exception:
+        if db.in_transaction:
+            if savepoint:
+                await db.execute("ROLLBACK TO SAVEPOINT claim_quest_reward")
+                await db.execute("RELEASE SAVEPOINT claim_quest_reward")
+            else:
+                await db.rollback()
+        raise
     return f"🎁 <b>{quest['title']}</b> reward claimed: +{quest['coins']} coins and +{quest['potions']} potions."
 
 
