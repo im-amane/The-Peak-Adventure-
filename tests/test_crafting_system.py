@@ -109,4 +109,15 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    with self.subTest(user_id=user_id,monster=monster),self.assertRaises(CraftingError):
     await award_material_drop(self.db,user_id,monster)
 
+
+ async def test_table_initialization_preserves_outer_transaction(self):
+  await self.db.commit()
+  await self.db.execute("BEGIN")
+  await self.db.execute("UPDATE players SET weapon='Pending Blade' WHERE user_id=1")
+  await init_crafting_tables(self.db)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["weapon"],"Rusty Sword")
+
 if __name__=="__main__":unittest.main()
