@@ -3429,6 +3429,36 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
         cursor = await self.postgres.execute("SELECT COUNT(*) AS count FROM players")
         self.assertEqual((await cursor.fetchone())["count"], 0)
 
+    async def test_dry_run_blocks_missing_checks_defaults_and_non_unique_indexes(self):
+        with sqlite3.connect(self.sqlite_path) as source:
+            source.execute(
+                """CREATE TABLE migration_guard(
+                     value INTEGER CHECK(value >= 0),
+                     marker TEXT DEFAULT 'ready'
+                   )"""
+            )
+            source.execute(
+                "CREATE INDEX source_only_migration_guard_idx ON migration_guard(value)"
+            )
+        await self.postgres.execute(
+            "CREATE TABLE migration_guard(value BIGINT, marker TEXT)"
+        )
+        await self.postgres.commit()
+
+        report = await migrate_sqlite_to_postgres(
+            self.sqlite_path,
+            self.postgres,
+            apply=True,
+        )
+        self.assertFalse(report["compatible"])
+        self.assertFalse(report["applied"])
+        differences = report["schema_differences"]
+        self.assertTrue(any("check constraint count mismatch migration_guard" in item for item in differences))
+        self.assertTrue(any("default availability mismatch migration_guard.marker" in item for item in differences))
+        self.assertTrue(any("PostgreSQL missing index" in item and "migration_guard" in item for item in differences))
+        cursor = await self.postgres.execute("SELECT COUNT(*) AS count FROM migration_guard")
+        self.assertEqual((await cursor.fetchone())["count"], 0)
+
     async def test_migration_requires_an_idle_postgres_connection(self):
         await self.postgres.execute("BEGIN")
         with self.assertRaisesRegex(RuntimeError, "connection must be idle"):
