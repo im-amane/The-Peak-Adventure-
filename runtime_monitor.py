@@ -30,7 +30,7 @@ class RuntimeMonitor:
     def record_request(self, path: str, status: int, duration_seconds: float) -> None:
         now = self._clock()
         route = path if isinstance(path, str) and path.startswith("/") else "/unknown"
-        if route not in self.routes and len(self.routes) >= 100:
+        if route not in self.routes and len(self.routes) >= 99:
             route = "/_other"
         status_key = str(status)
         failed = status >= 400
