@@ -47,7 +47,7 @@ def _transactional(function):
             await _commit_atomic(db, nested, savepoint)
             return result
         except Exception:
-            await _rollback_atomic(db, savepoint, nested) if False else await _rollback_atomic(db, nested, savepoint)
+            await _rollback_atomic(db, nested, savepoint)
             raise
     return wrapped
 
