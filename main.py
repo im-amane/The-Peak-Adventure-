@@ -4367,6 +4367,46 @@ async def api_social(request: web.Request):
                     if set(payload) != {"action"}:
                         return web.json_response({"error": "Unexpected party leave fields."}, status=400)
                     result = {"new_leader_id": await leave_party(db, user_id)}
+                elif action == "guild_create":
+                    if set(payload) != {"action", "name"} or not isinstance(payload.get("name"), str):
+                        return web.json_response({"error": "A guild name is required."}, status=400)
+                    guild_id = await create_guild(db, user_id, payload["name"])
+                    result = {"guild_id": guild_id}
+                elif action == "guild_invite":
+                    if set(payload) != {"action", "target_id"} or type(payload.get("target_id")) is not int or payload["target_id"] <= 0:
+                        return web.json_response({"error": "A valid target_id is required."}, status=400)
+                    target_id = payload["target_id"]
+                    membership_cur = await db.execute(
+                        "SELECT guild_id FROM guild_members WHERE user_id=?",
+                        (user_id,),
+                    )
+                    membership = await membership_cur.fetchone()
+                    if not membership:
+                        raise GuildFeatureError("Join a guild before inviting players.")
+                    target_cur = await db.execute(
+                        "SELECT class_selected FROM players WHERE user_id=?",
+                        (target_id,),
+                    )
+                    target = await target_cur.fetchone()
+                    if not target:
+                        raise GuildFeatureError("That player has not registered yet.")
+                    if not target["class_selected"]:
+                        raise GuildFeatureError("That player must choose a hero class first.")
+                    low_id, high_id = sorted((user_id, target_id))
+                    friend_cur = await db.execute(
+                        "SELECT 1 FROM friend_requests WHERE user_low=? AND user_high=? AND status='accepted'",
+                        (low_id, high_id),
+                    )
+                    if not await friend_cur.fetchone():
+                        raise GuildFeatureError("You can invite accepted friends to your guild.")
+                    invite_id = await create_guild_invite(
+                        db, membership["guild_id"], user_id, target_id
+                    )
+                    result = {"invite_id": invite_id, "guild_id": membership["guild_id"]}
+                elif action == "guild_leave":
+                    if set(payload) != {"action"}:
+                        return web.json_response({"error": "Unexpected guild leave fields."}, status=400)
+                    result = {"disbanded": await leave_guild(db, user_id)}
                 elif action in {"guild_accept", "guild_decline"}:
                     if set(payload) != {"action", "invite_id"} or type(payload["invite_id"]) is not int:
                         return web.json_response({"error": "A valid guild invite_id is required."}, status=400)
