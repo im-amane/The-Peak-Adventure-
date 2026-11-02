@@ -75,6 +75,18 @@
         <div><input id="party-target-id" type="number" min="1" step="1" inputmode="numeric" placeholder="Player ID"><button id="party-invite" type="button">Invite</button></div>
         <button id="party-leave" type="button" hidden>Leave party</button>
       </div>
+      <section class="matchmaking-panel" aria-labelledby="matchmaking-title">
+        <div class="section-heading"><div><span class="eyebrow">PLAYER VS PLAYER</span><h3 id="matchmaking-title">⚔️ Matchmaking Arena</h3></div></div>
+        <p id="matchmaking-status" class="small" role="status" aria-live="polite">Not in a queue. Choose a mode to find an opponent.</p>
+        <div id="matchmaking-details" class="matchmaking-details"></div>
+        <div class="matchmaking-actions">
+          <button id="matchmaking-casual" type="button">🎯 Find Casual Match</button>
+          <button id="matchmaking-ranked" type="button">🏆 Find Ranked Match</button>
+          <button id="matchmaking-cancel" type="button" hidden>Cancel Queue</button>
+          <button id="matchmaking-refresh" type="button">↻ Refresh Status</button>
+        </div>
+        <p class="small">Queues match players by level and rating. Refresh to check whether an opponent has been found.</p>
+      </section>
       <div id="social-overview" class="social-overview"><p class="small">Loading your social circle...</p></div>
       <section id="guild-chat-panel" class="guild-chat-panel" aria-labelledby="guild-chat-title">
         <div class="section-heading"><h3 id="guild-chat-title">Guild Chat</h3><button id="guild-chat-load" type="button">Load messages</button></div>

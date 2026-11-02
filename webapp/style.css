@@ -210,3 +210,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px soli
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{scroll-margin-block:12px}
 button,input,select,textarea{-webkit-tap-highlight-color:transparent}
 button:disabled{opacity:.55}
+
+/* Matchmaking queue controls */
+.matchmaking-panel{margin:18px 0;padding:16px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,rgba(35,49,65,.92),rgba(21,29,40,.94))}
+.matchmaking-panel h3{margin:0}
+.matchmaking-details{display:flex;flex-wrap:wrap;gap:8px}
+.matchmaking-detail,.matchmaking-opponent{margin:5px 0;padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.06)}
+.matchmaking-opponent{border:1px solid var(--gold)}
+.matchmaking-actions{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.matchmaking-actions button{min-height:42px}
+.matchmaking-actions button[hidden]{display:none}
+@media(max-width:520px){.matchmaking-actions{display:grid;grid-template-columns:1fr 1fr}.matchmaking-actions button{width:100%}}

@@ -39,6 +39,12 @@
     worldNavigation: document.getElementById("world-navigation"),
     weeklyQuestList: document.getElementById("weekly-quest-list"),
     socialOverview: document.getElementById("social-overview"),
+    matchmakingStatus: document.getElementById("matchmaking-status"),
+    matchmakingDetails: document.getElementById("matchmaking-details"),
+    matchmakingCasual: document.getElementById("matchmaking-casual"),
+    matchmakingRanked: document.getElementById("matchmaking-ranked"),
+    matchmakingCancel: document.getElementById("matchmaking-cancel"),
+    matchmakingRefresh: document.getElementById("matchmaking-refresh"),
     socialSearchForm: document.getElementById("social-search-form"),
     socialSearchInput: document.getElementById("social-player-search"),
     socialSearchResults: document.getElementById("social-search-results"),
@@ -230,6 +236,7 @@
     renderWeeklyQuests(data.weekly_quests || []);
     renderWorldNavigation(data.worlds || [], data.landmark || null, data.battle_active);
     renderSocial(data.social || {});
+    renderMatchmaking(data.matchmaking || null);
     renderDungeon(data.dungeon || null, data.dungeons || []);
     renderMaterials(data.materials || {});
     renderStory(data.story || []);
@@ -437,6 +444,65 @@
     });
   }
 
+  function renderMatchmaking(queue) {
+    if (!ui.matchmakingStatus) return;
+    ui.matchmakingDetails.replaceChildren();
+    const queued = Boolean(queue && queue.status === "queued");
+    const matched = Boolean(queue && queue.status === "matched");
+    if (!queue) {
+      ui.matchmakingStatus.textContent = "Not in a queue. Choose Casual or Ranked to find an opponent.";
+    } else if (queued) {
+      const elapsed = Math.max(0, Math.floor(Date.now() / 1000 - queue.queued_at));
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      ui.matchmakingStatus.textContent = "🔎 Searching in " + queue.mode.toUpperCase() + " queue · " + minutes + ":" + String(seconds).padStart(2, "0") + " elapsed";
+    } else if (matched) {
+      ui.matchmakingStatus.textContent = "⚔️ MATCH FOUND · " + queue.mode.toUpperCase();
+    } else {
+      const labels = {cancelled:"Queue cancelled",expired:"Queue expired",completed:"Previous match completed"};
+      ui.matchmakingStatus.textContent = labels[queue.status] || "Queue status: " + queue.status;
+    }
+    if (queue) {
+      const detail = document.createElement("p");
+      detail.className = "matchmaking-detail";
+      detail.textContent = queue.mode.toUpperCase() + " · Level " + queue.player_level + " · Rating " + queue.rating;
+      ui.matchmakingDetails.appendChild(detail);
+      if (matched) {
+        const opponent = document.createElement("p");
+        opponent.className = "matchmaking-opponent";
+        opponent.textContent = "Opponent ID: " + queue.opponent_id + " · Level " + queue.opponent_level + " · Rating gap " + queue.rating_gap;
+        ui.matchmakingDetails.appendChild(opponent);
+        const note = document.createElement("p");
+        note.className = "small";
+        note.textContent = "Opponent found. Live PvP battle controls are not connected yet.";
+        ui.matchmakingDetails.appendChild(note);
+      }
+    }
+    const active = Boolean(queue && ["queued", "matched"].includes(queue.status));
+    const disabled = requestInFlight || !gameState || !gameState.class_selected || gameState.battle_active || active;
+    ui.matchmakingCasual.disabled = disabled;
+    ui.matchmakingRanked.disabled = disabled;
+    ui.matchmakingCancel.hidden = !queued;
+    ui.matchmakingCancel.disabled = requestInFlight || !queued;
+    ui.matchmakingRefresh.disabled = requestInFlight || !gameState;
+  }
+
+  async function runMatchmakingAction(action, mode) {
+    if (requestInFlight || !gameState) return;
+    requestInFlight = true;
+    [ui.matchmakingCasual,ui.matchmakingRanked,ui.matchmakingCancel,ui.matchmakingRefresh].forEach(button => { if (button) button.disabled = true; });
+    try {
+      const payload = action === "join" ? {action,mode} : {action};
+      const result = await postApi("/api/matchmaking", payload);
+      applyState(result.state, result.message);
+    } catch (error) {
+      ui.status.textContent = error.message;
+      await loadState().catch(() => null);
+    } finally {
+      requestInFlight = false;
+      if (gameState) applyState(gameState);
+    }
+  }
   function renderSocial(social) {
     if (!ui.socialOverview) return;
     ui.socialOverview.replaceChildren();
@@ -1413,6 +1479,15 @@
     if(action==="trade_accept"||action==="trade_decline"||action==="trade_cancel"||action==="trade_confirm")payload.trade_id=Number(button.dataset.tradeId);
     button.disabled=true;
     try{await runSocialAction(payload);}catch(_){button.disabled=false;}
+  });
+  if(ui.matchmakingCasual)ui.matchmakingCasual.addEventListener("click",()=>runMatchmakingAction("join","casual"));
+  if(ui.matchmakingRanked)ui.matchmakingRanked.addEventListener("click",()=>runMatchmakingAction("join","ranked"));
+  if(ui.matchmakingCancel)ui.matchmakingCancel.addEventListener("click",()=>runMatchmakingAction("cancel"));
+  if(ui.matchmakingRefresh)ui.matchmakingRefresh.addEventListener("click",async()=>{
+    if(requestInFlight)return;
+    requestInFlight=true;ui.matchmakingRefresh.disabled=true;
+    try{await loadState();}catch(error){ui.status.textContent=error.message;}
+    finally{requestInFlight=false;if(gameState)applyState(gameState);}
   });
   if(ui.partyCreate)ui.partyCreate.addEventListener("click",async()=>{try{await runSocialAction({action:"party_create"});}catch(_){}});
   if(ui.partyInvite)ui.partyInvite.addEventListener("click",async()=>{
