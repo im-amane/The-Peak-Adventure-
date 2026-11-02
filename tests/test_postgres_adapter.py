@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import unittest
 
 from psycopg.errors import UniqueViolation
