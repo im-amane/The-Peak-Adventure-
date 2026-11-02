@@ -23,25 +23,49 @@ DEFAULTS = {
 class AppearanceError(ValueError):
     pass
 
+async def _atomic_start(db, name):
+    nested = db.in_transaction
+    await db.execute("SAVEPOINT " + name if nested else "BEGIN IMMEDIATE")
+    return nested
+
+async def _atomic_finish(db, name, nested):
+    if nested:
+        await db.execute("RELEASE SAVEPOINT " + name)
+    else:
+        await db.commit()
+
+async def _atomic_rollback(db, name, nested):
+    if nested:
+        await db.execute("ROLLBACK TO SAVEPOINT " + name)
+        await db.execute("RELEASE SAVEPOINT " + name)
+    else:
+        await db.rollback()
+
 
 async def init_character_tables(db: aiosqlite.Connection):
-    await db.execute("""CREATE TABLE IF NOT EXISTS character_appearance(
-      user_id INTEGER PRIMARY KEY,
-      race TEXT NOT NULL DEFAULT 'Human',
-      skin TEXT NOT NULL DEFAULT 'warm',
-      hair TEXT NOT NULL DEFAULT 'short',
-      outfit TEXT NOT NULL DEFAULT 'traveler',
-      face TEXT NOT NULL DEFAULT 'soft',
-      body TEXT NOT NULL DEFAULT 'balanced',
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )""")
-    cur = await db.execute("PRAGMA table_info(character_appearance)")
-    columns = {row[1] for row in await cur.fetchall()}
-    if "face" not in columns:
-        await db.execute("ALTER TABLE character_appearance ADD COLUMN face TEXT NOT NULL DEFAULT 'soft'")
-    if "body" not in columns:
-        await db.execute("ALTER TABLE character_appearance ADD COLUMN body TEXT NOT NULL DEFAULT 'balanced'")
-    await db.commit()
+    name = "init_character_tables"
+    nested = await _atomic_start(db, name)
+    try:
+        await db.execute("""CREATE TABLE IF NOT EXISTS character_appearance(
+          user_id INTEGER PRIMARY KEY,
+          race TEXT NOT NULL DEFAULT 'Human',
+          skin TEXT NOT NULL DEFAULT 'warm',
+          hair TEXT NOT NULL DEFAULT 'short',
+          outfit TEXT NOT NULL DEFAULT 'traveler',
+          face TEXT NOT NULL DEFAULT 'soft',
+          body TEXT NOT NULL DEFAULT 'balanced',
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cur = await db.execute("PRAGMA table_info(character_appearance)")
+        columns = {row[1] for row in await cur.fetchall()}
+        if "face" not in columns:
+            await db.execute("ALTER TABLE character_appearance ADD COLUMN face TEXT NOT NULL DEFAULT 'soft'")
+        if "body" not in columns:
+            await db.execute("ALTER TABLE character_appearance ADD COLUMN body TEXT NOT NULL DEFAULT 'balanced'")
+        await _atomic_finish(db, name, nested)
+    except Exception:
+        await _atomic_rollback(db, name, nested)
+        raise
 
 
 def validate_appearance(payload):
@@ -73,17 +97,20 @@ async def save_appearance(db, user_id, payload):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise AppearanceError("Invalid player account.")
     clean = validate_appearance(payload)
-    await db.execute(
-        """INSERT INTO character_appearance(user_id,race,skin,hair,outfit,face,body)
-           VALUES(?,?,?,?,?,?,?)
-           ON CONFLICT(user_id) DO UPDATE SET
-             race=excluded.race,skin=excluded.skin,hair=excluded.hair,
-             outfit=excluded.outfit,face=excluded.face,body=excluded.body,
-             updated_at=CURRENT_TIMESTAMP""",
-        (
-            user_id, clean["race"], clean["skin"], clean["hair"],
-            clean["outfit"], clean["face"], clean["body"],
-        ),
-    )
-    await db.commit()
+    name = "save_character_appearance"
+    nested = await _atomic_start(db, name)
+    try:
+        await db.execute(
+            """INSERT INTO character_appearance(user_id,race,skin,hair,outfit,face,body)
+               VALUES(?,?,?,?,?,?,?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                 race=excluded.race,skin=excluded.skin,hair=excluded.hair,
+                 outfit=excluded.outfit,face=excluded.face,body=excluded.body,
+                 updated_at=CURRENT_TIMESTAMP""",
+            (user_id, clean["race"], clean["skin"], clean["hair"], clean["outfit"], clean["face"], clean["body"]),
+        )
+        await _atomic_finish(db, name, nested)
+    except Exception:
+        await _atomic_rollback(db, name, nested)
+        raise
     return clean
