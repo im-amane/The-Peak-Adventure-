@@ -53,6 +53,12 @@
     guildChatForm: document.getElementById("guild-chat-form"),
     guildChatInput: document.getElementById("guild-chat-input"),
     guildChatLoad: document.getElementById("guild-chat-load"),
+    guildCreateForm: document.getElementById("guild-create-form"),
+    guildCreateName: document.getElementById("guild-create-name"),
+    guildInviteForm: document.getElementById("guild-invite-form"),
+    guildInvitePlayerId: document.getElementById("guild-invite-player-id"),
+    guildLeave: document.getElementById("guild-leave"),
+    guildManagementStatus: document.getElementById("guild-management-status"),
     partyCreate: document.getElementById("party-create"),
     partyTargetId: document.getElementById("party-target-id"),
     partyInvite: document.getElementById("party-invite"),
@@ -608,6 +614,12 @@
     const guild=social.guild;
     addCard(panels.guild,"Guild",guild ? [guild.name+" · Lv."+guild.level+" · "+guild.role,...guild.members.map(x=>x.username+" · "+x.role)] : ["Not in a guild. Use /guild create in Telegram."]);
     if(ui.guildChatPanel)ui.guildChatPanel.hidden=!guild;
+    if(ui.guildCreateForm)ui.guildCreateForm.hidden=Boolean(guild);
+    if(ui.guildInviteForm)ui.guildInviteForm.hidden=!guild;
+    if(ui.guildLeave)ui.guildLeave.hidden=!guild;
+    if(ui.guildManagementStatus)ui.guildManagementStatus.textContent=guild
+      ? "Invite accepted friends by player ID. Guild creation is available after you leave your current guild."
+      : "Create a guild for 100 coins, or accept an invitation from another player.";
     const guildInvites=social.pending_guild_invites||[];
     if(guildInvites.length){
       const card=addCard(panels.guild,"Guild invitations",guildInvites.map(x=>x.guild_name+" · invited by "+x.inviter_name));
@@ -1583,6 +1595,54 @@
     requestInFlight=true;ui.matchmakingRefresh.disabled=true;
     try{await loadState();}catch(error){ui.status.textContent=error.message;}
     finally{requestInFlight=false;if(gameState)applyState(gameState);}
+  });
+  if(ui.guildCreateForm)ui.guildCreateForm.addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(requestInFlight||!gameState)return;
+    const name=ui.guildCreateName.value.trim();
+    if(name.length<3||name.length>20||!/^[A-Za-z0-9 _-]+$/.test(name)){
+      ui.guildManagementStatus.textContent="Guild names must be 3–20 characters and use letters, numbers, spaces, _ or -.";
+      return;
+    }
+    const button=ui.guildCreateForm.querySelector('button[type="submit"]');
+    button.disabled=true;
+    try{
+      await runSocialAction({action:"guild_create",name});
+      ui.guildCreateName.value="";
+      ui.guildManagementStatus.textContent="Guild created. Your 100-coin fee has been applied.";
+    }catch(error){
+      ui.guildManagementStatus.textContent=error.message;
+    }finally{button.disabled=false;}
+  });
+  if(ui.guildInviteForm)ui.guildInviteForm.addEventListener("submit",async event=>{
+    event.preventDefault();
+    if(requestInFlight||!gameState)return;
+    const targetId=Number(ui.guildInvitePlayerId.value);
+    if(!Number.isSafeInteger(targetId)||targetId<=0){
+      ui.guildManagementStatus.textContent="Enter a valid friend player ID.";
+      return;
+    }
+    const button=ui.guildInviteForm.querySelector('button[type="submit"]');
+    button.disabled=true;
+    try{
+      await runSocialAction({action:"guild_invite",target_id:targetId});
+      ui.guildInvitePlayerId.value="";
+      ui.guildManagementStatus.textContent="Guild invitation sent.";
+    }catch(error){
+      ui.guildManagementStatus.textContent=error.message;
+    }finally{button.disabled=false;}
+  });
+  if(ui.guildLeave)ui.guildLeave.addEventListener("click",async()=>{
+    if(requestInFlight||!gameState)return;
+    ui.guildLeave.disabled=true;
+    try{
+      const result=await runSocialAction({action:"guild_leave"});
+      ui.guildManagementStatus.textContent=result.result.disbanded
+        ? "Your guild was disbanded."
+        : "You left the guild.";
+    }catch(error){
+      ui.guildManagementStatus.textContent=error.message;
+    }finally{ui.guildLeave.disabled=false;}
   });
   if(ui.partyCreate)ui.partyCreate.addEventListener("click",async()=>{try{await runSocialAction({action:"party_create"});}catch(_){}});
   if(ui.partyInvite)ui.partyInvite.addEventListener("click",async()=>{
