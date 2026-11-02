@@ -79,6 +79,33 @@ class DuelCallbackTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(duel["status"], "active")
         self.assertTrue(callback.answer_args[1].get("show_alert"))
 
+    async def test_decline_cannot_overwrite_an_accepted_duel(self):
+        cur = await main.db.execute(
+            """INSERT INTO duels(
+                 chat_id,challenger_id,opponent_id,challenger_hp,opponent_hp,status
+               ) VALUES(?,?,?,?,?,'pending')""",
+            (12345,self.challenger_id,self.opponent_id,1000,1000),
+        )
+        duel_id = cur.lastrowid
+        await main.db.commit()
+
+        accepted = FakeDuelCallback(
+            self.opponent_id, f"duel_accept:{duel_id}"
+        )
+        await main.accept_duel(accepted)
+        declined = FakeDuelCallback(
+            self.opponent_id, f"duel_decline:{duel_id}"
+        )
+        await main.decline_duel(declined)
+
+        cur = await main.db.execute(
+            "SELECT status,turn_user_id FROM duels WHERE duel_id=?",
+            (duel_id,),
+        )
+        duel = await cur.fetchone()
+        self.assertEqual((duel["status"],duel["turn_user_id"]),("active",self.challenger_id))
+        self.assertTrue(declined.answer_args[1].get("show_alert"))
+
     async def test_failed_pvp_stat_update_rolls_back_duel_finish(self):
         duel_id = await self._create_duel(opponent_hp=1)
         await main.db.execute(
