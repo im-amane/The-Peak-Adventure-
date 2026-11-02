@@ -4098,10 +4098,6 @@ async def api_social(request: web.Request):
                             return web.json_response({
                                 "error": "Trade paused because an offered item or balance changed. Update offers and confirm again."
                             }, status=409)
-                        initiator_weapon = (trade["partner_weapon"],trade["partner_weapon_attack"]) if trade["initiator_weapon"] else (initiator["weapon"],initiator["weapon_attack"])
-                        partner_weapon = (trade["initiator_weapon"],trade["initiator_weapon_attack"]) if trade["partner_weapon"] else (partner["weapon"],partner["weapon_attack"])
-                        initiator_armor = (trade["partner_armor"],trade["partner_armor_defense"]) if trade["initiator_armor"] else (initiator["armor"],initiator["armor_defense"])
-                        partner_armor = (trade["initiator_armor"],trade["initiator_armor_defense"]) if trade["partner_armor"] else (partner["armor"],partner["armor_defense"])
                         if not await settle_trade_assets(db, trade, initiator, partner):
                             await db.commit()
                             return web.json_response({
