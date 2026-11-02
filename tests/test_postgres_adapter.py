@@ -21,6 +21,7 @@ from dungeon_system import DungeonError, advance_dungeon, abandon_dungeon, claim
 from crafting_system import CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables
 from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
+from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -939,6 +940,94 @@ class PostgresQuestServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_quest_schemas_initialize_idempotently(self):
         await init_daily_mission_tables(self.db)
         await init_weekly_tables(self.db)
+        await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresReportServiceTests(unittest.IsolatedAsyncioTestCase):
+    reporter_id = 9_876_543_210
+    target_id = 9_876_543_211
+    admin_id = 9_876_543_212
+
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS player_reports")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute("CREATE TABLE players(user_id BIGINT PRIMARY KEY)")
+        await self.db.execute(
+            "INSERT INTO players(user_id) VALUES(?),(?)",
+            (self.reporter_id, self.target_id),
+        )
+        await self.db.commit()
+        await init_report_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS player_reports")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_report_submit_review_and_resubmit_lifecycle(self):
+        report_id = await submit_player_report(
+            self.db, self.reporter_id, self.target_id, "Repeated harassment in chat", now=1000
+        )
+        self.assertIsInstance(report_id, int)
+        self.assertEqual(len(await list_open_reports(self.db)), 1)
+        self.assertTrue(
+            await resolve_player_report(
+                self.db, report_id, self.admin_id, "reviewed", "Evidence checked"
+            )
+        )
+        self.assertEqual(await list_open_reports(self.db), [])
+
+        next_id = await submit_player_report(
+            self.db, self.reporter_id, self.target_id, "New incident after review", now=2000
+        )
+        self.assertGreater(next_id, report_id)
+
+    async def test_duplicate_open_report_is_rejected(self):
+        await submit_player_report(
+            self.db, self.reporter_id, self.target_id, "Repeated harassment in chat", now=1000
+        )
+        with self.assertRaises(ReportError):
+            await submit_player_report(
+                self.db, self.reporter_id, self.target_id, "Another valid report reason", now=1001
+            )
+        self.assertEqual(len(await list_open_reports(self.db)), 1)
+
+    async def test_concurrent_duplicate_reports_are_blocked_by_unique_index(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                submit_player_report(
+                    self.db, self.reporter_id, self.target_id,
+                    "Repeated harassment in chat", now=1000
+                ),
+                submit_player_report(
+                    second, self.reporter_id, self.target_id,
+                    "Another valid report reason", now=1000
+                ),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(x, int) for x in results), 1)
+            self.assertEqual(sum(isinstance(x, ReportError) for x in results), 1)
+            self.assertEqual(len(await list_open_reports(self.db)), 1)
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_report_submission_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await submit_player_report(
+            self.db, self.reporter_id, self.target_id, "Repeated harassment in chat", now=1000
+        )
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await list_open_reports(self.db), [])
+
+    async def test_report_schema_initialization_is_idempotent(self):
+        await init_report_tables(self.db)
+        await init_report_tables(self.db)
         await self.db.commit()
 
 

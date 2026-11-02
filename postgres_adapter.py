@@ -151,6 +151,8 @@ def qmark_to_pyformat(sql: str) -> str:
 class PostgresConnection:
     """Minimal async connection wrapper used only by the migration proof-of-concept."""
 
+    dialect = "postgres"
+
     def __init__(self, connection: psycopg.AsyncConnection):
         self._connection = connection
 
