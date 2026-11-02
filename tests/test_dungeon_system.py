@@ -109,4 +109,22 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(DungeonError): await get_dungeon_state(self.db,True)
   with self.assertRaises(DungeonError): await abandon_dungeon(self.db,0)
 
+ async def test_table_initialization_preserves_outer_transaction(self):
+  db=await aiosqlite.connect(":memory:")
+  try:
+   await db.execute("CREATE TABLE transaction_marker(value INTEGER)")
+   await db.execute("BEGIN")
+   await db.execute("INSERT INTO transaction_marker VALUES(1)")
+   await init_dungeon_tables(db)
+   self.assertTrue(db.in_transaction)
+   await db.rollback()
+   cur=await db.execute("SELECT COUNT(*) FROM transaction_marker")
+   self.assertEqual((await cur.fetchone())[0],0)
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='dungeon_runs'")
+   self.assertIsNone(await cur.fetchone())
+   cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='dungeon_rewards'")
+   self.assertIsNone(await cur.fetchone())
+  finally:
+   await db.close()
+
 if __name__=="__main__":unittest.main()
