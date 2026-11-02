@@ -9,8 +9,9 @@ Heroku is the selected hosting target for The Peak Adventure. This document reco
 - `Procfile` declares `web: python main.py`.
 - `main.py` reads the platform-provided `PORT` value for its aiohttp server.
 - The same process currently starts Telegram long polling and the HTTP server.
-- The game database is SQLite through `aiosqlite`; the configured path defaults to a local file.
-- The automated backup loop creates SQLite snapshot files under the configured local backup directory.
+- SQLite through `aiosqlite` remains the default when `DATABASE_URL` is unset. Setting `DATABASE_URL` explicitly selects the Psycopg 3 PostgreSQL adapter; connection or schema initialization failures stop startup rather than silently falling back to a new SQLite file.
+- PostgreSQL runtime selection is now wired, but it is not production-verified. The existing adapter and service-level tests do not replace full schema, transaction, concurrency and migration validation on a representative database.
+- With SQLite selected, the automated backup loop creates snapshots under the configured local directory. With PostgreSQL selected, that path is disabled and the monitor reports the missing durable PostgreSQL backup provider.
 - The Cloudflare Worker is the Mini App edge gateway; its `BACKEND_ORIGIN` must point to the HTTPS Python backend.
 - The Mini App requires a public HTTPS `WEBAPP_URL` registered with BotFather.
 
@@ -21,7 +22,7 @@ Heroku is the selected hosting target for The Peak Adventure. This document reco
 Heroku dyno filesystems are ephemeral and isolated. Local files are not a durable database and are not shared between dynos. The current SQLite database and local backup snapshots therefore cannot be treated as production persistence.
 
 Required work:
-- Introduce a PostgreSQL persistence implementation and explicit schema migrations.
+- Complete the PostgreSQL persistence audit and explicit, versioned schema migrations. The runtime can now opt into the existing Psycopg adapter with `DATABASE_URL`, but the application still has SQLite-specific paths and compatibility gaps to resolve.
 - Audit SQLite-specific SQL and APIs, including placeholders, `PRAGMA`, `lastrowid`, row handling, transaction/savepoint semantics and locking.
 - Preserve transaction atomicity and idempotency across all gameplay, economy, trading, guild and multiplayer operations.
 - Add PostgreSQL integration tests and migration/rollback tests.
@@ -31,7 +32,7 @@ Do not attempt to solve this by setting `DATABASE_URL` alone. The current applic
 
 ### 2. Durable backups and restore
 
-The current backup loop writes local SQLite snapshots. The SQLite backup utility now takes an online consistent snapshot, runs an integrity check, flushes the verified file and directory metadata before/after atomic publication, rotates old snapshots, and refuses restore while WAL/SHM sidecars exist. These protections improve local snapshot integrity but do not make dyno-local files durable. Before production:
+The SQLite backup utility takes an online consistent snapshot, runs an integrity check, flushes the verified file and directory metadata before/after atomic publication, rotates old snapshots, and refuses restore while WAL/SHM sidecars exist. These protections improve local snapshot integrity but do not make dyno-local files durable. PostgreSQL backup automation is not implemented; when PostgreSQL is selected, the SQLite snapshot path is deliberately disabled and the runtime monitor reports the missing durable backup provider. Before production:
 - Choose a durable backup destination or a database-native backup strategy.
 - Encrypt and restrict access to backups.
 - Verify backup integrity and perform a restore drill against a disposable database.
