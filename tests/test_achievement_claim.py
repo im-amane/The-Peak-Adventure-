@@ -22,6 +22,7 @@ class AchievementClaimTests(unittest.IsolatedAsyncioTestCase):
             (self.achievement["target"], self.user_id),
         )
         await main.db.commit()
+        await main.refresh_achievement_progress(self.user_id)
 
     async def asyncTearDown(self):
         if main.db is not None:
