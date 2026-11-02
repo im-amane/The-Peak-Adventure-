@@ -23,6 +23,7 @@ from daily_mission_system import DailyMissionError, claim_daily_mission, get_dai
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
+from security_system import SecurityEventError, get_security_events, get_suspicious_players, init_security_tables, record_security_event
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -1147,3 +1148,58 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresSecurityEventServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS security_events")
+        await self.db.commit()
+        await init_security_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS security_events")
+        await self.db.commit()
+        await self.db.close()
+
+    async def test_records_and_aggregates_security_events(self):
+        await record_security_event(self.db, 9_876_543_210, "invalid_battle_action", "unknown action", 2)
+        await record_security_event(self.db, 9_876_543_210, "invalid_monster_request", "level 999", 4)
+        await record_security_event(self.db, 9_876_543_211, "invalid_social_action", "unsupported action", 1)
+        rows = await get_suspicious_players(self.db)
+        self.assertEqual(rows[0]["user_id"], 9_876_543_210)
+        self.assertEqual(rows[0]["event_count"], 2)
+        self.assertEqual(rows[0]["max_severity"], 4)
+        self.assertEqual(rows[0]["risk_score"], 6)
+        events = await get_security_events(self.db, 9_876_543_210)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["details"], "level 999")
+
+    async def test_event_details_are_bounded_and_invalid_values_rejected(self):
+        await record_security_event(self.db, 1, "invalid_battle_action", "x" * 400)
+        rows = await get_security_events(self.db, 1)
+        self.assertEqual(len(rows[0]["details"]), 240)
+        with self.assertRaises(SecurityEventError):
+            await record_security_event(self.db, 1, "not_allowed")
+        with self.assertRaises(SecurityEventError):
+            await get_suspicious_players(self.db, window_minutes=0)
+
+    async def test_security_event_write_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await record_security_event(self.db, 303, "invalid_battle_action", "rolled back with caller")
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual(await get_security_events(self.db, 303), [])
+
+    async def test_cleanup_respects_configured_event_cap(self):
+        from unittest.mock import patch
+        with patch("security_system.MAX_SECURITY_EVENTS", 2), patch("security_system.CLEANUP_INTERVAL", 1):
+            for index in range(5):
+                await record_security_event(self.db, 404, "invalid_battle_action", str(index))
+        rows = await get_security_events(self.db, 404, limit=100)
+        self.assertEqual([row["details"] for row in rows], ["4", "3"])
+
+    async def test_security_schema_initialization_is_idempotent(self):
+        await init_security_tables(self.db)
+        await self.db.commit()
