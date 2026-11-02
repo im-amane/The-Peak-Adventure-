@@ -17,6 +17,7 @@ from stamina_system import consume_stamina, get_stamina, init_stamina_tables, re
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
 from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
 from world_system import WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world
+from dungeon_system import DungeonError, advance_dungeon, abandon_dungeon, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
 
 
 class QmarkTranslationTests(unittest.TestCase):
@@ -478,6 +479,122 @@ class PostgresWorldServiceTests(unittest.IsolatedAsyncioTestCase):
         await init_world_tables(self.db)
         await init_world_tables(self.db)
         await self.db.commit()
+
+
+@unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
+class PostgresDungeonServiceTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        await self.db.execute("DROP TABLE IF EXISTS dungeon_rewards")
+        await self.db.execute("DROP TABLE IF EXISTS dungeon_runs")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute(
+            """CREATE TABLE players(
+                 user_id BIGINT PRIMARY KEY,
+                 coins BIGINT NOT NULL DEFAULT 0,
+                 potions BIGINT NOT NULL DEFAULT 0
+               )"""
+        )
+        await self.db.execute("INSERT INTO players(user_id) VALUES(901)")
+        await self.db.commit()
+        await init_dungeon_tables(self.db)
+
+    async def asyncTearDown(self):
+        await self.db.execute("DROP TABLE IF EXISTS dungeon_rewards")
+        await self.db.execute("DROP TABLE IF EXISTS dungeon_runs")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.commit()
+        await self.db.close()
+
+    async def complete_first_dungeon(self):
+        state = await enter_dungeon(self.db, 901, 1, 1)
+        for _ in range(3):
+            state = await advance_dungeon(self.db, 901, state["target_level"])
+        self.assertEqual(state["status"], "completed")
+        return state
+
+    async def test_enter_advance_and_claim_dungeon_reward(self):
+        await self.complete_first_dungeon()
+        self.assertEqual(await claim_dungeon_reward(self.db, 901), (150, 2))
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (901,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (150, 2))
+        self.assertIsNone(await get_dungeon_state(self.db, 901))
+
+    async def test_completed_dungeon_reward_cannot_be_claimed_twice(self):
+        await self.complete_first_dungeon()
+        await claim_dungeon_reward(self.db, 901)
+        with self.assertRaises(DungeonError):
+            await enter_dungeon(self.db, 901, 1, 1)
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (901,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (150, 2))
+
+    async def test_dungeon_reward_preserves_outer_transaction(self):
+        await self.complete_first_dungeon()
+        await self.db.execute("BEGIN IMMEDIATE")
+        self.assertEqual(await claim_dungeon_reward(self.db, 901), (150, 2))
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cursor = await self.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id=?", (901,)
+        )
+        self.assertEqual(tuple((await cursor.fetchone()).values()), (0, 0))
+        cursor = await self.db.execute(
+            "SELECT 1 FROM dungeon_rewards WHERE user_id=?", (901,)
+        )
+        self.assertIsNone(await cursor.fetchone())
+        self.assertEqual((await get_dungeon_state(self.db, 901))["status"], "completed")
+
+    async def test_dungeon_entry_preserves_outer_transaction(self):
+        await self.db.execute("BEGIN IMMEDIATE")
+        await enter_dungeon(self.db, 901, 1, 1)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertIsNone(await get_dungeon_state(self.db, 901))
+
+    async def test_dungeon_advance_preserves_outer_transaction(self):
+        state = await enter_dungeon(self.db, 901, 1, 1)
+        await self.db.execute("BEGIN IMMEDIATE")
+        await advance_dungeon(self.db, 901, state["target_level"])
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        self.assertEqual((await get_dungeon_state(self.db, 901))["room"], 1)
+
+    async def test_concurrent_reward_claims_award_only_once(self):
+        await self.complete_first_dungeon()
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                claim_dungeon_reward(self.db, 901),
+                claim_dungeon_reward(second, 901),
+                return_exceptions=True,
+            )
+            successes = [item for item in results if isinstance(item, tuple)]
+            failures = [item for item in results if isinstance(item, DungeonError)]
+            self.assertEqual(successes, [(150, 2)])
+            self.assertEqual(len(failures), 1)
+            cursor = await self.db.execute(
+                "SELECT coins,potions FROM players WHERE user_id=?", (901,)
+            )
+            self.assertEqual(tuple((await cursor.fetchone()).values()), (150, 2))
+            await self.db.commit()
+        finally:
+            await second.close()
+
+    async def test_dungeon_schema_initialization_is_idempotent(self):
+        await init_dungeon_tables(self.db)
+        await init_dungeon_tables(self.db)
+        await self.db.commit()
+
+    async def test_telegram_sized_player_id_is_supported(self):
+        player_id = 9_876_543_210
+        await self.db.execute("INSERT INTO players(user_id) VALUES(?)", (player_id,))
+        await self.db.commit()
+        state = await enter_dungeon(self.db, player_id, 1, 1)
+        self.assertEqual(state["dungeon_id"], 1)
 
 
 if __name__ == "__main__":
