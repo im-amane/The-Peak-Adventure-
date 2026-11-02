@@ -81,6 +81,11 @@ def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
 
+def _for_update(db, sql):
+    """Serialize per-wallet shop purchases on PostgreSQL."""
+    return f"{sql} FOR UPDATE" if _is_postgres(db) else sql
+
+
 def _is_integrity_error(exc):
     sqlstate = getattr(exc, "sqlstate", None)
     return isinstance(exc, sqlite3.IntegrityError) or (
@@ -216,7 +221,10 @@ async def buy_premium_item(db, user_id, item_id):
         cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
         if not await cur.fetchone():
             raise PremiumError("Player account not found.")
-        cur = await db.execute("SELECT balance FROM premium_wallets WHERE user_id=?", (user_id,))
+        cur = await db.execute(
+            _for_update(db, "SELECT balance FROM premium_wallets WHERE user_id=?"),
+            (user_id,),
+        )
         wallet = await cur.fetchone()
         balance = wallet["balance"] if wallet else 0
         if balance < item["cost"]:
