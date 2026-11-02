@@ -101,14 +101,16 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                     answer=AsyncMock(),
                     message=SimpleNamespace(edit_text=AsyncMock()),
                 )
+                async def handler(event, data):
+                    await main._battle_action_unlocked(event)
+
                 with patch(
                     "main.finish_battle",
                     side_effect=RuntimeError("simulated Telegram reward failure"),
                 ):
                     with self.assertRaisesRegex(RuntimeError,"simulated Telegram reward failure"):
-                        await main._battle_action_unlocked(call)
-                self.assertTrue(main.db.in_transaction)
-                await main.db.rollback()
+                        await main.DatabaseLockMiddleware()(handler,call,{})
+                self.assertFalse(main.db.in_transaction)
                 cur=await main.db.execute(
                     "SELECT monster_hp,turn_count FROM battles WHERE user_id=?",(user_id,)
                 )
