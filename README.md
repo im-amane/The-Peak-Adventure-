@@ -64,7 +64,7 @@ When changing `webapp/index.html`, `webapp/style.css`, or `webapp/game.js`, run 
 2. Authenticate: `npx wrangler login`.
 3. After the Heroku backend is approved and deployed, set its HTTPS origin as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (origin only, without a path). Do not configure this against an unverified or temporary backend.
 4. Deploy from the repository root: `npx wrangler deploy`.
-5. Set Render's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
+5. Set Heroku's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
 
 Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Cloudflare account now has the `thepeakadventure.workers.dev` subdomain and the `peak-adventure-edge` Worker is deployed. Public Mini App URL: `https://peak-adventure-edge.thepeakadventure.workers.dev`. Set `BACKEND_ORIGIN` to the deployed Python/Aiohttp HTTPS origin before gameplay API calls can work.
 
@@ -177,7 +177,7 @@ Telegram Stars purchases are disabled by default. Enable them only after setting
 The latest verified GitHub Actions run (#1122) passed all 510 Python unit tests, 10 pathfinding tests and 35 Cloudflare Worker tests. CI also passed Python compile/import checks, JavaScript syntax checks and Cloudflare embedded-asset parity. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
 The project manifest currently tracks 152 items complete, 17 in progress, and 2 blocked on live bot credentials and production database hosting.
 
-The Cloudflare Worker and Render deployment configuration are present, but a configured live Python backend and full production end-to-end launch have not been verified. The included Render blueprint provisions paid resources, so create it only after choosing and authorizing the hosting plan.
+The Cloudflare Worker and a legacy Render deployment configuration are present, but Heroku deployment is blocked until PostgreSQL persistence and durable backups are implemented. No live Python backend or full production end-to-end launch has been verified. Do not provision paid hosting or deploy until the owner explicitly authorizes it.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
