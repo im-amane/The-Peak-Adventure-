@@ -34,7 +34,8 @@ from account_system import AccountError, delete_player_account, get_settings, in
 from guild_system import GuildFeatureError, create_guild, disband_guild, join_guild, leave_guild, attack_guild_raid, claim_guild_mission, create_guild_invite, get_guild_announcement, get_guild_chat, get_guild_missions, init_guild_features, record_guild_activity, respond_guild_invite, set_guild_announcement, set_guild_role, start_guild_raid, guild_raid_status, declare_guild_war, get_guild_war, record_guild_war_duel, respond_guild_war, send_guild_message, list_pending_guild_invites
 from world_system import WORLD_NAMES, WorldError, discover_world_landmark, get_current_world, get_world_choices, get_world_landmark, init_world_tables, travel_to_world, world_encounter_levels
 from dungeon_system import DungeonError, abandon_dungeon, advance_dungeon, available_dungeons, claim_dungeon_reward, enter_dungeon, get_dungeon_state, init_dungeon_tables
-from crafting_system import MATERIALS, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
+from crafting_system import MATERIALS, MATERIAL_RARITY, CraftingError, award_material_drop, craft_item, get_materials, init_crafting_tables, list_recipes
+from item_rarity import RARITY_TIERS, rarity_label, rarity_rank
 from presence_system import count_online_players, init_presence_tables, list_online_friends, touch_presence
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
@@ -77,15 +78,15 @@ HERO_CLASSES = {
     "Berserker": {"hp": 25, "attack": 22, "defense": -3, "speed": 4, "element": "Fire", "skill": "Rage Cleave"},
 }
 SHOP_ITEMS = {
-    "iron_sword": {"name": "Iron Sword", "type": "weapon", "cost": 40, "bonus": 8, "level": 2},
-    "steel_sword": {"name": "Steel Sword", "type": "weapon", "cost": 150, "bonus": 20, "level": 5},
-    "flame_sword": {"name": "Flame Sword", "type": "weapon", "cost": 450, "bonus": 45, "level": 15},
-    "dragon_slayer": {"name": "Dragon Slayer", "type": "weapon", "cost": 1500, "bonus": 90, "level": 40},
-    "leather_armor": {"name": "Leather Armor", "type": "armor", "cost": 30, "bonus": 5, "level": 2},
-    "iron_armor": {"name": "Iron Armor", "type": "armor", "cost": 150, "bonus": 18, "level": 10},
-    "frostguard_armor": {"name": "Frostguard Armor", "type": "armor", "cost": 500, "bonus": 35, "level": 25},
-    "celestial_armor": {"name": "Celestial Armor", "type": "armor", "cost": 1400, "bonus": 60, "level": 60},
-    "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1},
+    "iron_sword": {"name": "Iron Sword", "type": "weapon", "cost": 40, "bonus": 8, "level": 2, "rarity": "common"},
+    "steel_sword": {"name": "Steel Sword", "type": "weapon", "cost": 150, "bonus": 20, "level": 5, "rarity": "uncommon"},
+    "flame_sword": {"name": "Flame Sword", "type": "weapon", "cost": 450, "bonus": 45, "level": 15, "rarity": "rare"},
+    "dragon_slayer": {"name": "Dragon Slayer", "type": "weapon", "cost": 1500, "bonus": 90, "level": 40, "rarity": "legendary"},
+    "leather_armor": {"name": "Leather Armor", "type": "armor", "cost": 30, "bonus": 5, "level": 2, "rarity": "common"},
+    "iron_armor": {"name": "Iron Armor", "type": "armor", "cost": 150, "bonus": 18, "level": 10, "rarity": "uncommon"},
+    "frostguard_armor": {"name": "Frostguard Armor", "type": "armor", "cost": 500, "bonus": 35, "level": 25, "rarity": "rare"},
+    "celestial_armor": {"name": "Celestial Armor", "type": "armor", "cost": 1400, "bonus": 60, "level": 60, "rarity": "legendary"},
+    "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1, "rarity": "common"},
 }
 QUESTS = [
     {"id": "first_steps", "title": "A Tiny Spark", "kind": "level", "target": 2, "coins": 40, "potions": 1, "description": "Reach hero level 2."},
@@ -468,7 +469,7 @@ def shop_keyboard():
     rows = []
     for item_id, item in SHOP_ITEMS.items():
         rows.append([InlineKeyboardButton(
-            text=f"{item['name']} · {item['cost']} coins · Lv.{item['level']}",
+            text=f"{rarity_label(item['rarity'])} · {item['name']} · {item['cost']} coins · Lv.{item['level']}",
             callback_data=f"buy:{item_id}",
         )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -964,7 +965,7 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
             )
     evolution = await record_monster_defeat(db, user_id, b["monster_level"])
     await advance_dungeon(db, user_id, m["level"])
-    await award_material_drop(db, user_id, m)
+    material_drop = await award_material_drop(db, user_id, m)
     await record_weekly_progress(db, user_id, "wins")
     await record_daily_progress(db, user_id, "wins")
     if m["boss"]:
@@ -979,7 +980,11 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         if evolution["evolved"] and evolution["defeats"] == 5 else ""
     )
     xp_boost_note = "\\n💎 XP Charm doubled this victory's XP." if xp_boosted else ""
-    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}{xp_boost_note}"
+    loot_note = (
+        f"\\n🧱 {material_drop['rarity_label']} {material_drop['name']} ×{material_drop['quantity']}."
+        if material_drop else ""
+    )
+    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{loot_note}{level_note}{boss_note}{evolution_note}{xp_boost_note}"
 
 
 @dp.message(F.web_app_data)
@@ -2930,7 +2935,7 @@ async def materials_command(message: Message):
         lines.append("No materials yet. Defeat monsters to collect crafting resources.")
     else:
         for material_id, quantity in materials.items():
-            lines.append(MATERIALS.get(material_id, material_id) + " x" + str(quantity))
+            lines.append(rarity_label(MATERIAL_RARITY[material_id]) + " · " + MATERIALS.get(material_id, material_id) + " x" + str(quantity))
     await message.answer("\n".join(lines))
 
 
@@ -2953,7 +2958,7 @@ async def craft_command(message: Message):
         await record_weekly_progress(db, message.from_user.id, "crafts")
         await record_daily_progress(db, message.from_user.id, "crafts")
         stat = "+" + str(recipe["attack"]) + " ATK" if recipe["slot"] == "weapon" else "+" + str(recipe["defense"]) + " DEF"
-        await message.answer("⚒️ Crafted <b>" + recipe["name"] + "</b> and equipped it. " + stat)
+        await message.answer("⚒️ Crafted <b>" + recipe["name"] + "</b> [" + rarity_label(recipe["rarity"]) + "] and equipped it. " + stat)
     except CraftingError as exc:
         await message.answer(escape(str(exc)))
 
@@ -3500,7 +3505,7 @@ async def cb_buy_item(call: CallbackQuery):
     except ShopError as exc:
         await call.message.answer(str(exc))
         return
-    await call.message.answer(f"✅ Purchased <b>{item['name']}</b> for {item['cost']} coins.")
+    await call.message.answer(f"✅ Purchased <b>{item['name']}</b> [{rarity_label(item['rarity'])}] for {item['cost']} coins.")
 
 @dp.callback_query(F.data == "profile")
 async def cb_profile(call: CallbackQuery):
@@ -3869,6 +3874,7 @@ async def miniapp_state(user: dict):
         "dungeon": dungeon_state,
         "dungeons": dungeon_choices,
         "materials": material_state,
+        "material_rarity": MATERIAL_RARITY,
         "story": story_state,
         "weekly_quests": await get_weekly_quests(db, user_id),
         "daily_missions": await get_daily_missions(db, user_id),
