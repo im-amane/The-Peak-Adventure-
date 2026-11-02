@@ -39,7 +39,7 @@ async def init_evolution_tables(db):
       user_id INTEGER NOT NULL,
       monster_level INTEGER NOT NULL CHECK(monster_level BETWEEN 1 AND 100),
       defeats INTEGER NOT NULL DEFAULT 0 CHECK(defeats >= 0),
-      evolved_at TEXT,
+      evolved_at TIMESTAMPTZ,
       PRIMARY KEY(user_id,monster_level)
     )""")
 
