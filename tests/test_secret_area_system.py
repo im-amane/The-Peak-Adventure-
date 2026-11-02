@@ -71,5 +71,26 @@ class SecretAreaTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(state["discovered"])
 
 
+    async def test_table_initialization_preserves_outer_transaction(self):
+        await self.db.execute("CREATE TABLE transaction_probe(value INTEGER)")
+        await self.db.commit()
+        await self.db.execute("INSERT INTO transaction_probe VALUES(1)")
+        await init_secret_area_tables(self.db)
+        self.assertTrue(self.db.in_transaction)
+        await self.db.rollback()
+        cur = await self.db.execute("SELECT COUNT(*) FROM transaction_probe")
+        self.assertEqual((await cur.fetchone())[0], 0)
+
+    async def test_missing_player_does_not_leave_discovery_or_reward(self):
+        await self.db.execute("INSERT INTO boss_defeats VALUES(999,10)")
+        for _ in range(5):
+            await record_monster_defeat(self.db, 999, 1)
+        await self.db.commit()
+        with self.assertRaisesRegex(SecretAreaError, "Player account not found"):
+            await discover_secret_area(self.db, 999, 10, 1)
+        cur = await self.db.execute("SELECT 1 FROM player_secret_areas WHERE user_id=999")
+        self.assertIsNone(await cur.fetchone())
+
+
 if __name__ == "__main__":
     unittest.main()
