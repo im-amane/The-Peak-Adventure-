@@ -40,7 +40,7 @@ from roaming_event_system import RoamingEventError, attack_roaming_event, claim_
 from guild_system import (
     GuildFeatureError, attack_guild_raid, create_guild, create_guild_invite,
     declare_guild_war, get_guild_chat, get_guild_missions, guild_role,
-    claim_guild_mission, init_guild_features, join_guild, record_guild_activity,
+    award_guild_xp, claim_guild_mission, init_guild_features, join_guild, record_guild_activity,
     record_guild_war_duel, respond_guild_invite,
     respond_guild_war, send_guild_message, start_guild_raid,
 )
@@ -1808,6 +1808,24 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 (guild_id,),
             )
             self.assertEqual((await cursor.fetchone())["total"], 20)
+        finally:
+            await other_db.close()
+
+    async def test_concurrent_combat_xp_awards_preserve_all_guild_xp(self):
+        guild_id = await create_guild(self.db, self.user_id, "Combat XP Guard")
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                award_guild_xp(self.db, guild_id, 100),
+                award_guild_xp(other_db, guild_id, 200),
+            )
+            self.assertEqual(sorted(results), [(1, 100), (1, 300)])
+            cursor = await self.db.execute(
+                "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",
+                (guild_id,),
+            )
+            guild = await cursor.fetchone()
+            self.assertEqual((guild["guild_level"], guild["guild_xp"]), (1, 300))
         finally:
             await other_db.close()
 
