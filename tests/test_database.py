@@ -62,6 +62,16 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError, "Unsupported generated ID column"):
             await main._insert_generated_id(main.db, "INSERT INTO duels(chat_id) VALUES (?)", (1,), "chat_id")
 
+    async def test_core_schema_initialization_is_idempotent_and_preserves_outer_transaction(self):
+        await main.db.execute("BEGIN")
+        await main.init_core_schema(main.db)
+        self.assertTrue(main.db.in_transaction)
+        await main.db.rollback()
+        cursor = await main.db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='players'"
+        )
+        self.assertIsNotNone(await cursor.fetchone())
+
     async def test_dialect_specific_social_and_expiry_sql(self):
         self.assertIn("MIN(?,?)", main._friend_pair_lookup_sql(main.db))
         self.assertIn("MAX(?,?)", main._friend_pair_lookup_sql(main.db))
