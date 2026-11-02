@@ -81,8 +81,6 @@ def _sqlite_type_affinity(declared_type: str, column_name: str) -> str:
     if "INT" in value:
         return "integer"
     if any(token in value for token in ("CHAR", "CLOB", "TEXT")):
-        if name.endswith(("_at", "_time", "_date")) or name in {"last_seen", "created", "updated"}:
-            return "datetime"
         return "text"
     if "BLOB" in value or not value:
         return "blob"
@@ -238,6 +236,17 @@ async def _inspect_schema_constraints(
                 source_column["declared_type"], column
             )
             target_affinity = _postgres_type_affinity(target_column["data_type"])
+            if (
+                source_affinity == "text"
+                and target_affinity == "datetime"
+                and (
+                    column.lower().endswith(("_at", "_time", "_date"))
+                    or column.lower() in {"last_seen", "created", "updated"}
+                )
+            ):
+                # Some legacy SQLite timestamp values are TEXT while a matching
+                # PostgreSQL column is a native timestamp; allow only that pairing.
+                source_affinity = "datetime"
             if source_affinity != target_affinity:
                 differences.append(
                     f"type mismatch {table}.{column}: SQLite {source_column['declared_type']!r} "
