@@ -295,5 +295,32 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT coins,xp FROM players WHERE user_id=101")
         self.assertEqual(tuple(await cur.fetchone()), (0, 0))
 
+    async def test_leaving_and_rejoining_does_not_reset_old_battle_reward_claim(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, invite_id, 202, True)
+        battle_id = await start_party_battle(
+            self.db, party_id, 101, 10, "Root Warden", 100
+        )
+        await attack_party_battle(self.db, party_id, 101, 100)
+        await reward_party_battle(self.db, battle_id, 101, 50, 40)
+
+        await leave_party(self.db, 101)
+        rejoin_invite = await invite_to_party(self.db, party_id, 202, 101)
+        await respond_to_party_invite(self.db, rejoin_invite, 101, True)
+
+        with self.assertRaisesRegex(PartyError, "already claimed"):
+            await reward_party_battle(self.db, battle_id, 101, 50, 40)
+        cur = await self.db.execute(
+            "SELECT coins,xp FROM players WHERE user_id=101"
+        )
+        player = await cur.fetchone()
+        self.assertEqual((player["coins"], player["xp"]), (50, 40))
+        cur = await self.db.execute(
+            "SELECT COUNT(*) FROM party_battle_rewards WHERE battle_id=? AND user_id=101",
+            (battle_id,),
+        )
+        self.assertEqual((await cur.fetchone())[0], 1)
+
 if __name__ == "__main__":
     unittest.main()
