@@ -103,6 +103,26 @@ class DatabaseSlidingWindowRateLimiterTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await other.close()
 
+    async def test_database_limiter_caps_a_concurrent_sqlite_burst(self):
+        connections = [self.db]
+        for _ in range(4):
+            connection = await aiosqlite.connect(self.path, timeout=30)
+            connection.row_factory = aiosqlite.Row
+            connections.append(connection)
+        try:
+            results = await asyncio.gather(*(
+                self.limiter.allow(connections[index % len(connections)], "burst-player", 7, now=500)
+                for index in range(50)
+            ))
+            self.assertEqual(sum(allowed for allowed, _ in results), 7)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM api_rate_limit_events WHERE rate_key='burst-player'"
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 7)
+        finally:
+            for connection in connections[1:]:
+                await connection.close()
+
     async def test_database_limiter_preserves_outer_transaction(self):
         await self.db.execute("BEGIN IMMEDIATE")
         await self.limiter.allow(self.db, "nested-key", 1, now=300)
