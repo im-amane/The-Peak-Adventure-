@@ -148,6 +148,32 @@ async def _insert_generated_id(connection, sql: str, parameters, id_column: str)
     return int(cursor.lastrowid)
 
 
+def _friend_pair_lookup_sql(connection) -> str:
+    """Return an accepted-friend lookup using the active SQL dialect's scalar functions."""
+    lower, upper = (
+        ("LEAST(?,?)", "GREATEST(?,?)")
+        if getattr(connection, "dialect", "sqlite") == "postgres"
+        else ("MIN(?,?)", "MAX(?,?)")
+    )
+    return (
+        "SELECT 1 FROM friend_requests "
+        f"WHERE user_low={lower} AND user_high={upper} AND status='accepted'"
+    )
+
+
+def _stale_trade_expiry_sql(connection) -> str:
+    """Return the 24-hour trade expiry update for the active SQL dialect."""
+    if getattr(connection, "dialect", "sqlite") == "postgres":
+        return """UPDATE trades
+                  SET status='expired',initiator_confirmed=0,partner_confirmed=0
+                  WHERE status IN ('pending','open')
+                    AND created_at::timestamp <= CURRENT_TIMESTAMP - INTERVAL '24 hours'"""
+    return """UPDATE trades
+              SET status='expired',initiator_confirmed=0,partner_confirmed=0
+              WHERE status IN ('pending','open')
+                AND datetime(created_at) <= datetime('now','-24 hours')"""
+
+
 class DatabaseLockMiddleware:
     async def __call__(self, handler, event, data):
         async with db_lock:
@@ -4110,12 +4136,7 @@ async def expire_stale_trades():
     else:
         await db.execute("BEGIN IMMEDIATE")
     try:
-        cur = await db.execute(
-            """UPDATE trades
-               SET status='expired',initiator_confirmed=0,partner_confirmed=0
-               WHERE status IN ('pending','open')
-                 AND datetime(created_at) <= datetime('now','-24 hours')"""
-        )
+        cur = await db.execute(_stale_trade_expiry_sql(db))
         expired_count = cur.rowcount
         if nested:
             await db.execute(f"RELEASE SAVEPOINT {savepoint}")
@@ -4199,8 +4220,7 @@ async def api_social(request: web.Request):
                     if not target["class_selected"]:
                         raise PartyError("That player must choose a hero class first.")
                     cur = await db.execute(
-                        """SELECT 1 FROM friend_requests
-                           WHERE user_low=MIN(?,?) AND user_high=MAX(?,?) AND status='accepted'""",
+                        _friend_pair_lookup_sql(db),
                         (user_id,payload["target_id"],user_id,payload["target_id"]),
                     )
                     if not await cur.fetchone():
