@@ -127,4 +127,21 @@ class DungeonTests(unittest.IsolatedAsyncioTestCase):
   finally:
    await db.close()
 
+ async def test_claimed_dungeon_can_be_followed_by_another_dungeon(self):
+  state=await enter_dungeon(self.db,1,1,1)
+  for _ in range(3):
+   state=await get_dungeon_state(self.db,1)
+   await advance_dungeon(self.db,1,state["target_level"])
+  await claim_dungeon_reward(self.db,1)
+  self.assertIsNone(await get_dungeon_state(self.db,1))
+  next_state=await enter_dungeon(self.db,1,11,2)
+  self.assertEqual(next_state["dungeon_id"],2)
+  with self.assertRaises(DungeonError):
+   await enter_dungeon(self.db,1,11,1)
+
+ async def test_enter_requires_existing_player_account(self):
+  with self.assertRaisesRegex(DungeonError,"Player account not found"):
+   await enter_dungeon(self.db,999,1,1)
+  self.assertIsNone(await get_dungeon_state(self.db,999))
+
 if __name__=="__main__":unittest.main()
