@@ -48,6 +48,20 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await get_guild_announcement(self.db,10))["message"],"Rally at dawn")
  async def test_member_cannot_post_announcement(self):
   with self.assertRaises(GuildFeatureError): await set_guild_announcement(self.db,10,2,"Hello")
+ async def test_get_guild_missions_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await get_guild_missions(self.db,10,"2026-11-02")
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM guild_missions WHERE guild_id=10 AND mission_date='2026-11-02'")
+  self.assertIsNone(await cur.fetchone())
+ async def test_record_guild_activity_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await record_guild_activity(self.db,10,2,"battle",2)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  cur=await self.db.execute("SELECT 1 FROM guild_missions WHERE guild_id=10 AND mission_id='battles' AND progress=2")
+  self.assertIsNone(await cur.fetchone())
  async def test_guild_mission_progress_and_reward(self):
   await record_guild_activity(self.db,10,2,"battle",5)
   with self.assertRaises(GuildFeatureError): await claim_guild_mission(self.db,10,2,"battles")
