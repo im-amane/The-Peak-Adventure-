@@ -82,9 +82,14 @@ class MatchmakingApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(invalid.status, 400)
         await self.call_api({"action": "join", "mode": "casual"})
         with patch("main.validate_init_data", return_value=self.other_user):
-            await main.api_matchmaking(FakeRequest({"action": "join", "mode": "casual"}))
-        match_id = (await main.api_matchmaking(FakeRequest({"action": "status"}))).status
-        self.assertEqual(match_id, 400)
+            second = await main.api_matchmaking(FakeRequest({"action": "join", "mode": "casual"}))
+        match_id = json.loads(second.body.decode())["result"]["match_id"]
+        outsider_id = 9_200_000_003
+        await main.get_player(outsider_id, "QueueApiOutsider")
+        outsider = {"id": outsider_id, "username": "QueueApiOutsider"}
+        with patch("main.validate_init_data", return_value=outsider):
+            response = await main.api_matchmaking(FakeRequest({"action": "attack", "match_id": match_id}))
+        self.assertEqual(response.status, 409)
 
     async def test_unselected_class_cannot_join(self):
         await self.db.execute(
