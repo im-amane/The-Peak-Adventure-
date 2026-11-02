@@ -142,7 +142,7 @@ player_locks: dict[int, asyncio.Lock] = defaultdict(asyncio.Lock)
 @asynccontextmanager
 async def player_lock(user_id: int):
     """Serialize one player's actions locally and across PostgreSQL processes."""
-    async with player_lock(user_id):
+    async with player_locks[user_id]:
         connection = db
         advisory_locked = False
         if getattr(connection, "dialect", "sqlite") == "postgres":
