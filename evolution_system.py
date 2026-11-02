@@ -39,7 +39,7 @@ async def init_evolution_tables(db):
       user_id INTEGER NOT NULL,
       monster_level INTEGER NOT NULL CHECK(monster_level BETWEEN 1 AND 100),
       defeats INTEGER NOT NULL DEFAULT 0 CHECK(defeats >= 0),
-      evolved_at TEXT,
+      evolved_at TIMESTAMPTZ,
       PRIMARY KEY(user_id,monster_level)
     )""")
 
@@ -56,7 +56,7 @@ async def record_monster_defeat(db, user_id, monster_level):
         await db.execute(
             """INSERT INTO player_monster_mastery(user_id,monster_level,defeats)
                VALUES(?,?,1)
-               ON CONFLICT(user_id,monster_level) DO UPDATE SET defeats=defeats+1""",
+               ON CONFLICT(user_id,monster_level) DO UPDATE SET defeats=player_monster_mastery.defeats+1""",
             (user_id, monster_level),
         )
         await db.execute(
