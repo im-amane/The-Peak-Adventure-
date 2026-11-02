@@ -40,8 +40,9 @@ from roaming_event_system import RoamingEventError, attack_roaming_event, claim_
 from guild_system import (
     GuildFeatureError, attack_guild_raid, create_guild, create_guild_invite,
     declare_guild_war, get_guild_chat, get_guild_missions, guild_role,
-    init_guild_features, record_guild_war_duel, respond_guild_invite,
-    respond_guild_war, send_guild_message, start_guild_raid, record_guild_activity,
+    claim_guild_mission, init_guild_features, join_guild, record_guild_activity,
+    record_guild_war_duel, respond_guild_invite,
+    respond_guild_war, send_guild_message, start_guild_raid,
 )
 from group_system import (
     GroupError, attack_group_raid, claim_group_mission_reward,
@@ -1768,6 +1769,70 @@ class GuildPostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 (guild_id,),
             )
             self.assertEqual((await cursor.fetchone())["total"], 1)
+        finally:
+            await other_db.close()
+
+    async def test_concurrent_guild_joins_respect_twenty_member_capacity(self):
+        guild_id = await create_guild(self.db, self.user_id, "Capacity Guard")
+        contender_one = 5_000_000_000_000_101
+        contender_two = 5_000_000_000_000_102
+        await self.db.execute(
+            """INSERT INTO players(user_id,username)
+               SELECT ?, 'contender-one'
+               UNION ALL SELECT ?, 'contender-two'
+               UNION ALL
+               SELECT 5_000_000_000_001_000 + n, 'filler'
+               FROM generate_series(1,18) AS n""",
+            (contender_one, contender_two),
+        )
+        await self.db.execute(
+            """INSERT INTO guild_members(user_id,guild_id,role)
+               SELECT 5_000_000_000_001_000 + n, ?, 'member'
+               FROM generate_series(1,18) AS n""",
+            (guild_id,),
+        )
+        await self.db.commit()
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                join_guild(self.db, contender_one, guild_id),
+                join_guild(other_db, contender_two, guild_id),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(result == "Capacity Guard" for result in results), 1)
+            self.assertEqual(
+                sum(isinstance(result, GuildFeatureError) for result in results), 1
+            )
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM guild_members WHERE guild_id=?",
+                (guild_id,),
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 20)
+        finally:
+            await other_db.close()
+
+    async def test_concurrent_guild_mission_claims_preserve_all_guild_xp(self):
+        guild_id = await create_guild(self.db, self.user_id, "Mission XP Guard")
+        invite_id = await create_guild_invite(
+            self.db, guild_id, self.user_id, self.member_id
+        )
+        await respond_guild_invite(self.db, invite_id, self.member_id, True)
+        await record_guild_activity(self.db, guild_id, self.member_id, "battle", 5)
+        await record_guild_activity(self.db, guild_id, self.member_id, "boss", 1)
+        other_db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                claim_guild_mission(self.db, guild_id, self.user_id, "battles"),
+                claim_guild_mission(other_db, guild_id, self.user_id, "boss"),
+                return_exceptions=True,
+            )
+            self.assertEqual(results, [60, 120])
+            cursor = await self.db.execute(
+                "SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",
+                (guild_id,),
+            )
+            guild = await cursor.fetchone()
+            self.assertEqual((guild["guild_level"], guild["guild_xp"]), (1, 180))
         finally:
             await other_db.close()
 

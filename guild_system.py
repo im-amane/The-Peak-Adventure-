@@ -246,7 +246,7 @@ async def join_guild(db,user_id,guild_id):
     cur=await db.execute("SELECT 1 FROM guild_members WHERE user_id=?",(user_id,))
     if await cur.fetchone():
         raise GuildFeatureError("You are already in a guild.")
-    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?",(guild_id,))
+    cur=await db.execute("SELECT name FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),(guild_id,))
     guild=await cur.fetchone()
     if not guild:
         raise GuildFeatureError("Guild not found.")
@@ -470,7 +470,7 @@ async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
     cur = await db.execute("UPDATE guild_missions SET claimed=1 WHERE guild_id=? AND mission_date=? AND mission_id=? AND claimed=0 AND progress>=?", (guild_id, date, mission_id, MISSIONS[mission_id][1]))
     if cur.rowcount != 1:
         raise GuildFeatureError("This guild mission reward was already claimed or is no longer complete.")
-    cur=await db.execute("SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?",(guild_id,))
+    cur=await db.execute("SELECT guild_level,guild_xp FROM guilds WHERE guild_id=?" + _lock_guild_sql(db),(guild_id,))
     guild=await cur.fetchone()
     if not guild: raise GuildFeatureError("Guild not found.")
     level,xp=guild["guild_level"],guild["guild_xp"]+mission["xp"]
