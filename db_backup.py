@@ -7,6 +7,28 @@ from contextlib import closing
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+import warnings
+
+
+def _fsync_file(path: Path) -> None:
+    """Flush file contents and metadata before publishing an atomic rename."""
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _fsync_directory(path: Path) -> None:
+    """Persist directory entry changes on POSIX filesystems."""
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def create_backup(database_path: str | Path, backup_dir: str | Path, keep: int = 7) -> Path:
@@ -30,7 +52,9 @@ def create_backup(database_path: str | Path, backup_dir: str | Path, keep: int =
                 result = target.execute("PRAGMA integrity_check").fetchone()
                 if not result or result[0] != "ok":
                     raise sqlite3.DatabaseError(f"Backup integrity check failed: {result}")
+        _fsync_file(temporary_path)
         os.replace(temporary_path, final_path)
+        _fsync_directory(destination_dir)
     except Exception:
         temporary_path.unlink(missing_ok=True)
         raise
@@ -40,8 +64,19 @@ def create_backup(database_path: str | Path, backup_dir: str | Path, keep: int =
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )
+    removed_backup = False
     for old_backup in backups[keep:]:
-        old_backup.unlink(missing_ok=True)
+        try:
+            old_backup.unlink(missing_ok=True)
+            removed_backup = True
+        except OSError as exc:
+            warnings.warn(
+                f"Backup was created, but retention cleanup could not remove {old_backup}: {exc}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+    if removed_backup:
+        _fsync_directory(destination_dir)
     return final_path
 
 
@@ -82,7 +117,9 @@ def restore_backup(backup_path: str | Path, database_path: str | Path) -> Path:
                 result = target_db.execute("PRAGMA integrity_check").fetchone()
                 if not result or result[0] != "ok":
                     raise sqlite3.DatabaseError(f"Restore verification failed: {result}")
+        _fsync_file(temporary)
         os.replace(temporary, destination)
+        _fsync_directory(destination.parent)
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
