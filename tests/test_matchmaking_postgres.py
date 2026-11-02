@@ -7,6 +7,7 @@ import uuid
 from postgres_adapter import PostgresConnection
 import main
 from matchmaking_system import MatchmakingError, join_matchmaking
+from matchmaking_battle_system import MatchmakingBattleError, perform_matchmaking_battle_action
 
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
@@ -51,6 +52,29 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         row = await cursor.fetchone()
         self.assertIn(row["mode"], {"casual", "ranked"})
         self.assertEqual(row["status"], "queued")
+
+    async def test_same_turn_cannot_be_replayed_across_connections(self):
+        await join_matchmaking(self.db_one, 9_100_000_001, "casual", now=2_000_000_200)
+        matched = await join_matchmaking(self.db_two, 9_100_000_002, "casual", now=2_000_000_201)
+        match_id = matched["match_id"]
+        outcomes = await asyncio.gather(
+            perform_matchmaking_battle_action(
+                self.db_one, 9_100_000_001, match_id, "attack", main.HERO_CLASSES
+            ),
+            perform_matchmaking_battle_action(
+                self.db_two, 9_100_000_001, match_id, "attack", main.HERO_CLASSES
+            ),
+            return_exceptions=True,
+        )
+        self.assertEqual(sum(isinstance(item, dict) for item in outcomes), 1)
+        self.assertEqual(sum(isinstance(item, MatchmakingBattleError) for item in outcomes), 1)
+        cursor = await self.db_one.execute(
+            "SELECT turn_count,turn_user_id FROM matchmaking_battles WHERE match_id=?",
+            (match_id,),
+        )
+        battle = await cursor.fetchone()
+        self.assertEqual(battle["turn_count"], 1)
+        self.assertEqual(battle["turn_user_id"], 9_100_000_002)
 
     async def test_two_accounts_match_once_under_concurrent_joins(self):
         results = await asyncio.gather(
