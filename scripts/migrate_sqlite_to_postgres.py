@@ -80,14 +80,15 @@ async def _postgres_insert_order(
     target: PostgresConnection, tables: set[str]
 ) -> list[str]:
     cursor = await target.execute(
-        """SELECT tc.table_name,ccu.table_name AS referenced_table
-           FROM information_schema.table_constraints tc
-           JOIN information_schema.constraint_column_usage ccu
-             ON ccu.constraint_schema=tc.constraint_schema
-            AND ccu.constraint_name=tc.constraint_name
-           WHERE tc.constraint_type='FOREIGN KEY'
-             AND tc.table_schema=current_schema()
-             AND ccu.table_schema=current_schema()"""
+        """SELECT child.relname AS table_name,parent.relname AS referenced_table
+           FROM pg_constraint fk
+           JOIN pg_class child ON child.oid=fk.conrelid
+           JOIN pg_namespace child_schema ON child_schema.oid=child.relnamespace
+           JOIN pg_class parent ON parent.oid=fk.confrelid
+           JOIN pg_namespace parent_schema ON parent_schema.oid=parent.relnamespace
+           WHERE fk.contype='f'
+             AND child_schema.nspname=current_schema()
+             AND parent_schema.nspname=current_schema()"""
     )
     edges: dict[str, set[str]] = {table: set() for table in tables}
     indegree = {table: 0 for table in tables}
@@ -130,6 +131,8 @@ async def migrate_sqlite_to_postgres(
         raise FileNotFoundError(f"SQLite database does not exist: {source_path}")
     if type(batch_size) is not int or not 1 <= batch_size <= 10_000:
         raise ValueError("batch_size must be an integer between 1 and 10000")
+    if target.in_transaction:
+        raise RuntimeError("PostgreSQL target connection must be idle before migration.")
 
     source = sqlite3.connect(
         f"file:{source_path.resolve().as_posix()}?mode=ro",

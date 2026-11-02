@@ -3127,6 +3127,21 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
                VALUES(?,?,?,?)""",
             (self.user_id, "first_blood", 1, 0),
         )
+        await sqlite_db.execute(
+            "CREATE TABLE migration_parent(parent_id INTEGER PRIMARY KEY, label TEXT NOT NULL)"
+        )
+        await sqlite_db.execute(
+            """CREATE TABLE migration_child(
+                 child_id INTEGER PRIMARY KEY,
+                 parent_id INTEGER NOT NULL REFERENCES migration_parent(parent_id)
+               )"""
+        )
+        await sqlite_db.execute(
+            "INSERT INTO migration_parent(parent_id,label) VALUES(1,'parent')"
+        )
+        await sqlite_db.execute(
+            "INSERT INTO migration_child(child_id,parent_id) VALUES(2,1)"
+        )
         await sqlite_db.commit()
         await sqlite_db.close()
 
@@ -3136,6 +3151,16 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
         await self.postgres.commit()
         await self.postgres.execute(f'SET search_path TO "{self.schema}"')
         await main.init_game_schema(self.postgres)
+        await self.postgres.execute(
+            "CREATE TABLE migration_parent(parent_id BIGINT PRIMARY KEY, label TEXT NOT NULL)"
+        )
+        await self.postgres.execute(
+            """CREATE TABLE migration_child(
+                 child_id BIGINT PRIMARY KEY,
+                 parent_id BIGINT NOT NULL REFERENCES migration_parent(parent_id)
+               )"""
+        )
+        await self.postgres.commit()
 
     async def asyncTearDown(self):
         if self.postgres.in_transaction:
@@ -3161,6 +3186,15 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(applied["applied"])
         self.assertEqual(applied["total_source_rows"], applied["total_target_rows_after"])
+        self.assertLess(
+            applied["insert_order"].index("migration_parent"),
+            applied["insert_order"].index("migration_child"),
+        )
+
+        cursor = await self.postgres.execute(
+            "SELECT parent_id FROM migration_child WHERE child_id=2"
+        )
+        self.assertEqual((await cursor.fetchone())["parent_id"], 1)
 
         cursor = await self.postgres.execute(
             "SELECT username,coins FROM players WHERE user_id=?",
@@ -3181,6 +3215,16 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
             "trade_id",
         )
         self.assertGreater(next_trade_id, original_trade_id)
+
+    async def test_migration_requires_an_idle_postgres_connection(self):
+        await self.postgres.execute("BEGIN")
+        with self.assertRaisesRegex(RuntimeError, "connection must be idle"):
+            await migrate_sqlite_to_postgres(
+                self.sqlite_path,
+                self.postgres,
+                apply=True,
+            )
+        await self.postgres.rollback()
 
     async def test_apply_refuses_a_nonempty_target(self):
         await migrate_sqlite_to_postgres(
