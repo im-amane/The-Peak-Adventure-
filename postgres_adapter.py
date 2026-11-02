@@ -129,6 +129,9 @@ def _is_write_statement(sql: str) -> bool:
         return True
     if keyword == "WITH":
         return _contains_sql_keyword(sql, {"INSERT", "UPDATE", "DELETE", "MERGE"})
+    if keyword == "SELECT":
+        # SELECT ... FOR UPDATE takes a row lock and must run inside a transaction.
+        return _contains_sql_keyword(sql, {"UPDATE"})
     return False
 
 
