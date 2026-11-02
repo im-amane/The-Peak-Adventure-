@@ -369,9 +369,11 @@ async def _inspect_schema_constraints(
     sqlite_indexes = {item for item in sqlite_indexes if item[0] in shared_tables}
     if sqlite_indexes != postgres_indexes:
         for item in sorted(sqlite_indexes - postgres_indexes):
-            differences.append(f"PostgreSQL missing index {item}")
+            label = "unique index" if item[1] else "index"
+            differences.append(f"PostgreSQL missing {label} {item}")
         for item in sorted(postgres_indexes - sqlite_indexes):
-            differences.append(f"PostgreSQL has extra index {item}")
+            label = "unique index" if item[1] else "index"
+            differences.append(f"PostgreSQL has extra {label} {item}")
     return differences
 
 
