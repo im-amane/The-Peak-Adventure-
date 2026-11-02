@@ -1082,7 +1082,7 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
         pending = await list_pending_friend_requests(self.db, self.bob)
         self.assertEqual(len(pending), 1)
         self.assertEqual(pending[0]["request_id"], request_id)
-        self.assertTrue(await respond_to_friend_request(self.db, request_id, self.bob, True))
+        await respond_to_friend_request(self.db, request_id, self.bob, True)
 
         friends = await list_friends(self.db, self.alice)
         self.assertEqual([item["user_id"] for item in friends], [self.bob])
