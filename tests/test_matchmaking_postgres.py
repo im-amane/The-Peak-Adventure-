@@ -53,6 +53,36 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(row["mode"], {"casual", "ranked"})
         self.assertEqual(row["status"], "queued")
 
+    async def test_pvp_damage_uses_match_start_stats_after_equipment_changes(self):
+        await self.db_one.execute(
+            "UPDATE players SET level=10 WHERE user_id IN (?,?)",
+            (9_100_000_001, 9_100_000_002),
+        )
+        await self.db_one.execute(
+            "UPDATE players SET hero_class='Mage' WHERE user_id=?",
+            (9_100_000_001,),
+        )
+        await self.db_one.commit()
+        await join_matchmaking(self.db_one, 9_100_000_001, "casual", now=2_000_000_300)
+        matched = await join_matchmaking(self.db_two, 9_100_000_002, "casual", now=2_000_000_301)
+        match_id = matched["match_id"]
+        await self.db_one.execute(
+            "UPDATE players SET weapon_attack=500 WHERE user_id=?",
+            (9_100_000_001,),
+        )
+        await self.db_one.execute(
+            "UPDATE players SET armor_defense=200 WHERE user_id=?",
+            (9_100_000_002,),
+        )
+        await self.db_one.commit()
+
+        result = await perform_matchmaking_battle_action(
+            self.db_two, 9_100_000_001, match_id, "attack", main.HERO_CLASSES,
+            rng=type("FixedRandom", (), {"randint": staticmethod(lambda low, high: 0)})(),
+            now=2_000_000_302,
+        )
+        self.assertEqual(result["damage"], 86)
+
     async def test_same_turn_cannot_be_replayed_across_connections(self):
         await join_matchmaking(self.db_one, 9_100_000_001, "casual", now=2_000_000_200)
         matched = await join_matchmaking(self.db_two, 9_100_000_002, "casual", now=2_000_000_201)
