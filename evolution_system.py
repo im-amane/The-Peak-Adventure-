@@ -56,7 +56,7 @@ async def record_monster_defeat(db, user_id, monster_level):
         await db.execute(
             """INSERT INTO player_monster_mastery(user_id,monster_level,defeats)
                VALUES(?,?,1)
-               ON CONFLICT(user_id,monster_level) DO UPDATE SET defeats=defeats+1""",
+               ON CONFLICT(user_id,monster_level) DO UPDATE SET defeats=player_monster_mastery.defeats+1""",
             (user_id, monster_level),
         )
         await db.execute(
