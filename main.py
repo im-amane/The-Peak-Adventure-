@@ -4140,11 +4140,15 @@ async def expire_stale_trades():
     else:
         await db.execute("BEGIN IMMEDIATE")
     try:
+        expiry_condition = (
+            "created_at::timestamptz <= CURRENT_TIMESTAMP - INTERVAL '24 hours'"
+            if getattr(db, "dialect", "sqlite") == "postgres"
+            else "datetime(created_at) <= datetime('now','-24 hours')"
+        )
         cur = await db.execute(
-            """UPDATE trades
+            f"""UPDATE trades
                SET status='expired',initiator_confirmed=0,partner_confirmed=0
-               WHERE status IN ('pending','open')
-                 AND datetime(created_at) <= datetime('now','-24 hours')"""
+               WHERE status IN ('pending','open') AND {expiry_condition}"""
         )
         expired_count = cur.rowcount
         if nested:
