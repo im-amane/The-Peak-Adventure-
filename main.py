@@ -26,6 +26,7 @@ from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from matchmaking_system import (MatchmakingError, cancel_matchmaking, get_matchmaking_status, init_matchmaking_tables, join_matchmaking)
+from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
 from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
@@ -3818,6 +3819,11 @@ async def miniapp_state(user: dict):
          "claimed": bool(quest_progress[quest["id"]]["claimed"])}
         for quest in QUESTS if quest["id"] in quest_progress
     ]
+    matchmaking_state = await get_matchmaking_status(db, user_id)
+    if matchmaking_state and matchmaking_state.get("match_id") is not None:
+        matchmaking_state["battle"] = await get_matchmaking_battle(
+            db, user_id, matchmaking_state["match_id"]
+        )
     return {
         "first_name": user.get("first_name") or user.get("username") or "Adventurer",
         "class_selected": bool(p["class_selected"]),
@@ -3825,7 +3831,7 @@ async def miniapp_state(user: dict):
         "hero_class": p["hero_class"],
         "appearance": appearance,
         "quests": quest_state,
-        "matchmaking": await get_matchmaking_status(db, user_id),
+        "matchmaking": matchmaking_state,
         "social": {"friends": social_friends, "friend_requests": friend_requests, "party_invites": party_invites,
                     "pending_guild_invites": social_guild_invites, "party": social_party, "guild": social_guild,
                     "pending_trades": pending_trades, "pending_trade_count": pending_trade_count,
@@ -4533,14 +4539,26 @@ async def api_matchmaking(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Matchmaking payload must be valid JSON."}, status=400)
-    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in {"join", "cancel"}:
+    actions = {"join", "cancel", "attack", "skill", "surrender"}
+    if not isinstance(payload, dict) or not isinstance(payload.get("action"), str) or payload["action"] not in actions:
         return web.json_response({"error": "Choose a valid matchmaking action."}, status=400)
     action = payload["action"]
-    expected = {"action", "mode"} if action == "join" else {"action"}
+    if action == "join":
+        expected = {"action", "mode"}
+    elif action == "cancel":
+        expected = {"action"}
+    else:
+        expected = {"action", "match_id"}
     if set(payload) != expected:
         return web.json_response({"error": "Unexpected matchmaking request fields."}, status=400)
     if action == "join" and (not isinstance(payload.get("mode"), str) or payload["mode"] not in {"casual", "ranked"}):
         return web.json_response({"error": "Choose casual or ranked matchmaking."}, status=400)
+    if action in {"attack", "skill", "surrender"} and (
+        not isinstance(payload.get("match_id"), int)
+        or isinstance(payload.get("match_id"), bool)
+        or payload["match_id"] <= 0
+    ):
+        return web.json_response({"error": "A valid match ID is required."}, status=400)
     user_id = user["id"]
     try:
         async with db_lock:
@@ -4563,11 +4581,15 @@ async def api_matchmaking(request: web.Request):
                             status=409,
                         )
                     result = await join_matchmaking(db, user_id, payload["mode"])
-                else:
+                elif action == "cancel":
                     result = {"cancelled": await cancel_matchmaking(db, user_id)}
+                else:
+                    result = await perform_matchmaking_battle_action(
+                        db, user_id, payload["match_id"], action, HERO_CLASSES
+                    )
                 state = await miniapp_state(user)
                 await db.commit()
-    except MatchmakingError as exc:
+    except (MatchmakingError, MatchmakingBattleError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response(
         {"message": "Matchmaking updated.", "result": result, "state": state}
