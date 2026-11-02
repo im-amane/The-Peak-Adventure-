@@ -203,7 +203,7 @@ class PostgresConnection:
         is_write = keyword in write_keywords
         if keyword == "WITH":
             is_write = re.search(
-                r"\\b(INSERT|UPDATE|DELETE|MERGE)\\b",
+                r"\b(INSERT|UPDATE|DELETE|MERGE)\b",
                 statement,
                 re.IGNORECASE,
             ) is not None
