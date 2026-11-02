@@ -88,6 +88,41 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         stash=await list_stash(self.db,2)
         self.assertEqual(stash[0]["item_name"],"Stormblade")
 
+    async def test_auction_ids_bids_and_timestamps_reject_invalid_types(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        for bad in (True,0,-1,"1"):
+            with self.subTest(value=bad),self.assertRaises(AuctionError):
+                await place_bid(self.db,bad,listing,100,now=1001)
+            with self.subTest(value=bad),self.assertRaises(AuctionError):
+                await cancel_listing(self.db,bad,listing,now=1001)
+        for bad in (True,1.5,"1001",-1):
+            with self.subTest(timestamp=bad),self.assertRaises(AuctionError):
+                await place_bid(self.db,2,listing,100,now=bad)
+        for bad in (True,0,1.5,10_000_001):
+            with self.subTest(amount=bad),self.assertRaises(AuctionError):
+                await place_bid(self.db,2,listing,bad,now=1001)
+
+    async def test_auction_query_and_stash_ids_are_validated(self):
+        for bad in (True,0,-1,"1"):
+            with self.subTest(user_id=bad),self.assertRaises(AuctionError):
+                await list_stash(self.db,bad)
+            with self.subTest(listing_id=bad),self.assertRaises(AuctionError):
+                await get_auction(self.db,bad,now=1000)
+        for bad in (True,0,-1,1.5):
+            with self.subTest(limit=bad),self.assertRaises(AuctionError):
+                await list_active_auctions(self.db,now=1000,limit=bad)
+        for user_id,stash_id in ((True,1),(1,True),(0,1),(1,0)):
+            with self.subTest(user_id=user_id,stash_id=stash_id),self.assertRaises(AuctionError):
+                await equip_stashed_item(self.db,user_id,stash_id)
+
+    async def test_invalid_auction_slot_and_timestamp_are_rejected(self):
+        for slot in ([],None,"ring"):
+            with self.subTest(slot=slot),self.assertRaises(AuctionError):
+                await create_listing(self.db,1,slot,100,now=1000)
+        for timestamp in (True,1.5,"1000",-1):
+            with self.subTest(timestamp=timestamp),self.assertRaises(AuctionError):
+                await create_listing(self.db,1,"weapon",100,now=timestamp)
+
     async def test_invalid_listing_duration(self):
         with self.assertRaises(AuctionError): await create_listing(self.db,1,"weapon",100,169,now=1000)
 
