@@ -555,7 +555,7 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
     await db.execute(f"""INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
       ON CONFLICT(raid_id,user_id) DO UPDATE SET damage={damage_expression}""",(raid["raid_id"],user_id,dealt))
     if status=="won":
-        cur = await db.execute("UPDATE guilds SET guild_xp=guild_xp+100 WHERE guild_id=?", (guild_id,))
+        await award_guild_xp(db, guild_id, 100)
         if cur.rowcount != 1:
             raise GuildFeatureError("Guild raid rewards could not be recorded.")
     return {"boss_name":raid["boss_name"],"hp":hp,"max_hp":raid["max_hp"],"damage":dealt,"status":status}
@@ -646,7 +646,7 @@ async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id, duel_
         winner=updated["challenger_guild"] if updated["challenger_score"]>updated["target_score"] else updated["target_guild"]
         cur = await db.execute("UPDATE guild_wars SET status='completed',winner_guild=? WHERE war_id=? AND status='active'", (winner, war["war_id"]))
         if cur.rowcount != 1: raise GuildFeatureError("This guild war has already completed.")
-        await db.execute("UPDATE guilds SET guild_xp=guild_xp+150 WHERE guild_id=?",(winner,))
+        await award_guild_xp(db, winner, 150)
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
     return await cur.fetchone()
 
