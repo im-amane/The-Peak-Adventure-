@@ -26,6 +26,8 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0]["event_count"], 2)
         self.assertEqual(rows[0]["max_severity"], 4)
         self.assertEqual(rows[0]["risk_score"], 6)
+        self.assertEqual(rows[0]["high_severity_count"], 1)
+        self.assertEqual(rows[0]["event_type_count"], 2)
 
     async def test_event_details_are_bounded(self):
         await record_security_event(self.db, 101, "invalid_battle_action", "x" * 400)
