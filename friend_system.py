@@ -92,7 +92,7 @@ def _valid_user_id(user_id: int) -> bool:
 
 
 @_transactional
-async def send_friend_request(db: aiosqlite.Connection, requester_id: int, target_id: int) -> int:
+async def send_friend_request(db: Any, requester_id: int, target_id: int) -> int:
     if not _valid_user_id(requester_id) or not _valid_user_id(target_id):
         raise FriendError("Invalid player account.")
     if requester_id == target_id:
@@ -139,7 +139,7 @@ async def send_friend_request(db: aiosqlite.Connection, requester_id: int, targe
 
 @_transactional
 async def respond_to_friend_request(
-    db: aiosqlite.Connection, request_id: int, target_id: int, accept: bool
+    db: Any, request_id: int, target_id: int, accept: bool
 ) -> None:
     if not _valid_user_id(request_id) or not _valid_user_id(target_id) or type(accept) is not bool:
         raise FriendError("Invalid friend request.")
@@ -162,7 +162,7 @@ async def respond_to_friend_request(
         raise FriendError("That friend request was already handled.")
 
 
-async def list_friends(db: aiosqlite.Connection, user_id: int):
+async def list_friends(db: Any, user_id: int):
     if not _valid_user_id(user_id):
         raise FriendError("Invalid player account.")
     cur = await db.execute(
@@ -180,7 +180,7 @@ async def list_friends(db: aiosqlite.Connection, user_id: int):
 
 
 @_transactional
-async def remove_friend(db: aiosqlite.Connection, user_id: int, friend_id: int) -> None:
+async def remove_friend(db: Any, user_id: int, friend_id: int) -> None:
     if not _valid_user_id(user_id) or not _valid_user_id(friend_id) or user_id == friend_id:
         raise FriendError("Invalid friend account.")
     low, high = sorted((user_id, friend_id))
@@ -194,7 +194,7 @@ async def remove_friend(db: aiosqlite.Connection, user_id: int, friend_id: int) 
  
 
 
-async def search_players(db: aiosqlite.Connection, searcher_id: int, query: str, limit: int = 10):
+async def search_players(db: Any, searcher_id: int, query: str, limit: int = 10):
     """Search public profiles and friends-only profiles visible to accepted friends."""
     if not _valid_user_id(searcher_id):
         raise FriendError("Invalid player account.")
@@ -223,14 +223,14 @@ async def search_players(db: aiosqlite.Connection, searcher_id: int, query: str,
                  )
                )
              )
-           ORDER BY p.level DESC,p.username COLLATE NOCASE
+           ORDER BY p.level DESC,LOWER(p.username)
            LIMIT ?""",
         (searcher_id, f"%{escaped}%", searcher_id, searcher_id, searcher_id, searcher_id, limit),
     )
     return await cur.fetchall()
 
 
-async def list_pending_friend_requests(db: aiosqlite.Connection, user_id: int):
+async def list_pending_friend_requests(db: Any, user_id: int):
     if not _valid_user_id(user_id):
         raise FriendError("Invalid player account.")
     cur = await db.execute(
