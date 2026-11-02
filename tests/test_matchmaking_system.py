@@ -1,3 +1,4 @@
+import time
 import unittest
 
 import aiosqlite
@@ -130,7 +131,8 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         matched = await join_matchmaking(self.db, 2, "casual", now=1001)
         match_id = matched["match_id"]
         await self.db.execute(
-            "INSERT INTO player_mana(user_id,mana,updated_at) VALUES(1,10,2000)"
+            "INSERT INTO player_mana(user_id,mana,updated_at) VALUES(1,10,?)",
+            (int(time.time()),)
         )
         await self.db.commit()
         with self.assertRaisesRegex(MatchmakingBattleError, "Not enough mana"):
