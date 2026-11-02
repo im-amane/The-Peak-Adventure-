@@ -3182,6 +3182,16 @@ class PostgresSqliteMigrationToolTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertGreater(next_trade_id, original_trade_id)
 
+    async def test_migration_requires_an_idle_postgres_connection(self):
+        await self.postgres.execute("BEGIN")
+        with self.assertRaisesRegex(RuntimeError, "connection must be idle"):
+            await migrate_sqlite_to_postgres(
+                self.sqlite_path,
+                self.postgres,
+                apply=True,
+            )
+        await self.postgres.rollback()
+
     async def test_apply_refuses_a_nonempty_target(self):
         await migrate_sqlite_to_postgres(
             self.sqlite_path,
