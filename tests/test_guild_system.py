@@ -18,9 +18,52 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO players VALUES(?,?,?,?)",(4,"other",4,0))
   await self.db.execute("INSERT INTO guilds VALUES(?,?,?,?,?)",(20,"Other",4,1,0))
   await self.db.execute("INSERT INTO guild_members VALUES(?,?,?,CURRENT_TIMESTAMP)",(4,20,"leader"))
+  await self.db.execute("ALTER TABLE players ADD COLUMN coins INTEGER NOT NULL DEFAULT 1000")
   await self.db.commit()
   await init_guild_features(self.db)
  async def asyncTearDown(self): await self.db.close()
+
+ async def test_create_guild_debits_coins_and_assigns_leader(self):
+  guild_id=await create_guild(self.db,3,"New Peak")
+  self.assertGreater(guild_id,20)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=3")
+  self.assertEqual((await cur.fetchone())["coins"],900)
+  self.assertEqual(await guild_role(self.db,guild_id,3),"leader")
+
+ async def test_failed_guild_membership_insert_rolls_back_creation_fee(self):
+  await self.db.execute("CREATE TRIGGER reject_new_guild_member BEFORE INSERT ON guild_members WHEN NEW.user_id=3 BEGIN SELECT RAISE(ABORT,'membership unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await create_guild(self.db,3,"New Peak")
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=3")
+  self.assertEqual((await cur.fetchone())["coins"],1000)
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE name='New Peak'")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_join_guild_checks_membership_and_capacity(self):
+  self.assertEqual(await join_guild(self.db,3,10),"Peak")
+  self.assertEqual(await guild_role(self.db,10,3),"member")
+  with self.assertRaises(GuildFeatureError):
+   await join_guild(self.db,3,20)
+
+ async def test_member_leave_removes_only_membership(self):
+  self.assertFalse(await leave_guild(self.db,2))
+  self.assertIsNone(await guild_role(self.db,10,2))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],1)
+
+ async def test_leader_cannot_leave_while_members_remain(self):
+  with self.assertRaises(GuildFeatureError):
+   await leave_guild(self.db,1)
+  self.assertEqual(await guild_role(self.db,10,1),"leader")
+
+ async def test_last_leader_leave_disbands_guild(self):
+  await self.db.execute("DELETE FROM guild_members WHERE user_id=2")
+  await self.db.commit()
+  self.assertTrue(await leave_guild(self.db,1))
+  cur=await self.db.execute("SELECT COUNT(*) FROM guilds WHERE guild_id=10")
+  self.assertEqual((await cur.fetchone())[0],0)
+
  async def test_pending_guild_invites_are_listed_for_target_only(self):
   invite_id=await create_guild_invite(self.db,10,1,3)
   rows=await list_pending_guild_invites(self.db,3)
