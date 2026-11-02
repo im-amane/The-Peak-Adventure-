@@ -50,7 +50,7 @@ async def init_stamina_tables(db):
     nested=await _begin_atomic(db,"init_stamina_tables")
     try:
         await db.execute("""CREATE TABLE IF NOT EXISTS player_stamina(
-          user_id INTEGER PRIMARY KEY,
+          user_id BIGINT PRIMARY KEY,
           stamina INTEGER NOT NULL DEFAULT 100 CHECK(stamina BETWEEN 0 AND 100),
           updated_at INTEGER NOT NULL
         )""")
