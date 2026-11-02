@@ -159,6 +159,16 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.headers.get("Retry-After"), "9")
         self.assertIn("Too many requests", (await response.json())["error"])
 
+
+    async def test_settings_endpoint_rejects_unsupported_http_methods(self):
+        for method in ("PUT", "PATCH", "DELETE"):
+            response = await self.client.request(
+                method, "/api/settings", headers=self.headers, json={"sound_enabled": False}
+            )
+            self.assertEqual(response.status, 405, method)
+            self.assertIn("GET", response.headers.get("Allow", ""))
+            self.assertIn("POST", response.headers.get("Allow", ""))
+
     async def test_miniapp_static_entrypoint_is_served_by_http_application(self):
         response = await self.client.get("/")
         self.assertEqual(response.status, 200)
