@@ -71,14 +71,20 @@ async def _settle_due(db, now):
         for row in rows:
             if row["highest_bidder"] is not None:
                 seller = await db.execute(
-                    "UPDATE players SET coins=coins+? WHERE user_id=?",
-                    (row["current_bid"], row["seller_id"]),
+                    "SELECT 1 FROM players WHERE user_id=?",
+                    (row["seller_id"],),
                 )
                 buyer = await db.execute(
                     "SELECT 1 FROM players WHERE user_id=?",
                     (row["highest_bidder"],),
                 )
-                if seller.rowcount and await buyer.fetchone():
+                seller_exists = await seller.fetchone() is not None
+                buyer_exists = await buyer.fetchone() is not None
+                if seller_exists and buyer_exists:
+                    await db.execute(
+                        "UPDATE players SET coins=coins+? WHERE user_id=?",
+                        (row["current_bid"], row["seller_id"]),
+                    )
                     column = row["slot"]
                     stat_column = "weapon_attack" if column == "weapon" else "armor_defense"
                     current = await db.execute(
@@ -112,10 +118,13 @@ async def _settle_due(db, now):
                         (row["listing_id"],),
                     )
                 else:
-                    await db.execute(
-                        "UPDATE players SET coins=coins+? WHERE user_id=?",
-                        (row["current_bid"], row["highest_bidder"]),
-                    )
+                    # Never pay a seller when the escrow owner account no longer
+                    # exists. Refund only when the bidder can still receive it.
+                    if buyer_exists:
+                        await db.execute(
+                            "UPDATE players SET coins=coins+? WHERE user_id=?",
+                            (row["current_bid"], row["highest_bidder"]),
+                        )
                     await db.execute(
                         "UPDATE auction_listings SET status='expired' WHERE listing_id=? AND status='active'",
                         (row["listing_id"],),
