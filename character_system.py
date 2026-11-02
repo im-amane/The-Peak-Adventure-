@@ -1,6 +1,4 @@
 """Validated persistent character appearance settings."""
-import aiosqlite
-
 
 OPTIONS = {
     "race": {"Human", "Elf", "Dwarf", "Orc"},
@@ -42,12 +40,17 @@ async def _atomic_rollback(db, name, nested):
         await db.rollback()
 
 
-async def init_character_tables(db: aiosqlite.Connection):
+def _is_postgres(db):
+    return getattr(db, "dialect", "sqlite") == "postgres"
+
+
+async def init_character_tables(db):
     name = "init_character_tables"
     nested = await _atomic_start(db, name)
+    user_id_type = "BIGINT" if _is_postgres(db) else "INTEGER"
     try:
-        await db.execute("""CREATE TABLE IF NOT EXISTS character_appearance(
-          user_id INTEGER PRIMARY KEY,
+        await db.execute(f"""CREATE TABLE IF NOT EXISTS character_appearance(
+          user_id {user_id_type} PRIMARY KEY,
           race TEXT NOT NULL DEFAULT 'Human',
           skin TEXT NOT NULL DEFAULT 'warm',
           hair TEXT NOT NULL DEFAULT 'short',
@@ -56,8 +59,18 @@ async def init_character_tables(db: aiosqlite.Connection):
           body TEXT NOT NULL DEFAULT 'balanced',
           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )""")
-        cur = await db.execute("PRAGMA table_info(character_appearance)")
-        columns = {row[1] for row in await cur.fetchall()}
+        if _is_postgres(db):
+            await db.execute(
+                "ALTER TABLE character_appearance ALTER COLUMN user_id TYPE BIGINT"
+            )
+            cur = await db.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=current_schema() AND table_name='character_appearance'"
+            )
+            columns = {row["column_name"] for row in await cur.fetchall()}
+        else:
+            cur = await db.execute("PRAGMA table_info(character_appearance)")
+            columns = {row[1] for row in await cur.fetchall()}
         if "face" not in columns:
             await db.execute("ALTER TABLE character_appearance ADD COLUMN face TEXT NOT NULL DEFAULT 'soft'")
         if "body" not in columns:
