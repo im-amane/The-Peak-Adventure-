@@ -41,8 +41,6 @@ async def _rollback_transaction(db, nested, savepoint):
         await db.rollback()
 
 
-def current_day_key(
-
 def current_day_key(now=None):
     stamp = datetime.fromtimestamp(time.time() if now is None else now, timezone.utc)
     return stamp.strftime("%Y-%m-%d")
