@@ -4628,10 +4628,7 @@ async def api_action(request: web.Request):
               new_enemy_hp = min(monster["hp"], new_enemy_hp + max(1, monster["hp"] // 50))
           if new_enemy_hp == 0:
               await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
-              await db.execute(
-                  "UPDATE players SET hp=min(max_hp, hp+15), skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-                  (user_id,),
-              )
+              await _apply_battle_victory_heal(db, user_id)
               message = await finish_battle(user_id, True)
               return web.json_response({"message": f"{action_line} {message}", "state": await miniapp_state(user)})
           p = await get_player(user_id)
@@ -4670,10 +4667,7 @@ async def api_action(request: web.Request):
               "UPDATE battles SET monster_hp=?, turn_count=? WHERE user_id=?",
               (new_enemy_hp, turn_count, user_id),
           )
-          await db.execute(
-              "UPDATE players SET hp=?, skill_cd=max(0, skill_cd-1) WHERE user_id=?",
-              (new_hp, user_id),
-          )
+          await _apply_battle_turn_state(db, user_id, new_hp)
           await restore_mana(db, user_id, TURN_MANA_REGEN, commit=False)
           if new_hp == 0:
               message = await finish_battle(user_id, False)
