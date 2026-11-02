@@ -12,35 +12,45 @@
         !Number.isFinite(goal.x) || !Number.isFinite(goal.y) || width <= 0 || height <= minY ||
         !Array.isArray(obstacles)) return [];
 
-    const pointBlocked = point => {
-      if (point.x < 0 || point.x > width || point.y < minY || point.y > height) return true;
-      return obstacles.some(obstacle => {
-        if (!obstacle || !Number.isFinite(obstacle.x) || !Number.isFinite(obstacle.y)) return false;
+    // Normalize obstacle geometry once. The same expanded rectangles are
+    // reused by endpoint checks, grid construction and segment collision tests.
+    const obstacleRects = obstacles
+      .filter(obstacle => obstacle && Number.isFinite(obstacle.x) && Number.isFinite(obstacle.y))
+      .map(obstacle => {
         const halfWidth = Math.max(0, Number(obstacle.width) || 0) / 2 + margin;
         const halfHeight = Math.max(0, Number(obstacle.height) || 0) / 2 + margin;
-        return Math.abs(point.x - obstacle.x) < halfWidth &&
-          Math.abs(point.y - obstacle.y) < halfHeight;
+        return {
+          left: obstacle.x - halfWidth,
+          right: obstacle.x + halfWidth,
+          top: obstacle.y - halfHeight,
+          bottom: obstacle.y + halfHeight,
+        };
       });
+
+    const pointBlocked = point => {
+      if (point.x < 0 || point.x > width || point.y < minY || point.y > height) return true;
+      return obstacleRects.some(rect =>
+        point.x > rect.left && point.x < rect.right &&
+        point.y > rect.top && point.y < rect.bottom
+      );
     };
     if (pointBlocked(start) || pointBlocked(goal)) return [];
 
     // Grid-cell centers alone are not enough for collision safety: a diagonal
     // edge can clip a thin obstacle even when both adjacent cells are walkable.
     // Use a segment-vs-expanded-rectangle test for every movement edge.
-    const segmentBlocked = (from, to) => obstacles.some(obstacle => {
-      if (!obstacle || !Number.isFinite(obstacle.x) || !Number.isFinite(obstacle.y)) return false;
-      const halfWidth = Math.max(0, Number(obstacle.width) || 0) / 2 + margin;
-      const halfHeight = Math.max(0, Number(obstacle.height) || 0) / 2 + margin;
-      const left = obstacle.x - halfWidth;
-      const right = obstacle.x + halfWidth;
-      const top = obstacle.y - halfHeight;
-      const bottom = obstacle.y + halfHeight;
+    const segmentBlocked = (from, to) => obstacleRects.some(rect => {
       const dx = to.x - from.x;
       const dy = to.y - from.y;
       let enter = 0;
       let leave = 1;
       const p = [-dx, dx, -dy, dy];
-      const q = [from.x - left, right - from.x, from.y - top, bottom - from.y];
+      const q = [
+        from.x - rect.left,
+        rect.right - from.x,
+        from.y - rect.top,
+        rect.bottom - from.y,
+      ];
       for (let index = 0; index < 4; index++) {
         if (p[index] === 0) {
           if (q[index] < 0) return false;
@@ -68,8 +78,9 @@
     const goalIndex = indexOf(goalCell.x, goalCell.y);
     if (startIndex === goalIndex) return segmentBlocked(start, goal) ? [] : [{ x: goal.x, y: goal.y }];
 
-    // Build the collision grid once. Re-testing every obstacle for every A-star
-    // neighbor used to multiply collision work by the number of expanded nodes.
+    // Build the collision grid by rasterizing only cells overlapped by each
+    // obstacle. The previous cell-by-obstacle nested scan cost O(map cells *
+    // obstacles), even when almost every obstacle was far from a given cell.
     const blocked = new Uint8Array(totalCells);
     for (let y = 0; y < rows; y++) {
       const centerY = y * cellSize + cellSize / 2;
@@ -77,17 +88,21 @@
         const centerX = x * cellSize + cellSize / 2;
         if (centerY < minY || centerX > width || centerY > height) {
           blocked[indexOf(x, y)] = 1;
-          continue;
         }
-        for (const obstacle of obstacles) {
-          if (!obstacle || !Number.isFinite(obstacle.x) || !Number.isFinite(obstacle.y)) continue;
-          const halfWidth = Math.max(0, Number(obstacle.width) || 0) / 2 + margin;
-          const halfHeight = Math.max(0, Number(obstacle.height) || 0) / 2 + margin;
-          if (Math.abs(centerX - obstacle.x) < halfWidth &&
-              Math.abs(centerY - obstacle.y) < halfHeight) {
-            blocked[indexOf(x, y)] = 1;
-            break;
-          }
+      }
+    }
+    for (const rect of obstacleRects) {
+      const firstX = Math.max(0, Math.floor((rect.left - cellSize / 2) / cellSize) + 1);
+      const lastX = Math.min(cols - 1, Math.ceil((rect.right - cellSize / 2) / cellSize) - 1);
+      const firstY = Math.max(0, Math.floor((rect.top - cellSize / 2) / cellSize) + 1);
+      const lastY = Math.min(rows - 1, Math.ceil((rect.bottom - cellSize / 2) / cellSize) - 1);
+      for (let y = firstY; y <= lastY; y++) {
+        const centerY = y * cellSize + cellSize / 2;
+        if (centerY < minY || centerY > height) continue;
+        for (let x = firstX; x <= lastX; x++) {
+          const centerX = x * cellSize + cellSize / 2;
+          if (centerX > width) continue;
+          blocked[indexOf(x, y)] = 1;
         }
       }
     }
