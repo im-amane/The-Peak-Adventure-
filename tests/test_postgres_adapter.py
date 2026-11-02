@@ -1,3 +1,4 @@
+import asyncio
 import os
 import unittest
 
@@ -15,7 +16,6 @@ from mana_system import consume_mana, get_mana, init_mana_tables, restore_mana
 from stamina_system import consume_stamina, get_stamina, init_stamina_tables, restore_stamina
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_flags, init_story_tables
 from evolution_system import EVOLUTION_DEFEATS_REQUIRED, get_evolution_state, init_evolution_tables, record_monster_defeat
-import asyncio
 
 
 class QmarkTranslationTests(unittest.TestCase):
