@@ -159,6 +159,7 @@ async def get_group_profile(db,chat_id):
     return row
 
 @_transactional
+@_transactional
 async def award_group_xp(db,chat_id,amount):
     if not valid_chat(chat_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=5000:
         raise GroupError("Invalid group XP award.")
