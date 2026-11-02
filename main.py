@@ -4853,7 +4853,6 @@ async def operations_alert_loop(bot: Bot):
         for alert_name, active in conditions.items():
             if active == active_alerts.get(alert_name, False):
                 continue
-            active_alerts[alert_name] = active
             if alert_name == "database_unavailable":
                 message = (
                     "🚨 The Peak Adventure database is unavailable."
@@ -4866,12 +4865,17 @@ async def operations_alert_loop(bot: Bot):
                 )
             if not ADMIN_IDS:
                 log.error("Operations alert could not be delivered: ADMIN_IDS is empty (%s)", alert_name)
+                active_alerts[alert_name] = active
                 continue
+            delivered = False
             for admin_id in ADMIN_IDS:
                 try:
                     await bot.send_message(admin_id, message)
+                    delivered = True
                 except Exception:
                     log.exception("Unable to deliver operations alert to configured admin")
+            if delivered:
+                active_alerts[alert_name] = active
         await asyncio.sleep(60)
 
 
