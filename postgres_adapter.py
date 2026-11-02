@@ -185,7 +185,7 @@ class PostgresConnection:
         }
         is_write = keyword in write_keywords
         if keyword == "WITH":
-            is_write = re.search(r"\\b(INSERT|UPDATE|DELETE|MERGE)\\b", statement, re.IGNORECASE) is not None
+            is_write = re.search(r"\b(INSERT|UPDATE|DELETE|MERGE)\b", statement, re.IGNORECASE) is not None
         if is_write and not self.in_transaction:
             await self._connection.execute("BEGIN")
         return await self._connection.execute(statement, parameters)
