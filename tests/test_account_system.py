@@ -138,6 +138,17 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await cur.fetchone())["leader_id"],2)
   cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
   self.assertEqual((await cur.fetchone())["role"],"leader")
+ async def test_delete_account_preserves_existing_guild_officers_on_leadership_transfer(self):
+  await self.db.execute("INSERT INTO players VALUES(3,'officer',15,0)")
+  await self.db.execute("INSERT INTO guild_members VALUES(3,5,'officer',CURRENT_TIMESTAMP)")
+  await self.db.commit()
+  await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=2")
+  self.assertEqual((await cur.fetchone())["role"],"leader")
+  cur=await self.db.execute("SELECT role FROM guild_members WHERE user_id=3")
+  self.assertEqual((await cur.fetchone())["role"],"officer")
+  cur=await self.db.execute("SELECT leader_id FROM guilds WHERE guild_id=5")
+  self.assertEqual((await cur.fetchone())["leader_id"],2)
  async def test_delete_account_removes_social_and_economy_data(self):
   await self.db.execute("INSERT INTO guild_war_duel_events(duel_id,war_id,winner_id) VALUES(1,5,2),(2,5,1)")
   await self.db.commit()  # Commit fixture writes before the deletion transaction.
