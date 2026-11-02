@@ -199,6 +199,19 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((await cur.fetchone())["coins"],175)
   cur=await self.db.execute("SELECT status FROM auction_listings WHERE listing_id=1")
   self.assertEqual((await cur.fetchone())["status"],"cancelled")
+ async def test_delete_seller_rolls_back_when_auction_escrow_bidder_is_missing(self):
+  await self.db.execute("ALTER TABLE players ADD COLUMN coins INTEGER NOT NULL DEFAULT 0")
+  await self.db.execute("CREATE TABLE auction_listings(listing_id INTEGER PRIMARY KEY,seller_id INTEGER,current_bid INTEGER,highest_bidder INTEGER,status TEXT)")
+  await self.db.execute("CREATE TABLE auction_stash(stash_id INTEGER PRIMARY KEY,user_id INTEGER)")
+  await self.db.execute("INSERT INTO auction_listings VALUES(1,1,75,999,'active')")
+  await self.db.commit()
+  with self.assertRaises(AccountError):
+   await delete_player_account(self.db,1)
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNotNone(await cur.fetchone())
+  cur=await self.db.execute("SELECT status,highest_bidder,current_bid FROM auction_listings WHERE listing_id=1")
+  row=await cur.fetchone()
+  self.assertEqual((row["status"],row["highest_bidder"],row["current_bid"]),("active",999,75))
  async def test_delete_highest_bidder_reopens_auction(self):
   await self.db.execute("ALTER TABLE players ADD COLUMN coins INTEGER NOT NULL DEFAULT 0")
   await self.db.execute("CREATE TABLE auction_listings(listing_id INTEGER PRIMARY KEY,seller_id INTEGER,current_bid INTEGER,highest_bidder INTEGER,status TEXT)")
