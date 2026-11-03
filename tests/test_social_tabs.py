@@ -72,14 +72,14 @@ class SocialTabMarkupTests(unittest.TestCase):
         parser = SocialTabParser()
         parser.feed((ROOT / "webapp" / "index.html").read_text(encoding="utf-8"))
         source = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
-        match = re.search(r"const ui = \{([\\s\\S]*?)\\n  \\};", source)
+        match = re.search(r"const ui = \{([\s\S]*?)\n  \};", source)
         self.assertIsNotNone(match, "Mini App UI binding map must exist")
         bindings = dict(re.findall(
-            r'^\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*document\\.getElementById\\(["\\']([^"\\']+)["\\']\\)',
+            r'^\s*([A-Za-z_$][\w$]*)\s*:\s*document\.getElementById\(["\']([^"\']+)["\']\)',
             match.group(1),
             re.MULTILINE,
         ))
-        references = set(re.findall(r"\\bui\\.([A-Za-z_$][\\w$]*)", source))
+        references = set(re.findall(r"\bui\.([A-Za-z_$][\w$]*)", source))
         self.assertEqual(references - set(bindings), set(), "Every ui.* reference must be initialized")
         for key in references:
             element_id = bindings[key]
