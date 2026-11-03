@@ -1198,7 +1198,8 @@ async def create_trade(message: Message):
             await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
             return
         for participant_id in (initiator_id, partner_id):
-            if await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,)) and await _has_active_duel(db, participant_id):
+            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
                 await message.answer("Both players must finish their active battles and duels before trading.")
                 return
             if await _has_active_pvp_match(db, participant_id):
