@@ -4516,7 +4516,32 @@ async def api_social(request: web.Request):
     try:
         async with db_lock:
             await expire_stale_trades()
-            async with player_lock(user_id):
+            player_lock_context = player_lock(user_id)
+            if action.startswith("trade_"):
+                other_player_id = None
+                if action == "trade_create":
+                    candidate_id = payload.get("target_id")
+                    if type(candidate_id) is int and candidate_id > 0:
+                        other_player_id = candidate_id
+                else:
+                    candidate_trade_id = payload.get("trade_id")
+                    if type(candidate_trade_id) is int and candidate_trade_id > 0:
+                        trade_lookup = await db.execute(
+                            "SELECT initiator_id,partner_id FROM trades WHERE trade_id=?",
+                            (candidate_trade_id,),
+                        )
+                        trade_participants = await trade_lookup.fetchone()
+                        if trade_participants and user_id in {
+                            trade_participants["initiator_id"], trade_participants["partner_id"]
+                        }:
+                            other_player_id = (
+                                trade_participants["partner_id"]
+                                if user_id == trade_participants["initiator_id"]
+                                else trade_participants["initiator_id"]
+                            )
+                if other_player_id is not None and other_player_id != user_id:
+                    player_lock_context = player_pair_lock(user_id, other_player_id)
+            async with player_lock_context:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "friend_search":
                     if set(payload) != {"action", "query"} or not isinstance(payload["query"], str):
@@ -4607,6 +4632,12 @@ async def api_social(request: web.Request):
                     target = await target_cur.fetchone()
                     if not target or not target["class_selected"] or not player["class_selected"]:
                         return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
+                    for participant_id in (user_id, target_id):
+                        battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                        if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
+                            return web.json_response({"error": "Both players must finish active battles and duels before trading."}, status=409)
+                        if await _has_active_pvp_match(db, participant_id):
+                            return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     active_cur = await db.execute(
                         """SELECT 1 FROM trades WHERE status IN ('pending','open')
                            AND (initiator_id IN (?,?) OR partner_id IN (?,?)) LIMIT 1""",
@@ -4626,6 +4657,20 @@ async def api_social(request: web.Request):
                         await log_invalid_trade_action(action, "malformed trade_id")
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
                     trade_status = "open" if action == "trade_accept" else "declined"
+                    if action == "trade_accept":
+                        trade_lookup = await db.execute(
+                            "SELECT initiator_id,partner_id FROM trades WHERE trade_id=? AND status='pending'",
+                            (payload["trade_id"],),
+                        )
+                        pending_trade = await trade_lookup.fetchone()
+                        if not pending_trade or pending_trade["partner_id"] != user_id:
+                            return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
+                        for participant_id in (pending_trade["initiator_id"], pending_trade["partner_id"]):
+                            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
+                                return web.json_response({"error": "Both players must finish active battles and duels before trading."}, status=409)
+                            if await _has_active_pvp_match(db, participant_id):
+                                return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     trade_cur = await db.execute(
                         """UPDATE trades SET status=?
                            WHERE trade_id=? AND partner_id=? AND status='pending'""",
