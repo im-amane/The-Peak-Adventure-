@@ -286,6 +286,13 @@ async def join_matchmaking(
     )
     if await dungeon.fetchone():
         raise MatchmakingError("Finish or abandon your active dungeon before joining matchmaking.")
+    party_battle = await db.execute(
+        """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+           WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+        (user_id,),
+    )
+    if await party_battle.fetchone():
+        raise MatchmakingError("Finish your party's active co-op battle before joining matchmaking.")
 
     cursor = await db.execute(
         "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
