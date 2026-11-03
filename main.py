@@ -618,6 +618,14 @@ async def _has_active_trade(db, user_id: int, exclude_trade_id: int | None = Non
     return await cur.fetchone() is not None
 
 
+async def _has_active_dungeon(db, user_id: int) -> bool:
+    cur = await db.execute(
+        "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+        (user_id,),
+    )
+    return await cur.fetchone() is not None
+
+
 async def _has_active_pvp_match(db, user_id: int) -> bool:
     if getattr(db, "dialect", "sqlite") == "postgres":
         await db.execute(
@@ -672,6 +680,10 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         if await _has_active_trade(db, user_id):
             await db.rollback()
             await send_target.answer("🤝 Finish or cancel your active trade before entering the wilds.")
+            return
+        if await _has_active_dungeon(db, user_id):
+            await db.rollback()
+            await send_target.answer("🗝️ Finish or abandon your active dungeon before entering the wilds.")
             return
         await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
@@ -1208,8 +1220,8 @@ async def create_trade(message: Message):
             return
         for participant_id in (initiator_id, partner_id):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
-            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
-                await message.answer("Both players must finish their active battles and duels before trading.")
+            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
+                await message.answer("Both players must finish their active battles, duels, and dungeons before trading.")
                 return
             if await _has_active_pvp_match(db, participant_id):
                 await message.answer("Both players must finish their active PvP matches before trading.")
@@ -2313,8 +2325,8 @@ async def create_duel(message: Message):
             return
         for participant_id in (challenger_id, opponent_id):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
-            if await battle_cur.fetchone() or await _has_active_trade(db, participant_id):
-                await message.answer("Both players must finish active battles and trades before starting a duel.")
+            if await battle_cur.fetchone() or await _has_active_trade(db, participant_id) or await _has_active_dungeon(db, participant_id):
+                await message.answer("Both players must finish active battles, trades, and dungeons before starting a duel.")
                 return
             if await _has_active_pvp_match(db, participant_id):
                 await message.answer("Both players must finish active PvP matches before starting a duel.")
@@ -3642,6 +3654,8 @@ async def _buy_shop_item_unlocked(user_id: int, item_id: str):
             raise ShopError("Finish your active duel before changing equipment.")
         if await _has_active_trade(db, user_id):
             raise ShopError("Finish or cancel your active trade before changing equipment.")
+        if await _has_active_dungeon(db, user_id):
+            raise ShopError("Finish or abandon your active dungeon before changing equipment.")
         if await _has_active_pvp_match(db, user_id):
             raise ShopError("Leave matchmaking before changing your equipment.")
         if player["level"]<item["level"]:
