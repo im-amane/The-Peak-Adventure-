@@ -215,6 +215,12 @@ async def respond_to_party_invite(
         )
         if not await cur.fetchone():
             raise PartyError("Party not found.")
+        cur = await db.execute(
+            "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+            (invite["party_id"],),
+        )
+        if await cur.fetchone():
+            raise PartyError("Wait until the party's active co-op battle ends before joining.")
         cur = await db.execute("SELECT 1 FROM party_members WHERE user_id=?", (target_id,))
         if await cur.fetchone():
             raise PartyError("You are already in a party.")
