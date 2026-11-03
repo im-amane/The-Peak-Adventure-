@@ -1144,6 +1144,16 @@ class TradeSettlementConflict(Exception):
     """Raised when a trade participant cannot be updated during settlement."""
 
 
+def _trade_has_value(trade) -> bool:
+    """Require at least one real asset so empty trades cannot farm guild missions."""
+    return any((
+        trade["initiator_coins"], trade["partner_coins"],
+        trade["initiator_potions"], trade["partner_potions"],
+        trade["initiator_weapon"], trade["partner_weapon"],
+        trade["initiator_armor"], trade["partner_armor"],
+    ))
+
+
 async def settle_trade_assets(db, trade, initiator, partner):
     """Apply both sides of a trade atomically; never leave a one-sided transfer."""
     savepoint = "trade_settlement"
@@ -1442,6 +1452,14 @@ async def confirm_trade(message: Message):
                 await db.commit()
                 waiting_summary = await trade_summary(trade)
             else:
+                if not _trade_has_value(trade):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("A trade must exchange at least one item, coin, or potion. Empty trades cannot be completed.")
+                    return
                 initiator = await get_player(trade["initiator_id"])
                 partner = await get_player(trade["partner_id"])
 
@@ -4841,6 +4859,15 @@ async def api_social(request: web.Request):
                     trade_cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (payload["trade_id"],))
                     trade = await trade_cur.fetchone()
                     if trade["initiator_confirmed"] and trade["partner_confirmed"]:
+                        if not _trade_has_value(trade):
+                            await db.execute(
+                                "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                                (payload["trade_id"],),
+                            )
+                            await db.commit()
+                            return web.json_response({
+                                "error": "A trade must exchange at least one item, coin, or potion. Empty trades cannot be completed."
+                            }, status=409)
                         initiator = await get_player(trade["initiator_id"])
                         partner = await get_player(trade["partner_id"])
                         invalid_equipment = (
