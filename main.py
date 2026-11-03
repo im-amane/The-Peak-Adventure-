@@ -1252,34 +1252,66 @@ async def set_trade_offer(message: Message):
     if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    player = await get_player(user_id, message.from_user.username)
-    if coins > player["coins"] or potions > player["potions"]:
-        await message.answer("Your offer exceeds your current coins or potions.")
-        return
-    if weapon and weapon != player["weapon"]:
-        await message.answer("You can only offer the weapon currently equipped by your hero.")
-        return
-    if armor and armor != player["armor"]:
-        await message.answer("You can only offer the armor currently equipped by your hero.")
-        return
-    weapon_attack = player["weapon_attack"] if weapon else None
-    armor_defense = player["armor_defense"] if armor else None
-    if user_id == trade["initiator_id"]:
-        await db.execute("""UPDATE trades SET initiator_coins=?,initiator_potions=?,
-          initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
-          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
-          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
-    else:
-        await db.execute("""UPDATE trades SET partner_coins=?,partner_potions=?,
-          partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
-          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
-          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
-    await db.commit()
+
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "open":
+                await db.rollback()
+                await message.answer("That trade is no longer open.")
+                return
+            if user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+            player = await get_player(user_id, message.from_user.username)
+            if coins > player["coins"] or potions > player["potions"]:
+                await db.rollback()
+                await message.answer("Your offer exceeds your current coins or potions.")
+                return
+            if weapon and weapon != player["weapon"]:
+                await db.rollback()
+                await message.answer("You can only offer the weapon currently equipped by your hero.")
+                return
+            if armor and armor != player["armor"]:
+                await db.rollback()
+                await message.answer("You can only offer the armor currently equipped by your hero.")
+                return
+            weapon_attack = player["weapon_attack"] if weapon else None
+            armor_defense = player["armor_defense"] if armor else None
+            if user_id == trade["initiator_id"]:
+                cur = await db.execute(
+                    """UPDATE trades SET initiator_coins=?,initiator_potions=?,
+                       initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
+                       initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                    (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id),
+                )
+            else:
+                cur = await db.execute(
+                    """UPDATE trades SET partner_coins=?,partner_potions=?,
+                       partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
+                       initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                    (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id),
+                )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await message.answer("That trade changed before your offer could be saved. Try again.")
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     await message.answer((await trade_summary(trade)) + "\nBoth players must confirm with /confirmtrade ID.")
-
-
 @dp.message(Command("confirmtrade"))
 async def confirm_trade(message: Message):
     if len(message.command) != 2 or not message.command[1].isdigit():
@@ -1396,13 +1428,41 @@ async def cancel_trade(message: Message):
     if not trade or trade["status"] not in {"pending", "open"}:
         await message.answer("That trade cannot be cancelled.")
         return
-    if message.from_user.id not in {trade["initiator_id"], trade["partner_id"]}:
+    user_id = message.from_user.id
+    if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    await db.execute("UPDATE trades SET status='cancelled' WHERE trade_id=?", (trade_id,))
-    await db.commit()
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] not in {"pending", "open"}:
+                await db.rollback()
+                await message.answer("That trade has already been completed or cancelled.")
+                return
+            if user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+            cur = await db.execute(
+                "UPDATE trades SET status='cancelled' WHERE trade_id=? AND status IN ('pending','open')",
+                (trade_id,),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await message.answer("That trade changed before it could be cancelled.")
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
     await message.answer(f"Trade #{trade_id} cancelled.")
-
 
 
 def friend_request_keyboard(request_id: int):
