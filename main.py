@@ -4260,6 +4260,18 @@ async def api_explore(request: web.Request):
                         {"error": "Finish your active PvP match before starting a monster encounter."},
                         status=409,
                     )
+                if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                    await db.rollback()
+                    return web.json_response(
+                        {"error": "Finish your active duel or trade before starting a monster encounter."},
+                        status=409,
+                    )
+                if await _has_active_dungeon(db, user_id):
+                    await db.rollback()
+                    return web.json_response(
+                        {"error": "Finish or abandon your active dungeon before starting a monster encounter."},
+                        status=409,
+                    )
                 await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
                 await db.execute("UPDATE players SET skill_cd=0 WHERE user_id=?", (user_id,))
                 await db.execute(
@@ -4659,8 +4671,8 @@ async def api_social(request: web.Request):
                         return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
                     for participant_id in (user_id, target_id):
                         battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
-                        if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
-                            return web.json_response({"error": "Both players must finish active battles and duels before trading."}, status=409)
+                        if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
+                            return web.json_response({"error": "Both players must finish active battles, duels, and dungeons before trading."}, status=409)
                         if await _has_active_pvp_match(db, participant_id):
                             return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     active_cur = await db.execute(
@@ -4692,8 +4704,8 @@ async def api_social(request: web.Request):
                             return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
                         for participant_id in (pending_trade["initiator_id"], pending_trade["partner_id"]):
                             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
-                            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id):
-                                return web.json_response({"error": "Both players must finish active battles and duels before trading."}, status=409)
+                            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
+                                return web.json_response({"error": "Both players must finish active battles, duels, and dungeons before trading."}, status=409)
                             if await _has_active_pvp_match(db, participant_id):
                                 return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     trade_cur = await db.execute(
