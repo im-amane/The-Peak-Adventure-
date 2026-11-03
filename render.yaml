@@ -3,6 +3,7 @@ services:
     name: the-peak-adventure
     runtime: docker
     plan: starter
+    region: singapore
     healthCheckPath: /healthz
     envVars:
       - key: BOT_TOKEN
@@ -21,6 +22,10 @@ services:
         value: "7"
       - key: WEB_HOST
         value: 0.0.0.0
+      - key: ENABLE_TELEGRAM_STARS
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
     disk:
       name: peak-adventure-data
       mountPath: /data
