@@ -619,6 +619,12 @@ async def _has_active_trade(db, user_id: int, exclude_trade_id: int | None = Non
 
 
 async def _has_active_pvp_match(db, user_id: int) -> bool:
+    queued = await db.execute(
+        "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
+        (user_id,),
+    )
+    if await queued.fetchone():
+        return True
     if getattr(db, "dialect", "sqlite") == "postgres":
         await db.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
@@ -3633,6 +3639,8 @@ async def _buy_shop_item_unlocked(user_id: int, item_id: str):
             raise ShopError("Finish your active duel before changing equipment.")
         if await _has_active_trade(db, user_id):
             raise ShopError("Finish or cancel your active trade before changing equipment.")
+        if await _has_active_pvp_match(db, user_id):
+            raise ShopError("Leave matchmaking before changing your equipment.")
         if player["level"]<item["level"]:
             raise ShopError(f"You need level {item['level']} to buy {item['name']}.")
         if player["coins"]<item["cost"]:
