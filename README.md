@@ -124,6 +124,11 @@ Keep `BOT_TOKEN` private. Never deploy production or provision paid resources wi
 - `/weekly` - View weekly objectives and claim with `/weekly claim QUEST_ID`
 - `/stamina` and `/mana` - View combat resources
 - `/settings` - Set notification preferences and profile visibility
+- `/mana` - View mana, skill cost and regeneration
+- `/online` - View active adventurers and online friends
+- `/report PLAYER_ID reason` - Submit a player report for administrator review
+- `/auction` - Browse active listings; `/auction sell weapon|armor STARTING_BID [HOURS]`, `/auction cancel LISTING_ID`, `/auction stash`, `/auction equip STASH_ID`
+- `/bid LISTING_ID AMOUNT` - Place a bid in the auction house
 - `/deleteaccount` - Request permanent player-data deletion with an explicit confirmation step
 - `/export` - Download your player data as JSON
 - `/group register|info|members|missions|claim|raid|ban|unban|top` - Telegram group progression and raids
