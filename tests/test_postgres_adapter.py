@@ -126,6 +126,13 @@ class QmarkTranslationTests(unittest.TestCase):
 
         self.assertTrue(_is_write_statement("SELECT * FROM players FOR UPDATE"))
 
+    def test_transaction_advisory_lock_is_classified_as_transactional(self):
+        from postgres_adapter import _is_write_statement
+
+        self.assertTrue(
+            _is_write_statement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")
+        )
+
     def test_begin_immediate_is_normalized_for_execute_paths(self):
         from postgres_adapter import _prepare_statement
 
