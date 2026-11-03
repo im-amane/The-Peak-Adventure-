@@ -1,6 +1,8 @@
 import json
 import tempfile
+import time
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -267,6 +269,68 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
             (25,2,"Rusty Sword",None,0,0),
         )
 
+    async def test_party_raid_requires_stamina_and_reports_shortage(self):
+        user_id = 987654940
+        await main.get_player(user_id, "RaidLeader")
+        await main.db.execute("UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,))
+        party_id = await main.create_party(main.db, user_id)
+        await main.get_stamina(main.db, user_id)
+        await main.db.execute("UPDATE player_stamina SET stamina=0 WHERE user_id=?", (user_id,))
+        await main.db.commit()
+
+        class FakePartyMessage:
+            text = "/party battle start"
+            from_user = SimpleNamespace(id=user_id, username="RaidLeader", full_name="Raid Leader")
+            responses = []
+
+            async def answer(self, text, **kwargs):
+                self.responses.append(text)
+
+        message = FakePartyMessage()
+        message.responses = []
+        await main.party_command(message)
+        self.assertTrue(any("stamina" in response.lower() for response in message.responses))
+        cur = await main.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        self.assertIsNone(await cur.fetchone())
+
+        await main.db.execute("UPDATE player_stamina SET stamina=100,updated_at=? WHERE user_id=?", (int(time.time()), user_id))
+        await main.db.commit()
+        successful_message = FakePartyMessage()
+        successful_message.responses = []
+        await main.party_command(successful_message)
+        cur = await main.db.execute("SELECT stamina FROM player_stamina WHERE user_id=?", (user_id,))
+        self.assertEqual((await cur.fetchone())["stamina"], 90)
+        cur = await main.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        self.assertIsNotNone(await cur.fetchone())
+
+    async def test_empty_trade_cannot_complete_or_farm_guild_mission_progress(self):
+        initiator_id = 987654930
+        partner_id = 987654931
+        await main.get_player(initiator_id, "EmptyTradeInitiator")
+        await main.get_player(partner_id, "EmptyTradePartner")
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'open')",
+            (initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "EmptyTradeInitiator"}):
+            first = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        self.assertEqual(first.status, 200)
+
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "EmptyTradePartner"}):
+            second = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        self.assertEqual(second.status, 409)
+        self.assertIn("at least one item, coin, or potion", json.loads(second.text)["error"])
+
+        cur = await main.db.execute(
+            "SELECT status,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
+            (trade_id,),
+        )
+        state = await cur.fetchone()
+        self.assertEqual((state["status"],state["initiator_confirmed"],state["partner_confirmed"]),("open",0,0))
+
     async def test_trade_confirmation_exchanges_balances_once(self):
         initiator_id = 987654926
         partner_id = 987654927
@@ -443,6 +507,58 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         trade = await cur.fetchone()
         self.assertEqual((trade["initiator_id"], trade["partner_id"], trade["status"]),
                          (initiator_id, friend_id, "pending"))
+
+    async def test_legacy_trade_invitation_cannot_be_accepted_during_active_battle(self):
+        initiator_id = 987654932
+        partner_id = 987654933
+        await main.get_player(initiator_id, "LegacyTradeInitiator")
+        await main.get_player(partner_id, "LegacyTradePartner")
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
+            (initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.execute(
+            "INSERT INTO battles(user_id,monster_level,monster_hp) VALUES(?,?,?)",
+            (initiator_id, 1, 100),
+        )
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "LegacyTradePartner"}):
+            response = await main.api_social(FakeRequest({"action": "trade_accept", "trade_id": trade_id}))
+        self.assertEqual(response.status, 409)
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "pending")
+
+    async def test_trade_creation_rejects_players_in_battles_or_duels(self):
+        initiator_id = 987654925
+        friend_id = 987654926
+        for user_id, username in ((initiator_id, "ModeInitiator"), (friend_id, "ModeFriend")):
+            await main.get_player(user_id, username)
+            await main.db.execute("UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,))
+        low_id, high_id = sorted((initiator_id, friend_id))
+        await main.db.execute(
+            """INSERT INTO friend_requests(user_low,user_high,requester_id,target_id,status)
+               VALUES(?,?,?,?, 'accepted')""",
+            (low_id, high_id, initiator_id, friend_id),
+        )
+        await main.db.execute("INSERT INTO battles(user_id,monster_level,monster_hp) VALUES(?,1,100)", (friend_id,))
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "ModeInitiator"}):
+            battle_blocked = await main.api_social(FakeRequest({"action": "trade_create", "target_id": friend_id}))
+        self.assertEqual(battle_blocked.status, 409)
+
+        await main.db.execute("DELETE FROM battles WHERE user_id=?", (friend_id,))
+        await main.db.execute(
+            """INSERT INTO duels(chat_id,challenger_id,opponent_id,challenger_hp,opponent_hp,status)
+               VALUES(0,?,?,100,100,'pending')""",
+            (friend_id, initiator_id),
+        )
+        await main.db.commit()
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "ModeInitiator"}):
+            duel_blocked = await main.api_social(FakeRequest({"action": "trade_create", "target_id": friend_id}))
+        self.assertEqual(duel_blocked.status, 409)
 
     async def test_trade_creation_rejects_self_and_invalid_target(self):
         user_id = 987654922
