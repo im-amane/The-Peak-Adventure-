@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import aiosqlite
 import asyncio
+import time
+
+from matchmaking_system import MAX_QUEUE_WAIT_SECONDS
 from functools import wraps
 
 
@@ -221,6 +224,27 @@ async def respond_to_party_invite(
         )
         if await cur.fetchone():
             raise PartyError("Wait until the party's active co-op battle ends before joining.")
+        activity_checks = (
+            ("battles", "SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (target_id,)),
+            ("duels", "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?) LIMIT 1", (target_id,target_id)),
+            ("trades", "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1", (target_id,target_id)),
+            ("dungeon_runs", "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1", (target_id,)),
+        )
+        for table, sql, params in activity_checks:
+            if await _table_exists(db, table):
+                activity = await db.execute(sql, params)
+                if await activity.fetchone():
+                    raise PartyError("Finish your active battle, duel, trade, or dungeon before joining a party.")
+        if await _table_exists(db, "matchmaking_queue"):
+            activity = await db.execute(
+                """SELECT 1 FROM matchmaking_queue
+                   WHERE user_id=? AND (
+                     status='matched' OR (status='queued' AND queued_at>=?)
+                   ) LIMIT 1""",
+                (target_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
+            )
+            if await activity.fetchone():
+                raise PartyError("Leave your active PvP queue or match before joining a party.")
         cur = await db.execute("SELECT 1 FROM party_members WHERE user_id=?", (target_id,))
         if await cur.fetchone():
             raise PartyError("You are already in a party.")
