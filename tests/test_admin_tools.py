@@ -10,7 +10,7 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   CREATE TABLE players(user_id INTEGER PRIMARY KEY,coins INTEGER DEFAULT 0);
   CREATE TABLE battles(user_id INTEGER PRIMARY KEY);
   CREATE TABLE guilds(guild_id INTEGER PRIMARY KEY);
-  CREATE TABLE group_profiles(chat_id INTEGER PRIMARY KEY);
+  CREATE TABLE group_profiles(chat_id INTEGER PRIMARY KEY,owner_id INTEGER);
   CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER,status TEXT);
   CREATE TABLE quest_progress(user_id INTEGER,quest_id TEXT);
   CREATE TABLE achievement_progress(user_id INTEGER,achievement_id TEXT);
@@ -52,6 +52,77 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(logs[0]["actor_id"],999)
  async def test_dashboard_counts(self):
   self.assertEqual(await dashboard_stats(self.db),{"players":1,"active_battles":0,"guilds":0,"registered_groups":0,"active_duels":0,"security_events_24h":0,"stars_received":0,"premium_gems_issued":0})
+ async def test_player_export_includes_social_economy_and_matchmaking_data(self):
+  await self.db.executescript("""
+  CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER);
+  CREATE TABLE auction_listings(listing_id INTEGER PRIMARY KEY,seller_id INTEGER,highest_bidder INTEGER);
+  CREATE TABLE auction_stash(stash_id INTEGER PRIMARY KEY,user_id INTEGER);
+  CREATE TABLE matchmaking_matches(match_id INTEGER PRIMARY KEY,player_one_id INTEGER,player_two_id INTEGER);
+  CREATE TABLE matchmaking_queue(user_id INTEGER,status TEXT,match_id INTEGER);
+  CREATE TABLE matchmaking_rate_limits(user_id INTEGER,last_joined_at INTEGER);
+  CREATE TABLE matchmaking_battles(match_id INTEGER);
+  CREATE TABLE matchmaking_battle_stats(match_id INTEGER,user_id INTEGER);
+  CREATE TABLE party_members(user_id INTEGER,party_id INTEGER);
+  CREATE TABLE party_invites(invite_id INTEGER,inviter_id INTEGER,target_id INTEGER);
+  CREATE TABLE party_battle_contributions(user_id INTEGER,battle_id INTEGER);
+  CREATE TABLE party_battle_cooldowns(user_id INTEGER,battle_id INTEGER);
+  CREATE TABLE party_battle_rewards(user_id INTEGER,battle_id INTEGER);
+  CREATE TABLE guild_members(user_id INTEGER,guild_id INTEGER);
+  CREATE TABLE guild_invites(invite_id INTEGER,inviter_id INTEGER,target_id INTEGER);
+  CREATE TABLE guild_chat_messages(message_id INTEGER,user_id INTEGER);
+  CREATE TABLE guild_announcements(guild_id INTEGER,author_id INTEGER);
+  CREATE TABLE guild_raid_contributions(user_id INTEGER,raid_id INTEGER);
+  CREATE TABLE guild_raid_cooldowns(user_id INTEGER,raid_id INTEGER);
+  CREATE TABLE guild_war_duel_events(duel_id INTEGER,winner_id INTEGER);
+  CREATE TABLE group_admins(user_id INTEGER,chat_id INTEGER);
+  CREATE TABLE group_players(user_id INTEGER,chat_id INTEGER);
+  CREATE TABLE group_bans(user_id INTEGER,actor_id INTEGER,chat_id INTEGER);
+  CREATE TABLE group_raid_contributions(user_id INTEGER,raid_id INTEGER);
+  CREATE TABLE group_raid_cooldowns(user_id INTEGER,raid_id INTEGER);
+  CREATE TABLE player_reports(report_id INTEGER,reporter_id INTEGER,target_id INTEGER);
+  CREATE TABLE player_bans(user_id INTEGER);
+  INSERT INTO trades VALUES(1,101,202);
+  INSERT INTO auction_listings VALUES(1,101,202);
+  INSERT INTO auction_stash VALUES(1,101);
+  INSERT INTO matchmaking_matches VALUES(1,101,202);
+  INSERT INTO matchmaking_queue VALUES(101,'matched',1);
+  INSERT INTO matchmaking_rate_limits VALUES(101,123);
+  INSERT INTO matchmaking_battles VALUES(1);
+  INSERT INTO matchmaking_battle_stats VALUES(1,101);
+  INSERT INTO party_members VALUES(101,7);
+  INSERT INTO party_invites VALUES(1,101,202);
+  INSERT INTO party_battle_contributions VALUES(101,8);
+  INSERT INTO party_battle_cooldowns VALUES(101,8);
+  INSERT INTO party_battle_rewards VALUES(101,8);
+  INSERT INTO guild_members VALUES(101,9);
+  INSERT INTO guild_invites VALUES(1,101,202);
+  INSERT INTO guild_chat_messages VALUES(1,101);
+  INSERT INTO guild_announcements VALUES(9,101);
+  INSERT INTO guild_raid_contributions VALUES(101,10);
+  INSERT INTO guild_raid_cooldowns VALUES(101,10);
+  INSERT INTO guild_war_duel_events VALUES(1,101);
+  INSERT INTO group_profiles VALUES(-100,101);
+  INSERT INTO group_admins VALUES(101,-100);
+  INSERT INTO group_players VALUES(101,-100);
+  INSERT INTO group_bans VALUES(101,101,-100);
+  INSERT INTO group_raid_contributions VALUES(101,11);
+  INSERT INTO group_raid_cooldowns VALUES(101,11);
+  INSERT INTO player_reports VALUES(1,101,202);
+  INSERT INTO player_bans VALUES(101);
+  """)
+  data=await export_player_data(self.db,101)
+  for key in (
+   "trades","auction_listings","auction_stash","matchmaking_queue",
+   "matchmaking_rate_limits","matchmaking_matches","matchmaking_battles",
+   "matchmaking_battle_stats","party_memberships","party_invites",
+   "party_battle_contributions","party_battle_cooldowns","party_battle_rewards",
+   "guild_memberships","guild_invites","guild_chat_messages","guild_announcements",
+   "guild_raid_contributions","guild_raid_cooldowns","guild_war_duel_events",
+   "group_profiles_owned","group_admin_roles","group_memberships","group_bans",
+   "group_raid_contributions","group_raid_cooldowns","player_reports","player_bans",
+  ):
+   self.assertTrue(data["data"][key],key)
+
  async def test_player_export_contains_account_data(self):
   data=await export_player_data(self.db,101)
   self.assertEqual(data["data"]["profile"][0]["coins"],50)
