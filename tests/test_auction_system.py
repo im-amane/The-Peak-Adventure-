@@ -28,6 +28,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
           initiator_id INTEGER NOT NULL,partner_id INTEGER NOT NULL,
           status TEXT NOT NULL
         );
+        CREATE TABLE matchmaking_queue(user_id INTEGER PRIMARY KEY,status TEXT NOT NULL);
         """)
         await init_auction_tables(self.db)
     async def asyncTearDown(self): await self.db.close()
@@ -154,6 +155,32 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
         self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
         stash=await list_stash(self.db,1)
+        self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_list_or_equip_items_while_queued_for_pvp(self):
+        await self.db.execute("INSERT INTO matchmaking_queue(user_id,status) VALUES(1,'queued')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel or trade"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel or trade"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
+
+    async def test_auction_expiry_stashes_gear_if_buyer_is_queued(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await place_bid(self.db,2,listing,100,now=1001)
+        await self.db.execute("INSERT INTO matchmaking_queue(user_id,status) VALUES(2,'queued')")
+        await self.db.commit()
+        await list_active_auctions(self.db,now=1000+24*3600+1)
+
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=2")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        stash=await list_stash(self.db,2)
         self.assertEqual(stash[0]["item_name"],"Stormblade")
 
     async def test_auction_ids_bids_and_timestamps_reject_invalid_types(self):
