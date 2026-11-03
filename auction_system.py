@@ -109,19 +109,22 @@ async def _lock_player_for_equipment(db, user_id):
 
 
 async def _has_active_duel_or_trade(db, user_id):
-    cur = await db.execute(
-        "SELECT 1 FROM duels WHERE status IN ('pending','active') "
-        "AND (challenger_id=? OR opponent_id=?) LIMIT 1",
-        (user_id, user_id),
-    )
-    if await cur.fetchone():
-        return True
-    cur = await db.execute(
-        "SELECT 1 FROM trades WHERE status IN ('pending','open') "
-        "AND (initiator_id=? OR partner_id=?) LIMIT 1",
-        (user_id, user_id),
-    )
-    return await cur.fetchone() is not None
+    if await _table_exists(db, "duels"):
+        cur = await db.execute(
+            "SELECT 1 FROM duels WHERE status IN ('pending','active') "
+            "AND (challenger_id=? OR opponent_id=?) LIMIT 1",
+            (user_id, user_id),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "trades"):
+        cur = await db.execute(
+            "SELECT 1 FROM trades WHERE status IN ('pending','open') "
+            "AND (initiator_id=? OR partner_id=?) LIMIT 1",
+            (user_id, user_id),
+        )
+        return await cur.fetchone() is not None
+    return False
 
 
 async def _return_listing_item(db, seller_id, slot, item_name, item_stat, listing_id, now):
