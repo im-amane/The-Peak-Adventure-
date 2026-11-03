@@ -197,8 +197,10 @@ async def respond_to_party_invite(
 ) -> None:
     if not _valid_id(invite_id) or not _valid_id(target_id) or type(accept) is not bool:
         raise PartyError("Invalid party invitation.")
+    # Read the invite to identify its parent, then lock in the consistent
+    # party -> invite order used by leave/disband and other lifecycle changes.
     cur = await db.execute(
-        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
+        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?",
         (invite_id,),
     )
     invite = await cur.fetchone()
@@ -206,15 +208,21 @@ async def respond_to_party_invite(
         raise PartyError("That party invitation is no longer active.")
     if invite["target_id"] != target_id:
         raise PartyError("Only the invited player can respond.")
+    cur = await db.execute(
+        "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (invite["party_id"],),
+    )
+    if not await cur.fetchone():
+        raise PartyError("Party not found.")
+    cur = await db.execute(
+        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
+        (invite_id,),
+    )
+    invite = await cur.fetchone()
+    if not invite or invite["status"] != "pending" or invite["target_id"] != target_id:
+        raise PartyError("That party invitation is no longer active.")
     if accept:
-        # Lock the parent party before checking capacity. Concurrent accepts on
-        # separate PostgreSQL connections must observe each other serially.
-        cur = await db.execute(
-            "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
-            (invite["party_id"],),
-        )
-        if not await cur.fetchone():
-            raise PartyError("Party not found.")
+        # The parent party lock serializes capacity checks across connections.
         cur = await db.execute("SELECT 1 FROM party_members WHERE user_id=?", (target_id,))
         if await cur.fetchone():
             raise PartyError("You are already in a party.")
