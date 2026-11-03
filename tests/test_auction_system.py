@@ -118,7 +118,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def test_cannot_list_or_equip_items_during_active_duel(self):
         await self.db.execute("INSERT INTO duels(challenger_id,opponent_id,status) VALUES(1,2,'active')")
         await self.db.commit()
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await create_listing(self.db,1,"weapon",100,now=1000)
 
         await self.db.execute(
@@ -126,13 +126,13 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.commit()
         stash = await list_stash(self.db,1)
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await equip_stashed_item(self.db,1,stash[0]["stash_id"])
 
     async def test_cannot_list_or_equip_items_during_open_trade(self):
         await self.db.execute("INSERT INTO trades(initiator_id,partner_id,status) VALUES(1,2,'open')")
         await self.db.commit()
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await create_listing(self.db,1,"weapon",100,now=1000)
 
     async def test_auction_expiry_stashes_gear_if_buyer_is_in_a_duel(self):
@@ -161,7 +161,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def test_cannot_list_or_equip_items_while_queued_for_pvp(self):
         await self.db.execute("INSERT INTO matchmaking_queue(user_id,status) VALUES(1,'queued')")
         await self.db.commit()
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await create_listing(self.db,1,"weapon",100,now=1000)
 
         await self.db.execute(
@@ -169,7 +169,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.commit()
         stash = await list_stash(self.db,1)
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await equip_stashed_item(self.db,1,stash[0]["stash_id"])
 
     async def test_auction_expiry_stashes_gear_if_buyer_is_queued(self):
@@ -187,7 +187,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
     async def test_cannot_change_equipment_during_active_dungeon(self):
         await self.db.execute("INSERT INTO dungeon_runs(user_id,status) VALUES(1,'active')")
         await self.db.commit()
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await create_listing(self.db,1,"weapon",100,now=1000)
 
         await self.db.execute(
@@ -195,7 +195,7 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.commit()
         stash = await list_stash(self.db,1)
-        with self.assertRaisesRegex(AuctionError,"active duel, trade, or PvP queue"):
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
             await equip_stashed_item(self.db,1,stash[0]["stash_id"])
 
     async def test_auction_expiry_stashes_gear_if_buyer_is_in_a_dungeon(self):
