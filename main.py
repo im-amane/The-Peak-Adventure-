@@ -636,6 +636,17 @@ async def _has_active_party_battle(db, user_id: int) -> bool:
     return await cur.fetchone() is not None
 
 
+async def _has_active_non_party_mode(db, user_id: int) -> bool:
+    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (user_id,))
+    if await cur.fetchone():
+        return True
+    if await _has_active_pvp_match(db, user_id):
+        return True
+    if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+        return True
+    return await _has_active_dungeon(db, user_id)
+
+
 async def _has_active_pvp_match(db, user_id: int) -> bool:
     if getattr(db, "dialect", "sqlite") == "postgres":
         await db.execute(
@@ -3222,6 +3233,8 @@ async def dungeon_command(message: Message):
                         raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
                     if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
                         raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                    if await _has_active_party_battle(db, user_id):
+                        raise DungeonError("Finish your party's active co-op battle before entering a dungeon.")
                     state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
                     await travel_to_world(db, user_id, player["level"], dungeon_id)
                     await db.commit()
@@ -4219,6 +4232,8 @@ async def api_dungeon(request: web.Request):
                             raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
                         if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
                             raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                        if await _has_active_party_battle(db, user_id):
+                            raise DungeonError("Finish your party's active co-op battle before entering a dungeon.")
                         state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
                         await db.commit()
                     except Exception:
@@ -4300,10 +4315,10 @@ async def api_explore(request: web.Request):
                         {"error": "Finish your active PvP match before starting a monster encounter."},
                         status=409,
                     )
-                if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id) or await _has_active_party_battle(db, user_id):
                     await db.rollback()
                     return web.json_response(
-                        {"error": "Finish your active duel or trade before starting a monster encounter."},
+                        {"error": "Finish your active duel, trade, or party battle before starting a monster encounter."},
                         status=409,
                     )
                 await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
