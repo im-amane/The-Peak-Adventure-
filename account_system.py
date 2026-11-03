@@ -274,6 +274,8 @@ async def _delete_player_account_unlocked(db,user_id):
     # Remove matchmaking rows before deleting the player because these tables
     # carry foreign keys to both the player and the match. A surviving opponent
     # must not remain in a phantom active match.
+    if await _table_exists(db, "matchmaking_queue"):
+        await db.execute("DELETE FROM matchmaking_queue WHERE user_id=?",(user_id,))
     if await _table_exists(db, "matchmaking_matches"):
         cur = await db.execute(
             """SELECT match_id,player_one_id,player_two_id
@@ -318,8 +320,6 @@ async def _delete_player_account_unlocked(db,user_id):
             "DELETE FROM matchmaking_matches WHERE player_one_id=? OR player_two_id=?",
             (user_id,user_id),
         )
-    if await _table_exists(db, "matchmaking_queue"):
-        await db.execute("DELETE FROM matchmaking_queue WHERE user_id=?",(user_id,))
     if await _table_exists(db, "matchmaking_rate_limits"):
         await db.execute("DELETE FROM matchmaking_rate_limits WHERE user_id=?",(user_id,))
     if await _table_exists(db, "matchmaking_battle_stats"):
