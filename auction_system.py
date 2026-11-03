@@ -46,8 +46,11 @@ async def _table_exists(db, table):
         return True
     if await _table_exists(db, "matchmaking_queue"):
         cur = await db.execute(
-            "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
-            (user_id,),
+            """SELECT 1 FROM matchmaking_queue
+               WHERE user_id=? AND (
+                 status='matched' OR (status='queued' AND queued_at>=?)
+               ) LIMIT 1""",
+            (user_id, int(time.time()) - 180),
         )
         if await cur.fetchone():
             return True
