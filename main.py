@@ -2469,8 +2469,7 @@ async def duel_action(call: CallbackQuery):
     await call.message.edit_text(duel_message, reply_markup=markup)
 
 
-@dp.message(Command("pvprank"))
-async def pvprank(message: Message):
+async def pvp_rankings_text():
     cur = await db.execute(
         "SELECT username, pvp_wins, pvp_losses FROM players ORDER BY pvp_wins DESC, pvp_losses ASC LIMIT 10"
     )
@@ -2478,7 +2477,18 @@ async def pvprank(message: Message):
     lines = ["⚔️ <b>PvP Rankings</b>"]
     for i, row in enumerate(rows, 1):
         lines.append(f"{i}. {escape(row['username'] or 'Adventurer')} · {row['pvp_wins']}W / {row['pvp_losses']}L")
-    await message.answer("\n".join(lines))
+    return "\n".join(lines)
+
+
+@dp.callback_query(F.data == "pvprank")
+async def cb_pvprank(call: CallbackQuery):
+    await call.answer()
+    await call.message.answer(await pvp_rankings_text())
+
+
+@dp.message(Command("pvprank"))
+async def pvprank(message: Message):
+    await message.answer(await pvp_rankings_text())
 
 
 @dp.message(Command("start"))
