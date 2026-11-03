@@ -136,7 +136,15 @@ async def _has_active_player_activity(db, user_id):
             "AND (initiator_id=? OR partner_id=?) LIMIT 1",
             (user_id, user_id),
         )
-        return await cur.fetchone() is not None
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "matchmaking_queue"):
+        cur = await db.execute(
+            "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
     return False
 
 
