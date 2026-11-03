@@ -1,6 +1,8 @@
 """Transactional player auction house for equipped weapons and armor."""
 import time
 
+from matchmaking_system import MAX_QUEUE_WAIT_SECONDS
+
 class AuctionError(ValueError):
     pass
 
@@ -137,7 +139,7 @@ async def _has_active_player_activity(db, user_id):
                WHERE user_id=? AND (
                  status='matched' OR (status='queued' AND queued_at>=?)
                ) LIMIT 1""",
-            (user_id, int(time.time()) - 180),
+            (user_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
         )
         if await cur.fetchone():
             return True
