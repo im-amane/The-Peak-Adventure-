@@ -598,6 +598,26 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         await db.commit()
 
 
+async def _has_active_duel(db, user_id: int, exclude_duel_id: int | None = None) -> bool:
+    sql = "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?)"
+    params = [user_id, user_id]
+    if exclude_duel_id is not None:
+        sql += " AND duel_id<>?"
+        params.append(exclude_duel_id)
+    cur = await db.execute(sql + " LIMIT 1", tuple(params))
+    return await cur.fetchone() is not None
+
+
+async def _has_active_trade(db, user_id: int, exclude_trade_id: int | None = None) -> bool:
+    sql = "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?)"
+    params = [user_id, user_id]
+    if exclude_trade_id is not None:
+        sql += " AND trade_id<>?"
+        params.append(exclude_trade_id)
+    cur = await db.execute(sql + " LIMIT 1", tuple(params))
+    return await cur.fetchone() is not None
+
+
 async def _has_active_pvp_match(db, user_id: int) -> bool:
     if getattr(db, "dialect", "sqlite") == "postgres":
         await db.execute(
@@ -635,6 +655,14 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         if await _has_active_pvp_match(db, user_id):
             await db.rollback()
             await send_target.answer("⚔️ Finish your active PvP match before entering the wilds.")
+            return
+        if await _has_active_duel(db, user_id):
+            await db.rollback()
+            await send_target.answer("⚔️ Finish or decline your active duel before entering the wilds.")
+            return
+        if await _has_active_trade(db, user_id):
+            await db.rollback()
+            await send_target.answer("🤝 Finish or cancel your active trade before entering the wilds.")
             return
         await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
@@ -1169,6 +1197,13 @@ async def create_trade(message: Message):
         if not initiator["class_selected"] or not partner["class_selected"]:
             await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
             return
+        for participant_id in (initiator_id, partner_id):
+            if await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,)) and await _has_active_duel(db, participant_id):
+                await message.answer("Both players must finish their active battles and duels before trading.")
+                return
+            if await _has_active_pvp_match(db, participant_id):
+                await message.answer("Both players must finish their active PvP matches before trading.")
+                return
         cur = await db.execute(
             "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
             "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
