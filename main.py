@@ -4111,7 +4111,15 @@ async def api_dungeon(request: web.Request):
                     cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
                     if await cur.fetchone():
                         return web.json_response({"error": "Finish your active battle before entering a dungeon."}, status=409)
-                    state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                    # Dungeon entry and world travel must succeed or roll back together.
+                    await db.execute("BEGIN IMMEDIATE")
+                    try:
+                        state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                        await travel_to_world(db, user_id, player["level"], dungeon_id)
+                        await db.commit()
+                    except Exception:
+                        await db.rollback()
+                        raise
                     message = "Dungeon entered. Defeat the room guardians to progress."
                 elif action == "abandon":
                     await abandon_dungeon(db, user_id)
@@ -4122,7 +4130,7 @@ async def api_dungeon(request: web.Request):
                     state = None
                     message = f"Dungeon reward claimed: +{coins} coins and +{potions} potions."
                 player_state = await miniapp_state(user)
-    except DungeonError as exc:
+    except (DungeonError, WorldError) as exc:
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response({"message": message, "result": state, "state": player_state})
 
