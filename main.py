@@ -3200,8 +3200,25 @@ async def dungeon_command(message: Message):
             dungeon_id = int(args[2])
             if not 1 <= dungeon_id <= 10:
                 raise DungeonError("Dungeon ID must be between 1 and 10.")
-            state = await enter_dungeon(db, message.from_user.id, player["level"], dungeon_id)
-            await travel_to_world(db, message.from_user.id, player["level"], dungeon_id)
+            user_id = message.from_user.id
+            async with player_lock(user_id):
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    player = await get_player(user_id)
+                    battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+                    if await battle_cur.fetchone():
+                        raise DungeonError("Finish your active battle before entering a dungeon.")
+                    if await _has_active_pvp_match(db, user_id):
+                        raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
+                    if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                        raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                    state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                    await travel_to_world(db, user_id, player["level"], dungeon_id)
+                    await db.commit()
+                except Exception:
+                    if db.in_transaction:
+                        await db.rollback()
+                    raise
             await message.answer("🗝️ Entered <b>" + escape(state["name"]) + "</b>. Room 1/3: defeat a level " + str(state["target_level"]) + " or stronger monster.")
         elif action == "status":
             state = await get_dungeon_state(db, message.from_user.id)
@@ -4181,10 +4198,21 @@ async def api_dungeon(request: web.Request):
                 if action == "enter":
                     if not player["class_selected"]:
                         return web.json_response({"error": "Choose a hero class in the Telegram chat first."}, status=409)
-                    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
-                    if await cur.fetchone():
-                        return web.json_response({"error": "Finish your active battle before entering a dungeon."}, status=409)
-                    state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                    await db.execute("BEGIN IMMEDIATE")
+                    try:
+                        cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+                        if await cur.fetchone():
+                            raise DungeonError("Finish your active battle before entering a dungeon.")
+                        if await _has_active_pvp_match(db, user_id):
+                            raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
+                        if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                            raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                        state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                        await db.commit()
+                    except Exception:
+                        if db.in_transaction:
+                            await db.rollback()
+                        raise
                     message = "Dungeon entered. Defeat the room guardians to progress."
                 elif action == "abandon":
                     await abandon_dungeon(db, user_id)
