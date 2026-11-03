@@ -4935,6 +4935,11 @@ async def api_social(request: web.Request):
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
                         await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if await _trade_has_mode_conflict(db, trade):
+                        await db.rollback()
+                        return web.json_response({
+                            "error": "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before changing offers."
+                        }, status=409)
                     if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
                         return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
                     weapon = player["weapon"] if payload["offer_weapon"] else None
@@ -4968,6 +4973,11 @@ async def api_social(request: web.Request):
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
                         await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if await _trade_has_mode_conflict(db, trade):
+                        await db.rollback()
+                        return web.json_response({
+                            "error": "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before confirming."
+                        }, status=409)
                     if user_id == trade["initiator_id"]:
                         await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
                     else:
