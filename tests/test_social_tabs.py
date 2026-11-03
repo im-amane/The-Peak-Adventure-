@@ -80,6 +80,12 @@ class SocialTabMarkupTests(unittest.TestCase):
             re.MULTILINE,
         ))
         references = set(re.findall(r"\bui\.([A-Za-z_$][\w$]*)", source))
+        direct_ids = set(re.findall(
+            r'document\.getElementById\(["\']([^"\']+)["\']\)',
+            source,
+        ))
+        for element_id in direct_ids:
+            self.assertEqual(parser.ids.get(element_id), 1, element_id)
         self.assertEqual(references - set(bindings), set(), "Every ui.* reference must be initialized")
         for key in references:
             element_id = bindings[key]
