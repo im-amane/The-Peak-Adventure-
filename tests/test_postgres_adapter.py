@@ -270,6 +270,35 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 await other.rollback()
             await other.close()
 
+    async def test_transaction_advisory_lock_is_held_until_commit(self):
+        other = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        lock_name = "peak-adventure-test-lock:" + uuid.uuid4().hex
+        try:
+            await self.db.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                (lock_name,),
+            )
+            self.assertTrue(self.db.in_transaction)
+
+            async def acquire_from_other_connection():
+                cursor = await other.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                    (lock_name,),
+                )
+                await cursor.fetchone()
+
+            waiting = asyncio.create_task(acquire_from_other_connection())
+            await asyncio.sleep(0.05)
+            self.assertFalse(waiting.done(), "transaction advisory lock was released before commit")
+
+            await self.db.commit()
+            await asyncio.wait_for(waiting, timeout=2)
+            await other.commit()
+        finally:
+            if other.in_transaction:
+                await other.rollback()
+            await other.close()
+
     async def test_player_advisory_lock_survives_gameplay_transaction_rollback(self):
         user_id = 9_800_000_002
         await self.db.acquire_player_lock(user_id)
