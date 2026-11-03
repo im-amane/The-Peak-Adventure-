@@ -267,6 +267,30 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
             (25,2,"Rusty Sword",None,0,0),
         )
 
+    async def test_party_raid_requires_stamina_and_reports_shortage(self):
+        user_id = 987654940
+        await main.get_player(user_id, "RaidLeader")
+        await main.db.execute("UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,))
+        party_id = await main.create_party(main.db, user_id)
+        await main.get_stamina(user_id)
+        await main.db.execute("UPDATE player_stamina SET stamina=0 WHERE user_id=?", (user_id,))
+        await main.db.commit()
+
+        class FakePartyMessage:
+            text = "/party battle start"
+            from_user = SimpleNamespace(id=user_id, username="RaidLeader", full_name="Raid Leader")
+            responses = []
+
+            async def answer(self, text, **kwargs):
+                self.responses.append(text)
+
+        message = FakePartyMessage()
+        message.responses = []
+        await main.party_command(message)
+        self.assertTrue(any("stamina" in response.lower() for response in message.responses))
+        cur = await main.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        self.assertIsNone(await cur.fetchone())
+
     async def test_empty_trade_cannot_complete_or_farm_guild_mission_progress(self):
         initiator_id = 987654930
         partner_id = 987654931
