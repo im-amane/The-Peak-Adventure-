@@ -31,6 +31,7 @@ const ROUTES = new Map([
   ["/api/weekly-quest/claim", new Set(["POST"])],
   ["/api/world", new Set(["POST"])],
   ["/api/social", new Set(["POST"])],
+  ["/api/matchmaking", new Set(["POST"])],
   ["/api/settings", new Set(["GET", "POST"])],
   ["/api/dungeon", new Set(["POST"])],
   ["/api/story", new Set(["POST"])],
