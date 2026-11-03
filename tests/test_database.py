@@ -295,5 +295,68 @@ class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
             main.db = previous_db
 
 
+    async def test_premium_handler_does_not_reacquire_middleware_database_lock(self):
+        message = SimpleNamespace(
+            chat=SimpleNamespace(type="private"),
+            text="/premium",
+            from_user=SimpleNamespace(id=987654390),
+            answer=AsyncMock(),
+        )
+        with patch.object(main, "get_premium_balance", new=AsyncMock(return_value=0)):
+            async with main.db_lock:
+                await asyncio.wait_for(main.premium_command(message), timeout=1)
+        message.answer.assert_awaited_once()
+
+    async def test_successful_payment_handler_does_not_reacquire_middleware_lock(self):
+        package = main.get_premium_packages()["spark"]
+        payment = SimpleNamespace(
+            invoice_payload=main.make_invoice_payload("spark", 987654391),
+            currency="XTR",
+            total_amount=package["stars"],
+            telegram_payment_charge_id="test-charge",
+            provider_payment_charge_id="",
+        )
+        message = SimpleNamespace(
+            successful_payment=payment,
+            from_user=SimpleNamespace(id=987654391),
+            answer=AsyncMock(),
+        )
+        with patch.object(main, "credit_premium_purchase", new=AsyncMock(return_value={
+            "credited": True, "gems": package["gems"], "balance": package["gems"]
+        })):
+            async with main.db_lock:
+                await asyncio.wait_for(main.premium_successful_payment(message), timeout=1)
+        message.answer.assert_awaited_once()
+
+    async def test_group_command_is_registered_instead_of_admin_helper(self):
+        callbacks = [handler.callback for handler in main.dp.message.handlers]
+        self.assertIn(main.group_command, callbacks)
+        self.assertNotIn(main.verify_live_group_admin, callbacks)
+
+    async def test_heal_debits_only_when_hp_is_not_full(self):
+        user_id = 987654392
+        await main.get_player(user_id, "HealRegression")
+        await main.db.execute(
+            "UPDATE players SET hp=40,max_hp=120,coins=50 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+        message = SimpleNamespace(
+            from_user=SimpleNamespace(id=user_id),
+            answer=AsyncMock(),
+        )
+        await main.heal(message)
+        cur = await main.db.execute(
+            "SELECT hp,coins FROM players WHERE user_id=?", (user_id,)
+        )
+        self.assertEqual(tuple(await cur.fetchone()), (120, 20))
+        await main.heal(message)
+        cur = await main.db.execute(
+            "SELECT hp,coins FROM players WHERE user_id=?", (user_id,)
+        )
+        self.assertEqual(tuple(await cur.fetchone()), (120, 20))
+        self.assertEqual(message.answer.await_count, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
