@@ -36,6 +36,8 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.db.execute("CREATE TABLE battles(user_id INTEGER PRIMARY KEY)")
         await self.db.execute("CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,status TEXT)")
+        await self.db.execute("CREATE TABLE party_members(party_id INTEGER,user_id INTEGER)")
+        await self.db.execute("CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER,status TEXT)")
         await self.db.execute(
             "CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER,status TEXT)"
         )
@@ -85,6 +87,13 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
         await self.db.commit()
         with self.assertRaisesRegex(MatchmakingError, "active dungeon"):
             await join_matchmaking(self.db, 1, "casual", now=1003)
+
+        await self.db.execute("DELETE FROM dungeon_runs WHERE user_id=1")
+        await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
+        await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
+        await self.db.commit()
+        with self.assertRaisesRegex(MatchmakingError, "party's active co-op battle"):
+            await join_matchmaking(self.db, 1, "casual", now=1004)
 
     async def test_two_similar_players_match_and_can_complete_match(self):
         first = await join_matchmaking(self.db, 1, "casual", now=1000)
