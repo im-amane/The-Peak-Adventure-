@@ -322,5 +322,65 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await cur.fetchone())[0], 1)
 
+
+    async def test_postgres_leave_and_disband_lock_parent_party_row(self):
+        class Cursor:
+            def __init__(self, row=None):
+                self.row = row
+                self.rowcount = 1
+
+            async def fetchone(self):
+                return self.row
+
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.in_transaction = False
+                self.statements = []
+
+            async def execute(self, sql, params=()):
+                self.statements.append((sql, params))
+                normalized = " ".join(sql.split())
+                if normalized == "SELECT party_id FROM party_members WHERE user_id=?":
+                    return Cursor({"party_id": 77})
+                if normalized.startswith("SELECT leader_id FROM parties WHERE party_id=? FOR UPDATE"):
+                    return Cursor({"leader_id": 101})
+                if normalized == "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?":
+                    return Cursor({"present": 1})
+                return Cursor()
+
+            async def commit(self):
+                self.in_transaction = False
+
+            async def rollback(self):
+                self.in_transaction = False
+
+        db = FakePostgresConnection()
+        await leave_party(db, 202)
+        leave_lock_queries = [
+            sql for sql, _ in db.statements
+            if sql.startswith("SELECT leader_id FROM parties")
+        ]
+        self.assertEqual(len(leave_lock_queries), 1)
+        self.assertIn("FOR UPDATE", leave_lock_queries[0])
+        self.assertTrue(any(
+            sql == "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?"
+            for sql, _ in db.statements
+        ))
+        self.assertTrue(any(
+            sql == "DELETE FROM party_members WHERE user_id=? AND party_id=?"
+            for sql, _ in db.statements
+        ))
+
+        db = FakePostgresConnection()
+        await disband_party(db, 77, 101)
+        disband_lock_queries = [
+            sql for sql, _ in db.statements
+            if sql.startswith("SELECT leader_id FROM parties")
+        ]
+        self.assertEqual(len(disband_lock_queries), 1)
+        self.assertIn("FOR UPDATE", disband_lock_queries[0])
+
 if __name__ == "__main__":
     unittest.main()
