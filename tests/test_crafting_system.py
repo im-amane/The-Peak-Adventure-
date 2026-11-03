@@ -13,6 +13,8 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER,status TEXT);
    CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,status TEXT);
    CREATE TABLE matchmaking_queue(user_id INTEGER PRIMARY KEY,status TEXT,queued_at INTEGER DEFAULT 0);
+   CREATE TABLE party_members(party_id INTEGER,user_id INTEGER);
+   CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER,status TEXT);
   """)
   await init_crafting_tables(self.db)
  async def asyncTearDown(self):await self.db.close()
@@ -46,6 +48,15 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
   cur=await self.db.execute("SELECT COUNT(*) AS n FROM crafted_items WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["n"],0)
+
+ async def test_crafting_is_blocked_during_active_party_battle(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
+  await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
+  await self.db.commit()
+  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon"):
+   await craft_item(self.db,1,10,"iron_sword")
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
 
  async def test_unique_recipe_cannot_be_crafted_twice(self):
   await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',6),(1,'ember_shard',2)")
