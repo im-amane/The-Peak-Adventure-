@@ -292,6 +292,16 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
         self.assertIsNone(await cur.fetchone())
 
+        await main.db.execute("UPDATE player_stamina SET stamina=100,updated_at=? WHERE user_id=?", (int(time.time()), user_id))
+        await main.db.commit()
+        successful_message = FakePartyMessage()
+        successful_message.responses = []
+        await main.party_command(successful_message)
+        cur = await main.db.execute("SELECT stamina FROM player_stamina WHERE user_id=?", (user_id,))
+        self.assertEqual((await cur.fetchone())["stamina"], 90)
+        cur = await main.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        self.assertIsNotNone(await cur.fetchone())
+
     async def test_empty_trade_cannot_complete_or_farm_guild_mission_progress(self):
         initiator_id = 987654930
         partner_id = 987654931
