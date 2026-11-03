@@ -241,6 +241,30 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(main.group_command, callbacks)
         self.assertNotIn(main.verify_live_group_admin, callbacks)
 
+    async def test_concurrent_shop_purchases_cannot_downgrade_equipment(self):
+        user_id = 987654395
+        await main.get_player(user_id, "ShopRaceHero")
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=60,coins=10000,weapon_attack=0 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        results = await asyncio.gather(
+            main.buy_shop_item(user_id, "flame_sword"),
+            main.buy_shop_item(user_id, "dragon_slayer"),
+            return_exceptions=True,
+        )
+        self.assertTrue(any(not isinstance(result, Exception) for result in results))
+        cur = await main.db.execute(
+            "SELECT weapon,weapon_attack,coins FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        player = await cur.fetchone()
+        self.assertEqual(player["weapon"], "Dragon Slayer")
+        self.assertEqual(player["weapon_attack"], 90)
+        self.assertGreaterEqual(player["coins"], 8500)
+
     async def test_game_messages_use_real_newline_escapes(self):
         source = Path(main.__file__).read_text(encoding="utf-8")
         self.assertNotIn(r"\\n", source)
