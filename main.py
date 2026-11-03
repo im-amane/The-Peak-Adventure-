@@ -619,17 +619,17 @@ async def _has_active_trade(db, user_id: int, exclude_trade_id: int | None = Non
 
 
 async def _has_active_pvp_match(db, user_id: int) -> bool:
+    if getattr(db, "dialect", "sqlite") == "postgres":
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
     queued = await db.execute(
         "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
         (user_id,),
     )
     if await queued.fetchone():
         return True
-    if getattr(db, "dialect", "sqlite") == "postgres":
-        await db.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-            (f"peak-adventure-matchmaking-player:{user_id}",),
-        )
     query = (
         """SELECT b.match_id FROM matchmaking_battles b
            JOIN matchmaking_matches m ON m.match_id=b.match_id
