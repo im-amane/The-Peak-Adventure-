@@ -267,6 +267,34 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
             (25,2,"Rusty Sword",None,0,0),
         )
 
+    async def test_empty_trade_cannot_complete_or_farm_guild_mission_progress(self):
+        initiator_id = 987654930
+        partner_id = 987654931
+        await main.get_player(initiator_id, "EmptyTradeInitiator")
+        await main.get_player(partner_id, "EmptyTradePartner")
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'open')",
+            (initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "EmptyTradeInitiator"}):
+            first = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        self.assertEqual(first.status, 200)
+
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "EmptyTradePartner"}):
+            second = await main.api_social(FakeRequest({"action": "trade_confirm", "trade_id": trade_id}))
+        self.assertEqual(second.status, 409)
+        self.assertIn("at least one item, coin, or potion", json.loads(second.text)["error"])
+
+        cur = await main.db.execute(
+            "SELECT status,initiator_confirmed,partner_confirmed FROM trades WHERE trade_id=?",
+            (trade_id,),
+        )
+        state = await cur.fetchone()
+        self.assertEqual((state["status"],state["initiator_confirmed"],state["partner_confirmed"]),("open",0,0))
+
     async def test_trade_confirmation_exchanges_balances_once(self):
         initiator_id = 987654926
         partner_id = 987654927
