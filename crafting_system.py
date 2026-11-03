@@ -57,6 +57,14 @@ async def _has_blocking_player_activity(db, user_id):
         ("trades", "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1", (user_id,user_id)),
         ("dungeon_runs", "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1", (user_id,)),
     )
+    if await _table_exists(db, "party_members") and await _table_exists(db, "party_battles"):
+        cur = await db.execute(
+            """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+               WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
     for table, sql, params in checks:
         if await _table_exists(db, table):
             cur = await db.execute(sql, params)
