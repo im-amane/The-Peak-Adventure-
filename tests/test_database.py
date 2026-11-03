@@ -241,6 +241,69 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(main.group_command, callbacks)
         self.assertNotIn(main.verify_live_group_admin, callbacks)
 
+    async def test_concurrent_shop_purchases_cannot_downgrade_equipment(self):
+        user_id = 987654395
+        await main.get_player(user_id, "ShopRaceHero")
+        await main.db.execute(
+            "UPDATE players SET class_selected=1,level=60,coins=10000,weapon_attack=0 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        results = await asyncio.gather(
+            main.buy_shop_item(user_id, "flame_sword"),
+            main.buy_shop_item(user_id, "dragon_slayer"),
+            return_exceptions=True,
+        )
+        self.assertTrue(any(not isinstance(result, Exception) for result in results))
+        cur = await main.db.execute(
+            "SELECT weapon,weapon_attack,coins FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        player = await cur.fetchone()
+        self.assertEqual(player["weapon"], "Dragon Slayer")
+        self.assertEqual(player["weapon_attack"], 90)
+        self.assertGreaterEqual(player["coins"], 8050)
+
+    async def test_game_messages_use_real_newline_escapes(self):
+        source = Path(main.__file__).read_text(encoding="utf-8")
+        self.assertNotIn(r"\\n", source)
+
+    async def test_trade_settlement_never_debits_below_zero(self):
+        initiator_id, partner_id = 987654393, 987654394
+        initiator = await main.get_player(initiator_id, "TradeInitiator")
+        partner = await main.get_player(partner_id, "TradePartner")
+        await main.db.execute(
+            "UPDATE players SET coins=5,potions=0 WHERE user_id IN (?,?)",
+            (initiator_id, partner_id),
+        )
+        await main.db.execute(
+            """INSERT INTO trades(chat_id,initiator_id,partner_id,status,initiator_coins,partner_coins)
+               VALUES(0,?,?,'open',10,0)""",
+            (initiator_id, partner_id),
+        )
+        await main.db.commit()
+        cur = await main.db.execute("SELECT * FROM trades WHERE initiator_id=?", (initiator_id,))
+        trade = await cur.fetchone()
+        cur = await main.db.execute("SELECT * FROM players WHERE user_id=?", (initiator_id,))
+        initiator = await cur.fetchone()
+        cur = await main.db.execute("SELECT * FROM players WHERE user_id=?", (partner_id,))
+        partner = await cur.fetchone()
+
+        settled = await main.settle_trade_assets(main.db, trade, initiator, partner)
+        self.assertFalse(settled)
+        await main.db.commit()
+
+        cur = await main.db.execute(
+            "SELECT coins,potions FROM players WHERE user_id IN (?,?) ORDER BY user_id",
+            (initiator_id, partner_id),
+        )
+        balances = await cur.fetchall()
+        self.assertEqual([row["coins"] for row in balances], [5, 5])
+        self.assertEqual([row["potions"] for row in balances], [0, 0])
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade["trade_id"],))
+        self.assertEqual((await cur.fetchone())["status"], "open")
+
     async def test_heal_debits_only_when_hp_is_not_full(self):
         user_id = 987654392
         await main.get_player(user_id, "HealRegression")
@@ -313,6 +376,31 @@ class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(main.db)
             finally:
                 main.db = previous_db
+
+    async def test_player_pair_lock_acquires_in_sorted_order(self):
+        class FakePostgresConnection:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.acquired = []
+                self.released = []
+
+            async def acquire_player_lock(self, user_id):
+                self.acquired.append(user_id)
+
+            async def release_player_lock(self, user_id):
+                self.released.append(user_id)
+
+        connection = FakePostgresConnection()
+        previous_db = main.db
+        try:
+            main.db = connection
+            async with main.player_pair_lock(90, 10):
+                self.assertEqual(connection.acquired, [10, 90])
+                self.assertEqual(connection.released, [])
+            self.assertEqual(connection.released, [90, 10])
+        finally:
+            main.db = previous_db
 
     async def test_player_lock_releases_postgres_advisory_lock_after_handler_error(self):
         class FakePostgresConnection:

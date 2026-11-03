@@ -159,6 +159,17 @@ async def player_lock(user_id: int):
                     log.exception("Unable to explicitly release PostgreSQL player lock")
 
 
+@asynccontextmanager
+async def player_pair_lock(first_user_id: int, second_user_id: int):
+    """Lock two players in a stable order to prevent cross-process race conditions."""
+    if first_user_id == second_user_id:
+        raise ValueError("A player-pair lock requires two distinct users.")
+    first, second = sorted((first_user_id, second_user_id))
+    async with player_lock(first):
+        async with player_lock(second):
+            yield
+
+
 async def _insert_generated_id(connection, sql: str, parameters, id_column: str) -> int:
     """Insert a row and return its generated ID across SQLite and PostgreSQL."""
     if id_column not in {"trade_id", "duel_id"}:
@@ -569,7 +580,7 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
     )
     text = (f"{intro}\n\n" if intro else "") + (
         f"⚔️ <b>ENCOUNTER: {m['name']}</b>\n"
-        f"🏷️ Monster level: {m['level']} {monster_flags}\\n"
+        f"🏷️ Monster level: {m['level']} {monster_flags}\n"
         f"❤️ Enemy HP: <b>{max(0, battle['monster_hp'])}/{m['hp']}</b>\n"
         f"🧙 Your HP: <b>{p['hp']}/{p['max_hp']}</b>\n\n"
         f"<i>{m['story']}</i>\n"
@@ -629,7 +640,7 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
     except StaminaError as exc:
         await db.rollback()
         state = await get_stamina(db, user_id)
-        await send_target.answer("⚡ " + escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
+        await send_target.answer("⚡ " + escape(str(exc)) + f"\nStamina: {state['stamina']}/{state['max_stamina']}. Regeneration: 1 every 5 minutes.")
         return
     except Exception:
         await db.rollback()
@@ -998,14 +1009,14 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     await record_player_guild_activity(user_id, "boss" if m["boss"] else "battle")
     await db.commit()
     await refresh_quest_progress(user_id)
-    level_note = f"\\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
-    boss_note = "\\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
+    level_note = f"\n🌟 LEVEL UP! You reached level {new_level}." if new_level > p["level"] else ""
+    boss_note = "\n👑 Boss seal broken! The next region is now within reach." if m["boss"] else ""
     evolution_note = (
-        "\\n✨ Mastery complete! This monster's evolved form can now appear."
+        "\n✨ Mastery complete! This monster's evolved form can now appear."
         if evolution["evolved"] and evolution["defeats"] == 5 else ""
     )
-    xp_boost_note = "\\n💎 XP Charm doubled this victory's XP." if xp_boosted else ""
-    return f"🏆 <b>Victory!</b> {m['name']} defeated.\\n✨ +{reward_xp} XP\\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}{xp_boost_note}"
+    xp_boost_note = "\n💎 XP Charm doubled this victory's XP." if xp_boosted else ""
+    return f"🏆 <b>Victory!</b> {m['name']} defeated.\n✨ +{reward_xp} XP\n🪙 +{reward_coins} coins{level_note}{boss_note}{evolution_note}{xp_boost_note}"
 
 
 @dp.message(F.web_app_data)
@@ -1086,17 +1097,19 @@ async def settle_trade_assets(db, trade, initiator, partner):
         )
         cur = await db.execute(
             """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=? AND coins>=? AND potions>=?""",
             (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
-             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
+             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"],
+             trade["initiator_coins"],trade["initiator_potions"]),
         )
         if cur.rowcount != 1:
             raise TradeSettlementConflict("The initiating player account could not be updated.")
         cur = await db.execute(
             """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=? AND coins>=? AND potions>=?""",
             (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
-             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
+             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"],
+             trade["partner_coins"],trade["partner_potions"]),
         )
         if cur.rowcount != 1:
             raise TradeSettlementConflict("The receiving player account could not be updated.")
@@ -1150,26 +1163,27 @@ async def create_trade(message: Message):
     if initiator_id == partner_id or message.reply_to_message.from_user.is_bot:
         await message.answer("Choose another human player.")
         return
-    initiator = await get_player(initiator_id, message.from_user.username or message.from_user.full_name)
-    partner = await get_player(partner_id, message.reply_to_message.from_user.username or message.reply_to_message.from_user.full_name)
-    if not initiator["class_selected"] or not partner["class_selected"]:
-        await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
-        return
-    cur = await db.execute(
-        "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
-        "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
-        (initiator_id, partner_id, initiator_id, partner_id),
-    )
-    if await cur.fetchone():
-        await message.answer("One of these players already has a pending or open trade.")
-        return
-    trade_id = await _insert_generated_id(
-        db,
-        "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
-        (message.chat.id, initiator_id, partner_id),
-        "trade_id",
-    )
-    await db.commit()
+    async with player_pair_lock(initiator_id, partner_id):
+        initiator = await get_player(initiator_id, message.from_user.username or message.from_user.full_name)
+        partner = await get_player(partner_id, message.reply_to_message.from_user.username or message.reply_to_message.from_user.full_name)
+        if not initiator["class_selected"] or not partner["class_selected"]:
+            await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
+            return
+        cur = await db.execute(
+            "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
+            "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
+            (initiator_id, partner_id, initiator_id, partner_id),
+        )
+        if await cur.fetchone():
+            await message.answer("One of these players already has a pending or open trade.")
+            return
+        trade_id = await _insert_generated_id(
+            db,
+            "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
+            (message.chat.id, initiator_id, partner_id),
+            "trade_id",
+        )
+        await db.commit()
     await message.answer(
         f"🤝 <b>Trade invitation #{trade_id}</b>\n"
         f"{escape(initiator['username'] or 'Player 1')} wants to trade with "
@@ -1238,34 +1252,66 @@ async def set_trade_offer(message: Message):
     if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    player = await get_player(user_id, message.from_user.username)
-    if coins > player["coins"] or potions > player["potions"]:
-        await message.answer("Your offer exceeds your current coins or potions.")
-        return
-    if weapon and weapon != player["weapon"]:
-        await message.answer("You can only offer the weapon currently equipped by your hero.")
-        return
-    if armor and armor != player["armor"]:
-        await message.answer("You can only offer the armor currently equipped by your hero.")
-        return
-    weapon_attack = player["weapon_attack"] if weapon else None
-    armor_defense = player["armor_defense"] if armor else None
-    if user_id == trade["initiator_id"]:
-        await db.execute("""UPDATE trades SET initiator_coins=?,initiator_potions=?,
-          initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
-          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
-          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
-    else:
-        await db.execute("""UPDATE trades SET partner_coins=?,partner_potions=?,
-          partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
-          initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?""",
-          (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id))
-    await db.commit()
+
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "open":
+                await db.rollback()
+                await message.answer("That trade is no longer open.")
+                return
+            if user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+            player = await get_player(user_id, message.from_user.username)
+            if coins > player["coins"] or potions > player["potions"]:
+                await db.rollback()
+                await message.answer("Your offer exceeds your current coins or potions.")
+                return
+            if weapon and weapon != player["weapon"]:
+                await db.rollback()
+                await message.answer("You can only offer the weapon currently equipped by your hero.")
+                return
+            if armor and armor != player["armor"]:
+                await db.rollback()
+                await message.answer("You can only offer the armor currently equipped by your hero.")
+                return
+            weapon_attack = player["weapon_attack"] if weapon else None
+            armor_defense = player["armor_defense"] if armor else None
+            if user_id == trade["initiator_id"]:
+                cur = await db.execute(
+                    """UPDATE trades SET initiator_coins=?,initiator_potions=?,
+                       initiator_weapon=?,initiator_weapon_attack=?,initiator_armor=?,initiator_armor_defense=?,
+                       initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                    (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id),
+                )
+            else:
+                cur = await db.execute(
+                    """UPDATE trades SET partner_coins=?,partner_potions=?,
+                       partner_weapon=?,partner_weapon_attack=?,partner_armor=?,partner_armor_defense=?,
+                       initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'""",
+                    (coins,potions,weapon,weapon_attack,armor,armor_defense,trade_id),
+                )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await message.answer("That trade changed before your offer could be saved. Try again.")
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     await message.answer((await trade_summary(trade)) + "\nBoth players must confirm with /confirmtrade ID.")
-
-
 @dp.message(Command("confirmtrade"))
 async def confirm_trade(message: Message):
     if len(message.command) != 2 or not message.command[1].isdigit():
@@ -1279,54 +1325,95 @@ async def confirm_trade(message: Message):
         await message.answer("That trade is not open.")
         return
     user_id = message.from_user.id
-    if user_id == trade["initiator_id"]:
-        await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=?", (trade_id,))
-    elif user_id == trade["partner_id"]:
-        await db.execute("UPDATE trades SET partner_confirmed=1 WHERE trade_id=?", (trade_id,))
-    else:
+    if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    await db.commit()
-    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
-    trade = await cur.fetchone()
-    if trade["initiator_confirmed"] and trade["partner_confirmed"]:
-        initiator = await get_player(trade["initiator_id"])
-        partner = await get_player(trade["partner_id"])
 
-        if bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"]) or bool(trade["initiator_armor"]) != bool(trade["partner_armor"]):
-            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
-            await db.commit()
-            await message.answer("Equipment must be exchanged slot-for-slot. Both players must offer a weapon or both leave weapon empty; same for armor.")
-            return
-        if (trade["initiator_weapon"] and (initiator["weapon"] != trade["initiator_weapon"] or initiator["weapon_attack"] != trade["initiator_weapon_attack"])) or (trade["partner_weapon"] and (partner["weapon"] != trade["partner_weapon"] or partner["weapon_attack"] != trade["partner_weapon_attack"])) or (trade["initiator_armor"] and (initiator["armor"] != trade["initiator_armor"] or initiator["armor_defense"] != trade["initiator_armor_defense"])) or (trade["partner_armor"] and (partner["armor"] != trade["partner_armor"] or partner["armor_defense"] != trade["partner_armor_defense"])):
-            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
-            await db.commit()
-            await message.answer("Trade paused: one equipped item changed. Update your offers and confirm again.")
-            return
-        if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
-                or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
-            await db.execute(
-                "UPDATE trades SET initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
+    # Both player locks serialize confirmations and settlement across PostgreSQL processes.
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
                 (trade_id,),
             )
-            await db.commit()
-            await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
-            return
-        if not await settle_trade_assets(db, trade, initiator, partner):
-            await db.commit()
-            await message.answer("Trade paused because an account changed during settlement. Both offers remain intact; confirm again after checking the trade.")
-            return
-        await db.commit()
-        if trade["chat_id"] < 0:
-            try:
-                await record_group_activity_reward(db,trade["chat_id"],"trade",10)
-            except GroupError:
-                pass
-        await record_player_guild_activity(trade["initiator_id"], "trade")
-        await record_player_guild_activity(trade["partner_id"], "trade")
-        await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "open":
+                await db.rollback()
+                await message.answer("That trade is no longer open.")
+                return
+            if user_id == trade["initiator_id"]:
+                await db.execute(
+                    "UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'",
+                    (trade_id,),
+                )
+            elif user_id == trade["partner_id"]:
+                await db.execute(
+                    "UPDATE trades SET partner_confirmed=1 WHERE trade_id=? AND status='open'",
+                    (trade_id,),
+                )
+            else:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+
+            cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+            trade = await cur.fetchone()
+            if not trade["initiator_confirmed"] or not trade["partner_confirmed"]:
+                await db.commit()
+                waiting_summary = await trade_summary(trade)
+            else:
+                initiator = await get_player(trade["initiator_id"])
+                partner = await get_player(trade["partner_id"])
+
+                if bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"]) or bool(trade["initiator_armor"]) != bool(trade["partner_armor"]):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Equipment must be exchanged slot-for-slot. Both players must offer a weapon or both leave weapon empty; same for armor.")
+                    return
+                if (trade["initiator_weapon"] and (initiator["weapon"] != trade["initiator_weapon"] or initiator["weapon_attack"] != trade["initiator_weapon_attack"])) or (trade["partner_weapon"] and (partner["weapon"] != trade["partner_weapon"] or partner["weapon_attack"] != trade["partner_weapon_attack"])) or (trade["initiator_armor"] and (initiator["armor"] != trade["initiator_armor"] or initiator["armor_defense"] != trade["initiator_armor_defense"])) or (trade["partner_armor"] and (partner["armor"] != trade["partner_armor"] or partner["armor_defense"] != trade["partner_armor_defense"])):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Trade paused: one equipped item changed. Update your offers and confirm again.")
+                    return
+                if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
+                        or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
+                    return
+                if not await settle_trade_assets(db, trade, initiator, partner):
+                    await db.commit()
+                    await message.answer("Trade paused because an account changed during settlement. Both offers remain intact; confirm again after checking the trade.")
+                    return
+                await db.commit()
+                waiting_summary = None
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+
+    if waiting_summary is not None:
+        await message.answer(waiting_summary + "\nWaiting for the other player to confirm.")
         return
-    await message.answer((await trade_summary(trade)) + "\nWaiting for the other player to confirm.")
+    if trade["chat_id"] < 0:
+        try:
+            await record_group_activity_reward(db, trade["chat_id"], "trade", 10)
+        except GroupError:
+            pass
+    await record_player_guild_activity(trade["initiator_id"], "trade")
+    await record_player_guild_activity(trade["partner_id"], "trade")
+    await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
 
 
 @dp.message(Command("canceltrade"))
@@ -1341,13 +1428,41 @@ async def cancel_trade(message: Message):
     if not trade or trade["status"] not in {"pending", "open"}:
         await message.answer("That trade cannot be cancelled.")
         return
-    if message.from_user.id not in {trade["initiator_id"], trade["partner_id"]}:
+    user_id = message.from_user.id
+    if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    await db.execute("UPDATE trades SET status='cancelled' WHERE trade_id=?", (trade_id,))
-    await db.commit()
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] not in {"pending", "open"}:
+                await db.rollback()
+                await message.answer("That trade has already been completed or cancelled.")
+                return
+            if user_id not in {trade["initiator_id"], trade["partner_id"]}:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+            cur = await db.execute(
+                "UPDATE trades SET status='cancelled' WHERE trade_id=? AND status IN ('pending','open')",
+                (trade_id,),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await message.answer("That trade changed before it could be cancelled.")
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
     await message.answer(f"Trade #{trade_id} cancelled.")
-
 
 
 def friend_request_keyboard(request_id: int):
@@ -1375,7 +1490,7 @@ async def cb_friend_list(call: CallbackQuery):
 async def search_players_command(message: Message):
     args = (message.text or "").split(maxsplit=1)
     if len(args) < 2:
-        await message.answer("Usage: /players username\\nOnly public profiles and profiles visible to your friends appear.")
+        await message.answer("Usage: /players username\nOnly public profiles and profiles visible to your friends appear.")
         return
     try:
         rows = await search_players(db, message.from_user.id, args[1])
@@ -1392,7 +1507,7 @@ async def search_players_command(message: Message):
             f"ID <code>{row['user_id']}</code>"
         )
     lines.append("To add someone, reply to their message in a shared group and use /friend request.")
-    await message.answer("\\n".join(lines))
+    await message.answer("\n".join(lines))
 
 
 @dp.message(Command("friend"))
@@ -1578,11 +1693,11 @@ async def party_command(message: Message):
                     raise
             except StaminaError as exc:
                 state = await get_stamina(db, user_id)
-                await message.answer(escape(str(exc)) + f"\\nStamina: {state['stamina']}/{state['max_stamina']}.")
+                await message.answer(escape(str(exc)) + f"\nStamina: {state['stamina']}/{state['max_stamina']}.")
                 return
             notice = (
-                f"🧭 <b>Party expedition #{battle_id}</b>\\n"
-                f"{escape(monster['name'])} · Lv.{monster_level} · World {world_id}\\n"
+                f"🧭 <b>Party expedition #{battle_id}</b>\n"
+                f"{escape(monster['name'])} · Lv.{monster_level} · World {world_id}\n"
                 "The party has found a shared encounter. Use /party battle attack to fight."
             )
             await message.answer(notice)
@@ -2145,26 +2260,27 @@ async def create_duel(message: Message):
     if challenger_id == opponent_id or target_message.from_user.is_bot:
         await message.answer("You need to challenge another human player.")
         return
-    challenger = await get_player(challenger_id, message.from_user.username or message.from_user.full_name)
-    opponent = await get_player(opponent_id, target_message.from_user.username or target_message.from_user.full_name)
-    if not challenger["class_selected"] or not opponent["class_selected"]:
-        await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
-        return
-    cur = await db.execute(
-        "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
-        (challenger_id, opponent_id, challenger_id, opponent_id),
-    )
-    if await cur.fetchone():
-        await message.answer("One of these players is already in an active duel.")
-        return
-    duel_id = await _insert_generated_id(
-        db,
-        "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
-        "VALUES (?, ?, ?, ?, ?, 'pending')",
-        (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
-        "duel_id",
-    )
-    await db.commit()
+    async with player_pair_lock(challenger_id, opponent_id):
+        challenger = await get_player(challenger_id, message.from_user.username or message.from_user.full_name)
+        opponent = await get_player(opponent_id, target_message.from_user.username or target_message.from_user.full_name)
+        if not challenger["class_selected"] or not opponent["class_selected"]:
+            await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
+            return
+        cur = await db.execute(
+            "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
+            (challenger_id, opponent_id, challenger_id, opponent_id),
+        )
+        if await cur.fetchone():
+            await message.answer("One of these players is already in an active duel.")
+            return
+        duel_id = await _insert_generated_id(
+            db,
+            "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
+            "VALUES (?, ?, ?, ?, ?, 'pending')",
+            (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
+            "duel_id",
+        )
+        await db.commit()
     await message.answer(
         f"⚔️ <b>Duel Challenge #{duel_id}</b>\n"
         f"{escape(challenger['username'] or 'Challenger')} challenges "
@@ -2523,17 +2639,17 @@ async def roaming_event_command(message: Message):
             status_line = "🌟 EVENT DEFEATED!" if result["status"] == "completed" else "⚔️ Hit landed."
             await message.answer(
                 f"{status_line} <b>{escape(event['monster_name'])}</b> · "
-                f"{result['hp']}/{result['max_hp']} HP · Your damage: {result['damage']}\\n"
-                f"Participants: {result['participants']}\\n"
+                f"{result['hp']}/{result['max_hp']} HP · Your damage: {result['damage']}\n"
+                f"Participants: {result['participants']}\n"
                 + ("Claim with /event claim " + str(event["event_id"]) if result["status"] == "completed"
                    else "Next attack in 30 seconds. Use /event to check progress.")
             )
         else:
             await message.answer(
-                f"🌍 <b>Roaming World Event #{event['event_id']}</b>\\n"
-                f"World {event['world_id']} · {escape(event['monster_name'])} · Lv.{event['monster_level']}\\n"
-                f"❤️ HP: {event['hp']}/{event['max_hp']}\\n"
-                f"⏳ Ends: {max(0, event['ends_at'] - int(time.time()))} seconds\\n"
+                f"🌍 <b>Roaming World Event #{event['event_id']}</b>\n"
+                f"World {event['world_id']} · {escape(event['monster_name'])} · Lv.{event['monster_level']}\n"
+                f"❤️ HP: {event['hp']}/{event['max_hp']}\n"
+                f"⏳ Ends: {max(0, event['ends_at'] - int(time.time()))} seconds\n"
                 "Use /event attack to help defeat it. Contributors can claim rewards after victory."
             )
     except RoamingEventError as exc:
@@ -2564,13 +2680,13 @@ async def daily_missions_command(message: Message):
         marker = "✅" if mission["claimed"] else ("🎁" if mission["completed"] else "🔹")
         lines.append(
             f"{marker} <b>{escape(mission['title'])}</b> · "
-            f"{mission['progress']}/{mission['target']}\\n"
-            f"{escape(mission['description'])}\\n"
+            f"{mission['progress']}/{mission['target']}\n"
+            f"{escape(mission['description'])}\n"
             f"Reward: {mission['coins']} coins · {mission['potions']} potions"
         )
         if mission["completed"] and not mission["claimed"]:
             lines.append(f"Claim: /missions claim {mission['id']}")
-    await message.answer("\\n\\n".join(lines))
+    await message.answer("\n\n".join(lines))
 
 
 @dp.message(Command("weekly"))
@@ -2588,10 +2704,10 @@ async def weekly_command(message: Message):
     lines=["📅 <b>Weekly Objectives</b> · Reset every Monday (UTC)"]
     for quest in rows:
         marker="✅" if quest["claimed"] else ("🎁" if quest["completed"] else "🔹")
-        lines.append(f"{marker} <b>{escape(quest['title'])}</b> · {quest['progress']}/{quest['target']}\\n{escape(quest['description'])}\\nReward: {quest['coins']} coins · {quest['potions']} potions")
+        lines.append(f"{marker} <b>{escape(quest['title'])}</b> · {quest['progress']}/{quest['target']}\n{escape(quest['description'])}\nReward: {quest['coins']} coins · {quest['potions']} potions")
         if quest["completed"] and not quest["claimed"]:
             lines.append(f"Claim: /weekly claim {quest['id']}")
-    await message.answer("\\n\\n".join(lines))
+    await message.answer("\n\n".join(lines))
 
 
 @dp.message(Command("report"))
@@ -2658,9 +2774,9 @@ async def admin_command(message: Message):
         reports=await list_open_reports(db,25)
         lines=["🚩 <b>Open Player Reports</b>"]
         for row in reports:
-            lines.append(f"#{row['report_id']} · reporter <code>{row['reporter_id']}</code> → target <code>{row['target_id']}</code>\\n{escape(row['reason'])}")
+            lines.append(f"#{row['report_id']} · reporter <code>{row['reporter_id']}</code> → target <code>{row['target_id']}</code>\n{escape(row['reason'])}")
         lines.append("Resolve with /admin resolve REPORT_ID reviewed|dismissed [note].")
-        await message.answer("\\n\\n".join(lines) if reports else "No open player reports.")
+        await message.answer("\n\n".join(lines) if reports else "No open player reports.")
         return
     if action=="resolve":
         if len(args)<3:
@@ -2684,14 +2800,14 @@ async def admin_command(message: Message):
             events=await get_security_events(db,target,20)
             lines=[f"🛡️ <b>Security Events · Player {target}</b>"]
             for row in events:
-                lines.append(f"#{row['event_id']} · severity {row['severity']} · {escape(row['event_type'])}\\n{escape(row['details'])} · {row['created_at']}")
-            await message.answer("\\n\\n".join(lines) if len(lines)>1 else "No security events for this player.")
+                lines.append(f"#{row['event_id']} · severity {row['severity']} · {escape(row['event_type'])}\n{escape(row['details'])} · {row['created_at']}")
+            await message.answer("\n\n".join(lines) if len(lines)>1 else "No security events for this player.")
         else:
             rows=await get_suspicious_players(db,1440,20)
             lines=["🛡️ <b>Suspicious Activity · Last 24 Hours</b>"]
             for row in rows:
                 lines.append(f"Player <code>{row['user_id']}</code> · {row['event_count']} events · risk {row['risk_score']} · high severity {row['high_severity_count']} · event types {row['event_type_count']} · economy abuse {row['economy_abuse_count']} · rate limits {row['rate_limit_count']} · max severity {row['max_severity']} · last {row['last_seen']}")
-            await message.answer("\\n".join(lines) if len(lines)>1 else "No suspicious activity recorded.")
+            await message.answer("\n".join(lines) if len(lines)>1 else "No suspicious activity recorded.")
         return
     if action=="logs":
         logs=await recent_admin_actions(db,20)
@@ -2793,7 +2909,7 @@ async def mana_command(message: Message):
     state=await get_mana(db,message.from_user.id)
     bars="🔷"*(state["mana"]//10)+"⬛"*(10-state["mana"]//10)
     await message.answer(
-        f"🔮 <b>Mana</b>\\n{bars}\\n{state['mana']}/{state['max_mana']}\\n"
+        f"🔮 <b>Mana</b>\n{bars}\n{state['mana']}/{state['max_mana']}\n"
         f"Skill cost: {SKILL_MANA_COST} · Regen: 1 per minute · Battle turn restore: {TURN_MANA_REGEN}"
     )
 
@@ -2804,10 +2920,10 @@ async def stamina_command(message: Message):
     bars = "🟩" * (state["stamina"] // 10) + "⬛" * (10 - state["stamina"] // 10)
     regen = "Full" if state["stamina"] >= state["max_stamina"] else f"{state['next_regen_seconds']} seconds"
     await message.answer(
-        f"⚡ <b>Stamina</b>\\n{bars}\\n"
-        f"{state['stamina']}/{state['max_stamina']}\\n"
-        f"Explore cost: {EXPLORE_COST} stamina\\n"
-        f"Next regeneration: {regen}\\n"
+        f"⚡ <b>Stamina</b>\n{bars}\n"
+        f"{state['stamina']}/{state['max_stamina']}\n"
+        f"Explore cost: {EXPLORE_COST} stamina\n"
+        f"Next regeneration: {regen}\n"
         "Regeneration: 1 stamina every 5 minutes."
     )
 
@@ -3246,9 +3362,9 @@ async def premium_command(message: Message):
         from premium_system import PREMIUM_SHOP_ITEMS
         lines = ["🛍️ <b>Peak Gems Shop</b>", f"Wallet: {balance} gems"]
         for item_id, item in PREMIUM_SHOP_ITEMS.items():
-            lines.append(f"<code>{item_id}</code> · {item['title']} · {item['cost']} gems\\n{item['description']}")
+            lines.append(f"<code>{item_id}</code> · {item['title']} · {item['cost']} gems\n{item['description']}")
         lines.append("Buy with /premium buy ITEM_ID.")
-        await message.answer("\\n\\n".join(lines))
+        await message.answer("\n\n".join(lines))
         return
     if action == "buy":
         if len(args) < 3:
@@ -3270,7 +3386,7 @@ async def premium_command(message: Message):
         return
     if not PREMIUM_PAYMENTS_ENABLED:
         await message.answer(
-            f"💎 <b>Peak Gems</b>\\nWallet: {balance} gems\\n"
+            f"💎 <b>Peak Gems</b>\nWallet: {balance} gems\n"
             "Stars purchases are disabled by the bot owner. Use /premium shop to spend existing gems."
         )
         return
@@ -3280,7 +3396,7 @@ async def premium_command(message: Message):
         callback_data=f"premium:buy:{package_id}",
     )] for package_id, item in packages.items()]
     await message.answer(
-        f"💎 <b>Peak Gems</b>\\nWallet: {balance} gems\\n"
+        f"💎 <b>Peak Gems</b>\nWallet: {balance} gems\n"
         "Choose a Telegram Stars package. Purchases are credited once per Telegram charge.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
     )
@@ -3448,7 +3564,7 @@ async def cb_shop(call: CallbackQuery):
     await call.message.answer("🛒 <b>Adventurer's Shop</b>\nChoose an item to buy:", reply_markup=shop_keyboard())
 
 
-async def buy_shop_item(user_id: int, item_id: str):
+async def _buy_shop_item_unlocked(user_id: int, item_id: str):
     """Purchase a coin-shop item atomically, including its inventory effect."""
     assert db is not None
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
@@ -3512,6 +3628,12 @@ async def buy_shop_item(user_id: int, item_id: str):
         else:
             await db.rollback()
         raise
+
+
+async def buy_shop_item(user_id: int, item_id: str):
+    """Serialize purchases against battles and other equipment changes."""
+    async with player_lock(user_id):
+        return await _buy_shop_item_unlocked(user_id, item_id)
 
 
 class ShopError(ValueError):
