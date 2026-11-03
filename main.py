@@ -2302,6 +2302,14 @@ async def create_duel(message: Message):
         if not challenger["class_selected"] or not opponent["class_selected"]:
             await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
             return
+        for participant_id in (challenger_id, opponent_id):
+            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+            if await battle_cur.fetchone() or await _has_active_trade(db, participant_id):
+                await message.answer("Both players must finish active battles and trades before starting a duel.")
+                return
+            if await _has_active_pvp_match(db, participant_id):
+                await message.answer("Both players must finish active PvP matches before starting a duel.")
+                return
         cur = await db.execute(
             "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
             (challenger_id, opponent_id, challenger_id, opponent_id),
@@ -3621,6 +3629,10 @@ async def _buy_shop_item_unlocked(user_id: int, item_id: str):
         cur=await db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
         if await cur.fetchone():
             raise ShopError("Finish or escape your current battle before shopping.")
+        if await _has_active_duel(db, user_id):
+            raise ShopError("Finish your active duel before changing equipment.")
+        if await _has_active_trade(db, user_id):
+            raise ShopError("Finish or cancel your active trade before changing equipment.")
         if player["level"]<item["level"]:
             raise ShopError(f"You need level {item['level']} to buy {item['name']}.")
         if player["coins"]<item["cost"]:
