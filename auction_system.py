@@ -317,7 +317,7 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
         if await _has_active_battle(db, seller_id):
             raise AuctionError("Finish your active battle before listing equipped gear.")
         if await _has_active_player_activity(db, seller_id):
-            raise AuctionError("Finish your active duel or trade before listing equipped gear.")
+            raise AuctionError("Finish your active duel, trade, or PvP queue before listing equipped gear.")
         cur = await db.execute("SELECT 1 FROM auction_listings WHERE seller_id=? AND status='active'", (seller_id,))
         if await cur.fetchone():
             raise AuctionError("You already have an active auction.")
@@ -450,7 +450,7 @@ async def equip_stashed_item(db, user_id, stash_id):
         if await _has_active_battle(db, user_id):
             raise AuctionError("Finish your active battle before changing equipment.")
         if await _has_active_player_activity(db, user_id):
-            raise AuctionError("Finish your active duel or trade before changing equipment.")
+            raise AuctionError("Finish your active duel, trade, or PvP queue before changing equipment.")
         slot = item["slot"]
         stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
         cur = await db.execute(
