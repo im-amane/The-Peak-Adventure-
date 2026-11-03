@@ -3716,6 +3716,20 @@ async def cb_leaderboard(call: CallbackQuery):
         f"{i}. {escape(r['username'] or 'Adventurer')} · Lv.{r['level']} · {r['wins']} wins" for i, r in enumerate(rows, 1)))
 
 
+async def consume_battle_potion(connection, user_id: int, heal_amount: int) -> bool:
+    """Atomically consume one potion only while the player can still be healed."""
+    if type(user_id) is not int or user_id <= 0 or type(heal_amount) is not int or heal_amount <= 0:
+        raise ValueError("Invalid battle potion consumption request.")
+    cur = await connection.execute(
+        """UPDATE players
+           SET potions=potions-1,
+               hp=CASE WHEN hp+?>max_hp THEN max_hp ELSE hp+? END
+           WHERE user_id=? AND potions>=1 AND hp<max_hp""",
+        (heal_amount, heal_amount, user_id),
+    )
+    return cur.rowcount == 1
+
+
 async def _battle_action_unlocked(call: CallbackQuery):
     assert db is not None
     await call.answer()
@@ -3744,7 +3758,9 @@ async def _battle_action_unlocked(call: CallbackQuery):
         if heal_amount <= 0:
             await call.message.answer("❤️ HP is already full.")
             return
-        await db.execute("UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?", (heal_amount, user_id))
+        if not await consume_battle_potion(db, user_id, heal_amount):
+            await call.message.answer("🧪 Your potion or HP changed. Check your status and try again.")
+            return
         damage = 0
         action_line = f"🧪 You recover {heal_amount} HP."
     else:
@@ -4871,10 +4887,8 @@ async def api_action(request: web.Request):
               heal_amount = min(80, p["max_hp"] - p["hp"])
               if heal_amount <= 0:
                   return web.json_response({"error": "Your HP is already full."}, status=409)
-              await db.execute(
-                  "UPDATE players SET potions=potions-1, hp=hp+? WHERE user_id=?",
-                  (heal_amount, user_id),
-              )
+              if not await consume_battle_potion(db, user_id, heal_amount):
+                  return web.json_response({"error": "Your potion or HP changed. Refresh your status and try again."}, status=409)
               damage = 0
               action_line = f"You recover {heal_amount} HP."
           else:
