@@ -1623,7 +1623,7 @@
     if (requestInFlight || !gameState) return;
     const button = document.getElementById("save-appearance");
     const payload = {};
-    ["race","skin","hair","outfit"].forEach(key => {
+    ["race","skin","hair","face","body","outfit"].forEach(key => {
       payload[key] = document.getElementById("appearance-" + key).value;
     });
     requestInFlight = true;

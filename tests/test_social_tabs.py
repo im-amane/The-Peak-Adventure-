@@ -91,6 +91,13 @@ class SocialTabMarkupTests(unittest.TestCase):
             element_id = bindings[key]
             self.assertEqual(parser.ids.get(element_id), 1, f"{key} must bind to one HTML element")
 
+    def test_appearance_save_includes_all_six_supported_fields(self):
+        source = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
+        self.assertIn(
+            '["race","skin","hair","face","body","outfit"].forEach(key => {',
+            source,
+        )
+
     def test_social_tabs_support_click_and_keyboard_navigation(self):
         source = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
         self.assertIn('socialTabs.addEventListener("click"', source)
