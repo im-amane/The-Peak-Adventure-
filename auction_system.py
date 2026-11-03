@@ -42,26 +42,7 @@ async def _table_exists(db, table):
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
             (table,),
         )
-    if await cur.fetchone():
-        return True
-    if await _table_exists(db, "matchmaking_queue"):
-        cur = await db.execute(
-            """SELECT 1 FROM matchmaking_queue
-               WHERE user_id=? AND (
-                 status='matched' OR (status='queued' AND queued_at>=?)
-               ) LIMIT 1""",
-            (user_id, int(time.time()) - 180),
-        )
-        if await cur.fetchone():
-            return True
-    if await _table_exists(db, "dungeon_runs"):
-        cur = await db.execute(
-            "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
-            (user_id,),
-        )
-        if await cur.fetchone():
-            return True
-    return False
+    return await cur.fetchone() is not None
 
 
 async def init_auction_tables(db):
@@ -150,7 +131,17 @@ async def _has_active_player_activity(db, user_id):
             return True
     if await _table_exists(db, "matchmaking_queue"):
         cur = await db.execute(
-            "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
+            """SELECT 1 FROM matchmaking_queue
+               WHERE user_id=? AND (
+                 status='matched' OR (status='queued' AND queued_at>=?)
+               ) LIMIT 1""",
+            (user_id, int(time.time()) - 180),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "dungeon_runs"):
+        cur = await db.execute(
+            "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
             (user_id,),
         )
         if await cur.fetchone():
