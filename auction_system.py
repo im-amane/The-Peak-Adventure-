@@ -54,6 +54,13 @@ async def _table_exists(db, table):
         )
         if await cur.fetchone():
             return True
+    if await _table_exists(db, "dungeon_runs"):
+        cur = await db.execute(
+            "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
     return False
 
 
