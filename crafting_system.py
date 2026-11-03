@@ -161,11 +161,19 @@ async def craft_item(db,user_id,player_level,recipe_id):
             raise CraftingError(
                 "Finish your active battle, duel, trade, dungeon, PvP queue, or party battle before crafting equipment."
             )
-        player=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
-        if await player.fetchone() is None:
+        player=await db.execute(
+            "SELECT weapon_attack,armor_defense FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        current_gear = await player.fetchone()
+        if current_gear is None:
             raise CraftingError("Player account not found.")
         if player_level<recipe["level"]:
             raise CraftingError("This recipe requires player level "+str(recipe["level"])+".")
+        current_stat = current_gear["weapon_attack"] if recipe["slot"] == "weapon" else current_gear["armor_defense"]
+        crafted_stat = recipe["attack"] if recipe["slot"] == "weapon" else recipe["defense"]
+        if crafted_stat <= current_stat:
+            raise CraftingError("Your equipped gear is already as strong or stronger. Crafting only equips real upgrades.")
 
         existing=await db.execute(
             "SELECT 1 FROM crafted_items WHERE user_id=? AND recipe_id=?",
@@ -192,17 +200,13 @@ async def craft_item(db,user_id,player_level,recipe_id):
         )
         if recipe["slot"]=="weapon":
             equipped=await db.execute(
-                """UPDATE players
-                   SET weapon=?,weapon_attack=CASE WHEN weapon_attack>? THEN weapon_attack ELSE ? END
-                   WHERE user_id=?""",
-                (recipe["name"],recipe["attack"],recipe["attack"],user_id),
+                "UPDATE players SET weapon=?,weapon_attack=? WHERE user_id=?",
+                (recipe["name"],recipe["attack"],user_id),
             )
         else:
             equipped=await db.execute(
-                """UPDATE players
-                   SET armor=?,armor_defense=CASE WHEN armor_defense>? THEN armor_defense ELSE ? END
-                   WHERE user_id=?""",
-                (recipe["name"],recipe["defense"],recipe["defense"],user_id),
+                "UPDATE players SET armor=?,armor_defense=? WHERE user_id=?",
+                (recipe["name"],recipe["defense"],user_id),
             )
         if equipped.rowcount!=1:
             raise CraftingError("Player account not found.")
