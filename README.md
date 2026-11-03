@@ -68,6 +68,10 @@ When changing `webapp/index.html`, `webapp/style.css`, or `webapp/game.js`, run 
 
 Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Cloudflare account now has the `thepeakadventure.workers.dev` subdomain and the `peak-adventure-edge` Worker is deployed. Public Mini App URL: `https://peak-adventure-edge.thepeakadventure.workers.dev`. Set `BACKEND_ORIGIN` to the deployed Python/Aiohttp HTTPS origin before gameplay API calls can work.
 
+## Controlled prototype launch
+
+The first playable prototype can use the single-instance Render configuration and SQLite persistent disk documented in [docs/PROTOTYPE_LAUNCH_RUNBOOK.md](docs/PROTOTYPE_LAUNCH_RUNBOOK.md). This is a temporary, controlled test deployment only; it does not change the production hosting decision or remove the PostgreSQL, external-backup, and process-separation blockers below. Telegram Stars remain disabled.
+
 ## Heroku deployment readiness
 
 **Target platform: Heroku. Deployment has not been performed.** The repository's `Procfile` already declares `web: python main.py`, and the HTTP server reads Heroku's `PORT` environment variable. However, the current game database is SQLite and the backup loop writes local snapshot files.
