@@ -265,10 +265,6 @@ async def join_matchmaking(
         (stamp, user_id, stamp - MAX_QUEUE_WAIT_SECONDS),
     )
 
-    cursor = await db.execute(
-        "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
-        (user_id,),
-    )
     battle = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (user_id,))
     if await battle.fetchone():
         raise MatchmakingError("Finish your active PvE battle before joining matchmaking.")
@@ -285,6 +281,10 @@ async def join_matchmaking(
     if await trade.fetchone():
         raise MatchmakingError("Finish or cancel your active trade before joining matchmaking.")
 
+    cursor = await db.execute(
+        "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
+        (user_id,),
+    )
     player = await cursor.fetchone()
     if not player:
         raise MatchmakingError("Create your hero before joining matchmaking.")
