@@ -58,6 +58,16 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    await craft_item(self.db,1,10,"iron_sword")
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
 
+ async def test_weaker_recipe_cannot_rename_stronger_equipment_or_consume_materials(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.execute("UPDATE players SET weapon='Stormglass Blade',weapon_attack=20 WHERE user_id=1")
+  await self.db.commit()
+  with self.assertRaisesRegex(CraftingError,"already as strong or stronger"):
+   await craft_item(self.db,1,10,"iron_sword")
+  cur=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+  self.assertEqual(tuple(await cur.fetchone()),("Stormglass Blade",20))
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
+
  async def test_unique_recipe_cannot_be_crafted_twice(self):
   await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',6),(1,'ember_shard',2)")
   await craft_item(self.db,1,10,"iron_sword")
