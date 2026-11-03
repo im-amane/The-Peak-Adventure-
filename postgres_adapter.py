@@ -132,8 +132,11 @@ def _is_write_statement(sql: str) -> bool:
     if keyword == "WITH":
         return _contains_sql_keyword(sql, {"INSERT", "UPDATE", "DELETE", "MERGE"})
     if keyword == "SELECT":
-        # SELECT ... FOR UPDATE takes a row lock and must run inside a transaction.
-        return _contains_sql_keyword(sql, {"UPDATE"})
+        # Row locks and transaction-scoped advisory locks must not be released
+        # by psycopg autocommit immediately after the SELECT statement.
+        return _contains_sql_keyword(sql, {"UPDATE"}) or bool(
+            re.search(r"\bpg_advisory_xact_lock(?:_shared)?\s*\(", sql, re.IGNORECASE)
+        )
     return False
 
 
