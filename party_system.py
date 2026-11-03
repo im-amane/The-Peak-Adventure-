@@ -50,6 +50,21 @@ def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
 
 
+async def _table_exists(db, table):
+    if _is_postgres(db):
+        cur = await db.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=? AND table_type='BASE TABLE'",
+            (table,),
+        )
+    else:
+        cur = await db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        )
+    return await cur.fetchone() is not None
+
+
 def _lock_party_sql(db):
     """Return the row-lock suffix needed to serialize party-wide limits on PostgreSQL."""
     return " FOR UPDATE" if _is_postgres(db) else ""
