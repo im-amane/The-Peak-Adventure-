@@ -42,7 +42,16 @@ async def _table_exists(db, table):
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
             (table,),
         )
-    return await cur.fetchone() is not None
+    if await cur.fetchone():
+        return True
+    if await _table_exists(db, "matchmaking_queue"):
+        cur = await db.execute(
+            "SELECT 1 FROM matchmaking_queue WHERE user_id=? AND status IN ('queued','matched') LIMIT 1",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
+    return False
 
 
 async def init_auction_tables(db):
@@ -103,12 +112,16 @@ async def _has_active_battle(db, user_id):
     return await cur.fetchone() is not None
 
 async def _lock_player_for_equipment(db, user_id):
-    """Coordinate auction equipment changes with gameplay's PostgreSQL player locks."""
+    """Coordinate auction equipment changes with gameplay and matchmaking locks."""
     if _is_postgres(db):
         await db.execute("SELECT pg_advisory_xact_lock(?)", (user_id,))
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
 
 
-async def _has_active_duel_or_trade(db, user_id):
+async def _has_active_player_activity(db, user_id):
     if await _table_exists(db, "duels"):
         cur = await db.execute(
             "SELECT 1 FROM duels WHERE status IN ('pending','active') "
@@ -138,7 +151,7 @@ async def _return_listing_item(db, seller_id, slot, item_name, item_stat, listin
     if not equipped:
         return False
     current_name, current_stat = equipped[slot], equipped[stat_column]
-    if await _has_active_battle(db, seller_id) or await _has_active_duel_or_trade(db, seller_id):
+    if await _has_active_battle(db, seller_id) or await _has_active_player_activity(db, seller_id):
         await db.execute(
             """INSERT INTO auction_stash
                (user_id,slot,item_name,item_stat,source_listing_id,created_at)
@@ -210,7 +223,7 @@ async def _settle_due(db, now):
                         (row["highest_bidder"],),
                     )
                     equipped = await current.fetchone()
-                    if await _has_active_battle(db, row["highest_bidder"]) or await _has_active_duel_or_trade(db, row["highest_bidder"]):
+                    if await _has_active_battle(db, row["highest_bidder"]) or await _has_active_player_activity(db, row["highest_bidder"]):
                         await db.execute(
                             """INSERT INTO auction_stash
                                (user_id,slot,item_name,item_stat,source_listing_id,created_at)
@@ -295,7 +308,7 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
             raise AuctionError("Register before using the auction house.")
         if await _has_active_battle(db, seller_id):
             raise AuctionError("Finish your active battle before listing equipped gear.")
-        if await _has_active_duel_or_trade(db, seller_id):
+        if await _has_active_player_activity(db, seller_id):
             raise AuctionError("Finish your active duel or trade before listing equipped gear.")
         cur = await db.execute("SELECT 1 FROM auction_listings WHERE seller_id=? AND status='active'", (seller_id,))
         if await cur.fetchone():
@@ -428,7 +441,7 @@ async def equip_stashed_item(db, user_id, stash_id):
             raise AuctionError("That stored item does not belong to your account.")
         if await _has_active_battle(db, user_id):
             raise AuctionError("Finish your active battle before changing equipment.")
-        if await _has_active_duel_or_trade(db, user_id):
+        if await _has_active_player_activity(db, user_id):
             raise AuctionError("Finish your active duel or trade before changing equipment.")
         slot = item["slot"]
         stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
