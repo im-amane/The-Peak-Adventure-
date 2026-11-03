@@ -241,6 +241,10 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(main.group_command, callbacks)
         self.assertNotIn(main.verify_live_group_admin, callbacks)
 
+    async def test_game_messages_use_real_newline_escapes(self):
+        source = Path(main.__file__).read_text(encoding="utf-8")
+        self.assertNotIn(r"\\n", source)
+
     async def test_trade_settlement_never_debits_below_zero(self):
         initiator_id, partner_id = 987654393, 987654394
         initiator = await main.get_player(initiator_id, "TradeInitiator")
