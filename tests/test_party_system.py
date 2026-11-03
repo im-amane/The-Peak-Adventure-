@@ -160,8 +160,8 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_party_membership_cannot_change_during_active_coop_battle(self):
         party_id = await create_party(self.db, 101)
-        await invite_to_party(self.db, party_id, 101, 202)
-        await respond_to_party_invite(self.db, 1, 202, True)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, invite_id, 202, True)
         await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
 
         with self.assertRaisesRegex(PartyError, "active co-op battle"):
