@@ -34,6 +34,13 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
                  skill_cd INTEGER NOT NULL DEFAULT 0
                )"""
         )
+        await self.db.execute("CREATE TABLE battles(user_id INTEGER PRIMARY KEY)")
+        await self.db.execute(
+            "CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER,status TEXT)"
+        )
+        await self.db.execute(
+            "CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER,status TEXT)"
+        )
         await self.db.executemany(
             "INSERT INTO players(user_id,level,pvp_wins,pvp_losses) VALUES(?,?,?,?)",
             (
@@ -49,6 +56,28 @@ class MatchmakingSystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         await self.db.close()
+
+    async def test_cannot_join_matchmaking_during_other_active_game_modes(self):
+        await self.db.execute("INSERT INTO battles(user_id) VALUES(1)")
+        await self.db.commit()
+        with self.assertRaisesRegex(MatchmakingError, "active PvE battle"):
+            await join_matchmaking(self.db, 1, "casual", now=1000)
+
+        await self.db.execute("DELETE FROM battles WHERE user_id=1")
+        await self.db.execute(
+            "INSERT INTO duels(duel_id,challenger_id,opponent_id,status) VALUES(1,1,2,'pending')"
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(MatchmakingError, "active duel"):
+            await join_matchmaking(self.db, 1, "casual", now=1001)
+
+        await self.db.execute("DELETE FROM duels WHERE duel_id=1")
+        await self.db.execute(
+            "INSERT INTO trades(trade_id,initiator_id,partner_id,status) VALUES(1,1,2,'open')"
+        )
+        await self.db.commit()
+        with self.assertRaisesRegex(MatchmakingError, "active trade"):
+            await join_matchmaking(self.db, 1, "casual", now=1002)
 
     async def test_two_similar_players_match_and_can_complete_match(self):
         first = await join_matchmaking(self.db, 1, "casual", now=1000)
