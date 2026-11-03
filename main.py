@@ -4128,6 +4128,8 @@ async def api_dungeon(request: web.Request):
 
 
 async def api_explore(request: web.Request):
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Exploration request is too large."}, status=413)
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
     except ValueError as exc:
@@ -4212,6 +4214,8 @@ async def api_explore(request: web.Request):
 
 
 async def api_quest_claim(request: web.Request):
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Quest claim request is too large."}, status=413)
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
     except ValueError as exc:
@@ -4848,6 +4852,8 @@ async def api_appearance(request: web.Request):
     return web.json_response({"message": "Character appearance saved.", "state": state})
 
 async def api_action(request: web.Request):
+    if request.content_length is not None and request.content_length > 2048:
+        return web.json_response({"error": "Battle action request is too large."}, status=413)
     try:
         user = validate_init_data(request.headers.get("X-Telegram-Init-Data", ""), TOKEN)
     except ValueError as exc:
