@@ -675,6 +675,21 @@ async def _has_active_pvp_match(db, user_id: int) -> bool:
     return await cursor.fetchone() is not None
 
 
+async def _trade_has_mode_conflict(db, trade) -> bool:
+    for participant_id in sorted((trade["initiator_id"], trade["partner_id"])):
+        battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+        if (
+            await battle_cur.fetchone()
+            or await _has_active_duel(db, participant_id)
+            or await _has_active_trade(db, participant_id, exclude_trade_id=trade["trade_id"])
+            or await _has_active_dungeon(db, participant_id)
+            or await _has_active_party_battle(db, participant_id)
+            or await _has_active_pvp_match(db, participant_id)
+        ):
+            return True
+    return False
+
+
 async def _start_battle_unlocked(user_id: int, username: str | None, send_target):
     assert db is not None
     p = await get_player(user_id, username)
@@ -1417,6 +1432,10 @@ async def set_trade_offer(message: Message):
                 await db.rollback()
                 await message.answer("You are not part of this trade.")
                 return
+            if await _trade_has_mode_conflict(db, trade):
+                await db.rollback()
+                await message.answer("Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before changing trade offers.")
+                return
             player = await get_player(user_id, message.from_user.username)
             if coins > player["coins"] or potions > player["potions"]:
                 await db.rollback()
@@ -1489,6 +1508,10 @@ async def confirm_trade(message: Message):
             if not trade or trade["status"] != "open":
                 await db.rollback()
                 await message.answer("That trade is no longer open.")
+                return
+            if await _trade_has_mode_conflict(db, trade):
+                await db.rollback()
+                await message.answer("Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before confirming.")
                 return
             if user_id == trade["initiator_id"]:
                 await db.execute(
