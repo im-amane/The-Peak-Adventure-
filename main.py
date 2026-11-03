@@ -1915,7 +1915,7 @@ async def party_command(message: Message):
                 await message.answer("⚔️ " + escape(result["monster_name"]) + ": " + str(result["hp"]) + "/" + str(result["max_hp"]) + " HP. Damage: " + str(result["damage"]) + ("\n🏆 PARTY RAID CLEARED! Rewards sent to party members." if result["status"] == "won" else ""))
                 return
             battle = await get_party_battle(db, party_id)
-            await message.answer("No co-op battle yet. Party leader can use /party battle start (costs 1 stamina)." if not battle else "🐉 " + escape(battle["monster_name"]) + ": " + str(battle["hp"]) + "/" + str(battle["max_hp"]) + " HP · " + battle["status"].upper())
+            await message.answer("No co-op battle yet. Party leader can use /party battle start (costs 10 stamina)." if not battle else "🐉 " + escape(battle["monster_name"]) + ": " + str(battle["hp"]) + "/" + str(battle["max_hp"]) + " HP · " + battle["status"].upper())
             return
         if action == "create":
             party_id = await create_party(db, user_id)
@@ -1972,7 +1972,7 @@ async def party_command(message: Message):
     await message.answer(
         "Party commands: <code>/party create</code>, <code>/party invite</code> (reply to player), "
         "<code>/party accept ID</code>, <code>/party decline ID</code>, "
-        "<code>/party info</code>, <code>/party explore</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>. Starting a co-op raid costs 1 stamina."
+        "<code>/party info</code>, <code>/party explore</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>. Starting a co-op raid costs 10 stamina."
     )
 
 
@@ -3095,7 +3095,7 @@ async def help_cmd(message: Message):
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/friend request|accept|decline|list|remove - Friend list\n/online - Recent online friends\n"
-        "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 1 stamina)\n"
+        "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 10 stamina)\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
