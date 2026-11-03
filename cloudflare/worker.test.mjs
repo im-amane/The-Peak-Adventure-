@@ -343,6 +343,43 @@ test("social management API is POST-only and forwards signed requests", async ()
 });
 
 
+
+test("matchmaking API is POST-only and forwards signed queue actions", async () => {
+  const originalFetch = globalThis.fetch;
+  let forwardedUrl;
+  let forwardedAuth;
+  let forwardedBody;
+  globalThis.fetch = async (url, init) => {
+    forwardedUrl = String(url);
+    forwardedAuth = new Headers(init.headers).get("x-telegram-init-data");
+    forwardedBody = init.body;
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  };
+  try {
+    const getResponse = await worker.fetch(
+      new Request("https://edge.example/api/matchmaking", { method: "GET" }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(getResponse.status, 405);
+    assert.equal(getResponse.headers.get("allow"), "POST");
+    const body = JSON.stringify({ action: "join", mode: "casual" });
+    const postResponse = await worker.fetch(
+      new Request("https://edge.example/api/matchmaking", {
+        method: "POST",
+        headers: { "X-Telegram-Init-Data": "signed-match-data", "Content-Type": "application/json" },
+        body,
+      }),
+      { BACKEND_ORIGIN: "https://game.example" },
+    );
+    assert.equal(postResponse.status, 200);
+    assert.equal(forwardedUrl, "https://game.example/api/matchmaking");
+    assert.equal(forwardedAuth, "signed-match-data");
+    assert.equal(new TextDecoder().decode(forwardedBody), body);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("serves current Mini App source files from the embedded fallback assets", async () => {
   const assets = [
     { route: "/", file: "../webapp/index.html", type: "text/html; charset=utf-8" },
