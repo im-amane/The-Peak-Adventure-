@@ -1283,7 +1283,11 @@ async def create_trade(message: Message):
 @dp.callback_query(F.data.startswith("trade_accept:"))
 async def accept_trade(call: CallbackQuery):
     await expire_stale_trades()
-    trade_id = int(call.data.split(":", 1)[1])
+    trade_id_text = call.data.split(":", 1)[1]
+    if not trade_id_text.isdigit():
+        await call.answer("Invalid trade invitation.", show_alert=True)
+        return
+    trade_id = int(trade_id_text)
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] != "pending":
@@ -1292,9 +1296,50 @@ async def accept_trade(call: CallbackQuery):
     if call.from_user.id != trade["partner_id"]:
         await call.answer("Only the invited player can accept.", show_alert=True)
         return
+
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "pending" or call.from_user.id != trade["partner_id"]:
+                await db.rollback()
+                await call.answer("This trade invitation is no longer active.", show_alert=True)
+                return
+            for participant_id in sorted((trade["initiator_id"], trade["partner_id"])):
+                battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                if (
+                    await battle_cur.fetchone()
+                    or await _has_active_duel(db, participant_id)
+                    or await _has_active_trade(db, participant_id, exclude_trade_id=trade_id)
+                    or await _has_active_dungeon(db, participant_id)
+                    or await _has_active_party_battle(db, participant_id)
+                    or await _has_active_pvp_match(db, participant_id)
+                ):
+                    await db.rollback()
+                    await call.answer(
+                        "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches first.",
+                        show_alert=True,
+                    )
+                    return
+            cur = await db.execute(
+                "UPDATE trades SET status='open' WHERE trade_id=? AND status='pending' AND partner_id=?",
+                (trade_id, call.from_user.id),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await call.answer("This trade invitation is no longer active.", show_alert=True)
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
     await call.answer()
-    await db.execute("UPDATE trades SET status='open' WHERE trade_id=?", (trade_id,))
-    await db.commit()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     await call.message.edit_text(
@@ -2421,32 +2466,59 @@ async def accept_duel(call: CallbackQuery):
         await call.answer("Invalid duel invitation.", show_alert=True)
         return
     duel_id = int(duel_id_text)
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-        duel = await cur.fetchone()
-        if not duel or duel["status"] != "pending":
-            await db.rollback()
-            await call.answer("This duel invitation is no longer active.", show_alert=True)
-            return
-        if call.from_user.id != duel["opponent_id"]:
-            await db.rollback()
-            await call.answer("Only the challenged player can accept.", show_alert=True)
-            return
-        await call.answer()
-        cur = await db.execute(
-            """UPDATE duels SET status='active',turn_user_id=challenger_id
-               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
-            (duel_id, call.from_user.id),
-        )
-        if cur.rowcount != 1:
-            await db.rollback()
-            return
-        await db.commit()
-    except Exception:
-        if db.in_transaction:
-            await db.rollback()
-        raise
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    if not duel or duel["status"] != "pending":
+        await call.answer("This duel invitation is no longer active.", show_alert=True)
+        return
+    if call.from_user.id != duel["opponent_id"]:
+        await call.answer("Only the challenged player can accept.", show_alert=True)
+        return
+
+    async with player_pair_lock(duel["challenger_id"], duel["opponent_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM duels WHERE duel_id=?" + lock_suffix,
+                (duel_id,),
+            )
+            duel = await cur.fetchone()
+            if not duel or duel["status"] != "pending" or call.from_user.id != duel["opponent_id"]:
+                await db.rollback()
+                await call.answer("This duel invitation is no longer active.", show_alert=True)
+                return
+            for participant_id in sorted((duel["challenger_id"], duel["opponent_id"])):
+                battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                if (
+                    await battle_cur.fetchone()
+                    or await _has_active_trade(db, participant_id)
+                    or await _has_active_dungeon(db, participant_id)
+                    or await _has_active_party_battle(db, participant_id)
+                    or await _has_active_pvp_match(db, participant_id)
+                    or await _has_active_duel(db, participant_id, exclude_duel_id=duel_id)
+                ):
+                    await db.rollback()
+                    await call.answer(
+                        "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches first.",
+                        show_alert=True,
+                    )
+                    return
+            cur = await db.execute(
+                """UPDATE duels SET status='active',turn_user_id=challenger_id
+                   WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+                (duel_id, call.from_user.id),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await call.answer("This duel invitation is no longer active.", show_alert=True)
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+    await call.answer()
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     await call.message.edit_text(await duel_text(duel), reply_markup=duel_keyboard(duel_id))
