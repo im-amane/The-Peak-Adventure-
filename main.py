@@ -1218,7 +1218,7 @@ async def create_trade(message: Message):
         if not initiator["class_selected"] or not partner["class_selected"]:
             await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
             return
-        for participant_id in (initiator_id, partner_id):
+        for participant_id in sorted((initiator_id, partner_id)):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
             if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
                 await message.answer("Both players must finish their active battles, duels, and dungeons before trading.")
@@ -2323,7 +2323,7 @@ async def create_duel(message: Message):
         if not challenger["class_selected"] or not opponent["class_selected"]:
             await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
             return
-        for participant_id in (challenger_id, opponent_id):
+        for participant_id in sorted((challenger_id, opponent_id)):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
             if await battle_cur.fetchone() or await _has_active_trade(db, participant_id) or await _has_active_dungeon(db, participant_id):
                 await message.answer("Both players must finish active battles, trades, and dungeons before starting a duel.")
@@ -4697,7 +4697,7 @@ async def api_social(request: web.Request):
                     target = await target_cur.fetchone()
                     if not target or not target["class_selected"] or not player["class_selected"]:
                         return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
-                    for participant_id in (user_id, target_id):
+                    for participant_id in sorted((user_id, target_id)):
                         battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
                         if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
                             return web.json_response({"error": "Both players must finish active battles, duels, and dungeons before trading."}, status=409)
@@ -4730,7 +4730,7 @@ async def api_social(request: web.Request):
                         pending_trade = await trade_lookup.fetchone()
                         if not pending_trade or pending_trade["partner_id"] != user_id:
                             return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
-                        for participant_id in (pending_trade["initiator_id"], pending_trade["partner_id"]):
+                        for participant_id in sorted((pending_trade["initiator_id"], pending_trade["partner_id"])):
                             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
                             if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id):
                                 return web.json_response({"error": "Both players must finish active battles, duels, and dungeons before trading."}, status=409)
