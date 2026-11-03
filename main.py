@@ -1718,8 +1718,6 @@ async def decline_party_callback(call: CallbackQuery):
 
 
 
-@dp.message(Command("group"))
-
 async def verify_live_group_admin(message: Message) -> bool:
     chat_id = message.chat.id
     user_id = message.from_user.id
@@ -1734,6 +1732,7 @@ async def verify_live_group_admin(message: Message) -> bool:
     return True
 
 
+@dp.message(Command("group"))
 async def group_command(message: Message):
     args=(message.text or "").split(maxsplit=2)
     action=args[1].lower() if len(args)>1 else "info"
@@ -2924,25 +2923,36 @@ async def shop(message: Message):
 
 @dp.message(Command("heal"))
 async def heal(message: Message):
-    p = await get_player(message.from_user.id)
-    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (message.from_user.id,))
-    if await cur.fetchone():
-        await message.answer("⚔️ Finish or escape your current battle before healing at camp.")
-        return
-    if p["hp"] >= p["max_hp"]:
-        await message.answer("❤️ Your HP is already full.")
-    elif p["coins"] < 30:
-        await message.answer("🪙 You need 30 coins to heal.")
-    else:
-        debit = await db.execute(
-            "UPDATE players SET coins=coins-30, hp=max_hp WHERE user_id=? AND coins>=30",
-            (message.from_user.id,),
-        )
-        await db.commit()
-        if debit.rowcount:
-            await message.answer("✨ Your HP has been fully restored.")
+    user_id = message.from_user.id
+    response = None
+    async with player_lock(user_id):
+        p = await get_player(user_id)
+        cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+        if await cur.fetchone():
+            response = "⚔️ Finish or escape your current battle before healing at camp."
+        elif p["hp"] >= p["max_hp"]:
+            response = "❤️ Your HP is already full."
+        elif p["coins"] < 30:
+            response = "🪙 You need 30 coins to heal."
         else:
-            await message.answer("🪙 You need 30 coins to heal.")
+            debit = await db.execute(
+                """UPDATE players SET coins=coins-30, hp=max_hp
+                   WHERE user_id=? AND coins>=30 AND hp<max_hp""",
+                (user_id,),
+            )
+            await db.commit()
+            if debit.rowcount:
+                response = "✨ Your HP has been fully restored."
+            else:
+                # Re-read after the conditional update so a concurrent heal cannot
+                # charge a second time once another process has already restored HP.
+                current = await get_player(user_id)
+                response = (
+                    "❤️ Your HP is already full."
+                    if current["hp"] >= current["max_hp"]
+                    else "🪙 You need 30 coins to heal."
+                )
+    await message.answer(response)
 
 
 
@@ -3231,8 +3241,7 @@ async def premium_command(message: Message):
     args = (message.text or "").split(maxsplit=2)
     action = args[1].lower() if len(args) > 1 else "balance"
     user_id = message.from_user.id
-    async with db_lock:
-        balance = await get_premium_balance(db, user_id)
+    balance = await get_premium_balance(db, user_id)
     if action == "shop":
         from premium_system import PREMIUM_SHOP_ITEMS
         lines = ["🛍️ <b>Peak Gems Shop</b>", f"Wallet: {balance} gems"]
@@ -3246,10 +3255,9 @@ async def premium_command(message: Message):
             await message.answer("Usage: /premium buy stamina_crystal|potion_bundle|xp_charm")
             return
         try:
-            async with db_lock:
-                async with player_lock(user_id):
-                    purchase = await buy_premium_item(db, user_id, args[2].strip().lower())
-                    balance = await get_premium_balance(db, user_id)
+            async with player_lock(user_id):
+                purchase = await buy_premium_item(db, user_id, args[2].strip().lower())
+                balance = await get_premium_balance(db, user_id)
             await message.answer(
                 f"✅ Purchased <b>{escape(purchase['title'])}</b> for {purchase['cost']} gems. "
                 f"Remaining balance: {balance} gems."
@@ -3288,9 +3296,8 @@ async def premium_buy_callback(callback: CallbackQuery):
     if not package:
         await callback.answer("Unknown premium package.", show_alert=True)
         return
-    async with db_lock:
-        cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (callback.from_user.id,))
-        registered = await cur.fetchone() is not None
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (callback.from_user.id,))
+    registered = await cur.fetchone() is not None
     if not registered:
         await callback.answer("Start the bot with /start before buying Peak Gems.", show_alert=True)
         return
@@ -3326,13 +3333,11 @@ async def premium_pre_checkout(query: PreCheckoutQuery):
             and query.total_amount == package["stars"]
         )
         if not valid:
-            async with db_lock:
-                await record_security_event(db, query.from_user.id, "invalid_premium_payment", "invoice validation mismatch", 4)
+            await record_security_event(db, query.from_user.id, "invalid_premium_payment", "invoice validation mismatch", 4)
             await query.answer(ok=False, error_message="This invoice is invalid or belongs to another player.")
             return
     except PremiumError as exc:
-        async with db_lock:
-            await record_security_event(db, query.from_user.id, "invalid_premium_payment", str(exc), 3)
+        await record_security_event(db, query.from_user.id, "invalid_premium_payment", str(exc), 3)
         await query.answer(ok=False, error_message="This premium invoice is invalid.")
         return
     await query.answer(ok=True)
@@ -3347,15 +3352,13 @@ async def premium_successful_payment(message: Message):
         package_id, owner_id = parse_invoice_payload(payment.invoice_payload)
         package = get_premium_packages()[package_id]
         if owner_id != message.from_user.id or payment.currency != "XTR" or payment.total_amount != package["stars"]:
-            async with db_lock:
-                await record_security_event(db, message.from_user.id, "invalid_premium_payment", "successful payment validation mismatch", 5)
+            await record_security_event(db, message.from_user.id, "invalid_premium_payment", "successful payment validation mismatch", 5)
             await message.answer("Payment validation failed. Contact the bot administrator with your Telegram payment receipt.")
             return
-        async with db_lock:
-            result = await credit_premium_purchase(
-                db, message.from_user.id, package_id, payment.total_amount,
-                payment.telegram_payment_charge_id, payment.provider_payment_charge_id,
-            )
+        result = await credit_premium_purchase(
+            db, message.from_user.id, package_id, payment.total_amount,
+            payment.telegram_payment_charge_id, payment.provider_payment_charge_id,
+        )
         if result["credited"]:
             await message.answer(
                 f"💎 Payment confirmed! {result['gems']} Peak Gems added. "
@@ -3364,8 +3367,7 @@ async def premium_successful_payment(message: Message):
         else:
             await message.answer(f"This payment was already credited. Wallet balance: {result['balance']} gems.")
     except PremiumError as exc:
-        async with db_lock:
-            await record_security_event(db, message.from_user.id, "invalid_premium_payment", str(exc), 4)
+        await record_security_event(db, message.from_user.id, "invalid_premium_payment", str(exc), 4)
         await message.answer("The payment could not be credited automatically. Contact the bot administrator.")
     except Exception:
         log.exception("Premium payment credit failed for user %s", message.from_user.id)
