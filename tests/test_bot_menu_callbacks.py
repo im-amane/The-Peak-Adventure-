@@ -1,3 +1,4 @@
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -29,6 +30,26 @@ class PvpRankMenuCallbackTests(unittest.IsolatedAsyncioTestCase):
         main.db = self.previous_db
         main.DB_PATH = self.previous_path
         self.temp_dir.cleanup()
+
+    def test_every_static_menu_callback_has_a_registered_handler(self):
+        source = Path(main.__file__).read_text(encoding="utf-8")
+        callback_values = set(
+            re.findall(r'callback_data\s*=\s*"([^"]+)"', source)
+        )
+        exact_handlers = set(
+            re.findall(r'F\.data\s*==\s*"([^"]+)"', source)
+        )
+        prefix_handlers = re.findall(
+            r'F\.data\.startswith\("([^"]+)"\)', source
+        )
+        for group in re.findall(r'F\.data\.in_\(\{([^}]+)\}\)', source):
+            exact_handlers.update(re.findall(r'"([^"]+)"', group))
+        unhandled = sorted(
+            value for value in callback_values
+            if value not in exact_handlers
+            and not any(value.startswith(prefix) for prefix in prefix_handlers)
+        )
+        self.assertEqual(unhandled, [])
 
     async def test_pvp_rank_menu_callback_displays_rankings(self):
         callback = SimpleNamespace(
