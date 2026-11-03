@@ -274,6 +274,14 @@ async def attack_party_battle(db, party_id, user_id, damage):
         raise PartyError("Invalid party or player account.")
     if not isinstance(damage, int) or isinstance(damage, bool) or not 1 <= damage <= 10000:
         raise PartyError("Invalid co-op attack damage.")
+    # Serialize battle attacks with party teardown and membership changes
+    # across independent PostgreSQL connections, not just this process.
+    cur = await db.execute(
+        "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
+    if not await cur.fetchone():
+        raise PartyError("Party not found.")
     cur = await db.execute(
         "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
         (party_id, user_id),
@@ -354,6 +362,13 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         battle = await cur.fetchone()
         if not battle or battle["status"] != "won":
             raise PartyError("This co-op battle has not been won.")
+        # Keep reward settlement ordered with leave/disband operations.
+        cur = await db.execute(
+            "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+            (battle["party_id"],),
+        )
+        if not await cur.fetchone():
+            raise PartyError("This party no longer exists.")
         cur = await db.execute(
             "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
             (battle["party_id"], user_id),
@@ -394,9 +409,24 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not membership:
         raise PartyError("You are not in a party.")
     party_id = membership["party_id"]
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    # Lock the parent row before changing membership or electing a successor.
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
-    await db.execute("DELETE FROM party_members WHERE user_id=?", (user_id,))
+    if not party:
+        raise PartyError("Party not found.")
+    cur = await db.execute("SELECT party_id FROM party_members WHERE user_id=?", (user_id,))
+    current_membership = await cur.fetchone()
+    if not current_membership or current_membership["party_id"] != party_id:
+        raise PartyError("Party membership changed; retry leaving.")
+    cur = await db.execute(
+        "DELETE FROM party_members WHERE user_id=? AND party_id=?",
+        (user_id, party_id),
+    )
+    if cur.rowcount != 1:
+        raise PartyError("Party membership changed; retry leaving.")
     await db.execute("DELETE FROM party_battle_contributions WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_cooldowns WHERE user_id=?", (user_id,))
     # Preserve reward claims when a member leaves; otherwise rejoining lets them farm old battles.
@@ -424,7 +454,11 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
 async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -> None:
     if not _valid_id(party_id) or not _valid_id(user_id):
         raise PartyError("Invalid party or player account.")
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    # Serialize teardown against invites, battle actions and other lifecycle changes.
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
     if not party:
         raise PartyError("Party not found.")
