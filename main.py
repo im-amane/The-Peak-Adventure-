@@ -27,7 +27,7 @@ from game_rules import get_boss_phase, resolve_enemy_turn, resolve_player_attack
 from telegram_auth import validate_init_data
 from friend_system import FriendError, init_friend_tables, list_friends, list_pending_friend_requests, remove_friend, respond_to_friend_request, search_players, send_friend_request
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
-from matchmaking_system import (MatchmakingError, cancel_matchmaking, get_matchmaking_status, init_matchmaking_tables, join_matchmaking)
+from matchmaking_system import (MAX_QUEUE_WAIT_SECONDS, MatchmakingError, cancel_matchmaking, get_matchmaking_status, init_matchmaking_tables, join_matchmaking)
 from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
 from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
@@ -598,12 +598,70 @@ async def send_battle(target, user_id: int, intro: str = "", edit: bool = False)
         await db.commit()
 
 
+async def _has_active_duel(db, user_id: int, exclude_duel_id: int | None = None) -> bool:
+    sql = "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?)"
+    params = [user_id, user_id]
+    if exclude_duel_id is not None:
+        sql += " AND duel_id<>?"
+        params.append(exclude_duel_id)
+    cur = await db.execute(sql + " LIMIT 1", tuple(params))
+    return await cur.fetchone() is not None
+
+
+async def _has_active_trade(db, user_id: int, exclude_trade_id: int | None = None) -> bool:
+    sql = "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?)"
+    params = [user_id, user_id]
+    if exclude_trade_id is not None:
+        sql += " AND trade_id<>?"
+        params.append(exclude_trade_id)
+    cur = await db.execute(sql + " LIMIT 1", tuple(params))
+    return await cur.fetchone() is not None
+
+
+async def _has_active_dungeon(db, user_id: int) -> bool:
+    cur = await db.execute(
+        "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+        (user_id,),
+    )
+    return await cur.fetchone() is not None
+
+
+async def _has_active_party_battle(db, user_id: int) -> bool:
+    cur = await db.execute(
+        """SELECT 1 FROM party_members pm
+           JOIN party_battles pb ON pb.party_id=pm.party_id
+           WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+        (user_id,),
+    )
+    return await cur.fetchone() is not None
+
+
+async def _has_active_non_party_mode(db, user_id: int) -> bool:
+    cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (user_id,))
+    if await cur.fetchone():
+        return True
+    if await _has_active_pvp_match(db, user_id):
+        return True
+    if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+        return True
+    return await _has_active_dungeon(db, user_id)
+
+
 async def _has_active_pvp_match(db, user_id: int) -> bool:
     if getattr(db, "dialect", "sqlite") == "postgres":
         await db.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
             (f"peak-adventure-matchmaking-player:{user_id}",),
         )
+    queued = await db.execute(
+        """SELECT 1 FROM matchmaking_queue
+           WHERE user_id=? AND (
+             status='matched' OR (status='queued' AND queued_at>=?)
+           ) LIMIT 1""",
+        (user_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
+    )
+    if await queued.fetchone():
+        return True
     query = (
         """SELECT b.match_id FROM matchmaking_battles b
            JOIN matchmaking_matches m ON m.match_id=b.match_id
@@ -615,6 +673,21 @@ async def _has_active_pvp_match(db, user_id: int) -> bool:
         query += " FOR UPDATE OF b,m"
     cursor = await db.execute(query, (user_id, user_id))
     return await cursor.fetchone() is not None
+
+
+async def _trade_has_mode_conflict(db, trade) -> bool:
+    for participant_id in sorted((trade["initiator_id"], trade["partner_id"])):
+        battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+        if (
+            await battle_cur.fetchone()
+            or await _has_active_duel(db, participant_id)
+            or await _has_active_trade(db, participant_id, exclude_trade_id=trade["trade_id"])
+            or await _has_active_dungeon(db, participant_id)
+            or await _has_active_party_battle(db, participant_id)
+            or await _has_active_pvp_match(db, participant_id)
+        ):
+            return True
+    return False
 
 
 async def _start_battle_unlocked(user_id: int, username: str | None, send_target):
@@ -635,6 +708,18 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
         if await _has_active_pvp_match(db, user_id):
             await db.rollback()
             await send_target.answer("⚔️ Finish your active PvP match before entering the wilds.")
+            return
+        if await _has_active_duel(db, user_id):
+            await db.rollback()
+            await send_target.answer("⚔️ Finish or decline your active duel before entering the wilds.")
+            return
+        if await _has_active_trade(db, user_id):
+            await db.rollback()
+            await send_target.answer("🤝 Finish or cancel your active trade before entering the wilds.")
+            return
+        if await _has_active_party_battle(db, user_id):
+            await db.rollback()
+            await send_target.answer("🛡️ Finish your party's active co-op battle before entering a solo encounter.")
             return
         await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
@@ -1074,6 +1159,16 @@ class TradeSettlementConflict(Exception):
     """Raised when a trade participant cannot be updated during settlement."""
 
 
+def _trade_has_value(trade) -> bool:
+    """Require at least one real asset so empty trades cannot farm guild missions."""
+    return any((
+        trade["initiator_coins"], trade["partner_coins"],
+        trade["initiator_potions"], trade["partner_potions"],
+        trade["initiator_weapon"], trade["partner_weapon"],
+        trade["initiator_armor"], trade["partner_armor"],
+    ))
+
+
 async def settle_trade_assets(db, trade, initiator, partner):
     """Apply both sides of a trade atomically; never leave a one-sided transfer."""
     savepoint = "trade_settlement"
@@ -1169,6 +1264,14 @@ async def create_trade(message: Message):
         if not initiator["class_selected"] or not partner["class_selected"]:
             await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
             return
+        for participant_id in sorted((initiator_id, partner_id)):
+            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+            if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id) or await _has_active_party_battle(db, participant_id):
+                await message.answer("Both players must finish their active battles, duels, dungeons, and party battles before trading.")
+                return
+            if await _has_active_pvp_match(db, participant_id):
+                await message.answer("Both players must finish their active PvP matches before trading.")
+                return
         cur = await db.execute(
             "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
             "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
@@ -1195,7 +1298,11 @@ async def create_trade(message: Message):
 @dp.callback_query(F.data.startswith("trade_accept:"))
 async def accept_trade(call: CallbackQuery):
     await expire_stale_trades()
-    trade_id = int(call.data.split(":", 1)[1])
+    trade_id_text = call.data.split(":", 1)[1]
+    if not trade_id_text.isdigit():
+        await call.answer("Invalid trade invitation.", show_alert=True)
+        return
+    trade_id = int(trade_id_text)
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     if not trade or trade["status"] != "pending":
@@ -1204,9 +1311,50 @@ async def accept_trade(call: CallbackQuery):
     if call.from_user.id != trade["partner_id"]:
         await call.answer("Only the invited player can accept.", show_alert=True)
         return
+
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
+                (trade_id,),
+            )
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "pending" or call.from_user.id != trade["partner_id"]:
+                await db.rollback()
+                await call.answer("This trade invitation is no longer active.", show_alert=True)
+                return
+            for participant_id in sorted((trade["initiator_id"], trade["partner_id"])):
+                battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                if (
+                    await battle_cur.fetchone()
+                    or await _has_active_duel(db, participant_id)
+                    or await _has_active_trade(db, participant_id, exclude_trade_id=trade_id)
+                    or await _has_active_dungeon(db, participant_id)
+                    or await _has_active_party_battle(db, participant_id)
+                    or await _has_active_pvp_match(db, participant_id)
+                ):
+                    await db.rollback()
+                    await call.answer(
+                        "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches first.",
+                        show_alert=True,
+                    )
+                    return
+            cur = await db.execute(
+                "UPDATE trades SET status='open' WHERE trade_id=? AND status='pending' AND partner_id=?",
+                (trade_id, call.from_user.id),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await call.answer("This trade invitation is no longer active.", show_alert=True)
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
     await call.answer()
-    await db.execute("UPDATE trades SET status='open' WHERE trade_id=?", (trade_id,))
-    await db.commit()
     cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
     trade = await cur.fetchone()
     await call.message.edit_text(
@@ -1226,9 +1374,23 @@ async def decline_trade(call: CallbackQuery):
     if call.from_user.id != trade["partner_id"]:
         await call.answer("Only the invited player can decline.", show_alert=True)
         return
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            """UPDATE trades SET status='declined',initiator_confirmed=0,partner_confirmed=0
+               WHERE trade_id=? AND status='pending' AND partner_id=?""",
+            (trade_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            await call.answer("This trade invitation is no longer active.", show_alert=True)
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     await call.answer()
-    await db.execute("UPDATE trades SET status='declined' WHERE trade_id=?", (trade_id,))
-    await db.commit()
     await call.message.edit_text("✋ Trade declined.")
 
 
@@ -1269,6 +1431,10 @@ async def set_trade_offer(message: Message):
             if user_id not in {trade["initiator_id"], trade["partner_id"]}:
                 await db.rollback()
                 await message.answer("You are not part of this trade.")
+                return
+            if await _trade_has_mode_conflict(db, trade):
+                await db.rollback()
+                await message.answer("Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before changing trade offers.")
                 return
             player = await get_player(user_id, message.from_user.username)
             if coins > player["coins"] or potions > player["potions"]:
@@ -1343,6 +1509,10 @@ async def confirm_trade(message: Message):
                 await db.rollback()
                 await message.answer("That trade is no longer open.")
                 return
+            if await _trade_has_mode_conflict(db, trade):
+                await db.rollback()
+                await message.answer("Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before confirming.")
+                return
             if user_id == trade["initiator_id"]:
                 await db.execute(
                     "UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'",
@@ -1364,6 +1534,14 @@ async def confirm_trade(message: Message):
                 await db.commit()
                 waiting_summary = await trade_summary(trade)
             else:
+                if not _trade_has_value(trade):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("A trade must exchange at least one item, coin, or potion. Empty trades cannot be completed.")
+                    return
                 initiator = await get_player(trade["initiator_id"])
                 partner = await get_player(trade["partner_id"])
 
@@ -1682,10 +1860,26 @@ async def party_command(message: Message):
             try:
                 await db.execute("BEGIN IMMEDIATE")
                 try:
+                    party_lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+                    party_cur = await db.execute(
+                        "SELECT leader_id FROM parties WHERE party_id=?" + party_lock_suffix,
+                        (party["party_id"],),
+                    )
+                    locked_party = await party_cur.fetchone()
+                    if not locked_party or locked_party["leader_id"] != user_id:
+                        raise PartyError("Only the current party leader can start a shared expedition.")
+                    member_cur = await db.execute(
+                        "SELECT user_id FROM party_members WHERE party_id=? ORDER BY user_id",
+                        (party["party_id"],),
+                    )
+                    member_ids = [row["user_id"] for row in await member_cur.fetchall()]
+                    for member_id in member_ids:
+                        if await _has_active_non_party_mode(db, member_id):
+                            raise PartyError("Every party member must finish solo battles, dungeons, duels, trades, and PvP matches before an expedition starts.")
                     await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
                     battle_id = await start_party_battle(
                         db, party["party_id"], user_id, monster_level, monster["name"],
-                        monster["hp"] * max(2, len(members) * 2),
+                        monster["hp"] * max(2, len(member_ids) * 2),
                     )
                     await db.commit()
                 except Exception:
@@ -1718,11 +1912,44 @@ async def party_command(message: Message):
             if sub == "start":
                 level = min(100, max(10, ((player["level"] + 9) // 10) * 10))
                 boss = MONSTER_BY_LEVEL[level]
-                battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(members) * 2))
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    party_lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+                    party_cur = await db.execute(
+                        "SELECT leader_id FROM parties WHERE party_id=?" + party_lock_suffix,
+                        (party_id,),
+                    )
+                    locked_party = await party_cur.fetchone()
+                    if not locked_party or locked_party["leader_id"] != user_id:
+                        raise PartyError("Only the current party leader can start a co-op raid.")
+                    member_cur = await db.execute(
+                        "SELECT user_id FROM party_members WHERE party_id=? ORDER BY user_id",
+                        (party_id,),
+                    )
+                    member_ids = [row["user_id"] for row in await member_cur.fetchall()]
+                    for member_id in member_ids:
+                        if await _has_active_non_party_mode(db, member_id):
+                            raise PartyError("Every party member must finish solo battles, dungeons, duels, trades, and PvP matches before a raid starts.")
+                    await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
+                    battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(member_ids) * 2))
+                    await db.commit()
+                except Exception:
+                    if db.in_transaction:
+                        await db.rollback()
+                    raise
                 await message.answer(f"🐉 <b>Co-op Raid #{battle_id}</b>\n{escape(boss['name'])} · Lv.{level}\nAll party members can use /party battle attack.")
                 return
             if sub == "attack":
-                result = await attack_party_battle(db, party_id, user_id, max(1, player["level"] * 5 + player["weapon_attack"]))
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    if await _has_active_non_party_mode(db, user_id):
+                        raise PartyError("Finish your solo battle, dungeon, duel, trade, or PvP queue before attacking the party boss.")
+                    result = await attack_party_battle(db, party_id, user_id, max(1, player["level"] * 5 + player["weapon_attack"]))
+                    await db.commit()
+                except Exception:
+                    if db.in_transaction:
+                        await db.rollback()
+                    raise
                 if result["status"] == "won":
                     for member_id in result["members"]:
                         try:
@@ -1739,7 +1966,7 @@ async def party_command(message: Message):
                 await message.answer("⚔️ " + escape(result["monster_name"]) + ": " + str(result["hp"]) + "/" + str(result["max_hp"]) + " HP. Damage: " + str(result["damage"]) + ("\n🏆 PARTY RAID CLEARED! Rewards sent to party members." if result["status"] == "won" else ""))
                 return
             battle = await get_party_battle(db, party_id)
-            await message.answer("No co-op battle yet. Party leader can use /party battle start." if not battle else "🐉 " + escape(battle["monster_name"]) + ": " + str(battle["hp"]) + "/" + str(battle["max_hp"]) + " HP · " + battle["status"].upper())
+            await message.answer("No co-op battle yet. Party leader can use /party battle start (costs 10 stamina)." if not battle else "🐉 " + escape(battle["monster_name"]) + ": " + str(battle["hp"]) + "/" + str(battle["max_hp"]) + " HP · " + battle["status"].upper())
             return
         if action == "create":
             party_id = await create_party(db, user_id)
@@ -1790,13 +2017,13 @@ async def party_command(message: Message):
         if action == "info":
             await message.answer(await party_text(user_id))
             return
-    except PartyError as exc:
+    except (PartyError, StaminaError) as exc:
         await message.answer(escape(str(exc)))
         return
     await message.answer(
         "Party commands: <code>/party create</code>, <code>/party invite</code> (reply to player), "
         "<code>/party accept ID</code>, <code>/party decline ID</code>, "
-        "<code>/party info</code>, <code>/party explore</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>."
+        "<code>/party info</code>, <code>/party explore</code>, <code>/party battle start|status|attack</code>, <code>/party leave</code>, <code>/party disband</code>. Starting a co-op raid costs 10 stamina."
     )
 
 
@@ -2266,6 +2493,14 @@ async def create_duel(message: Message):
         if not challenger["class_selected"] or not opponent["class_selected"]:
             await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
             return
+        for participant_id in sorted((challenger_id, opponent_id)):
+            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+            if await battle_cur.fetchone() or await _has_active_trade(db, participant_id) or await _has_active_dungeon(db, participant_id) or await _has_active_party_battle(db, participant_id):
+                await message.answer("Both players must finish active battles, trades, dungeons, and party battles before starting a duel.")
+                return
+            if await _has_active_pvp_match(db, participant_id):
+                await message.answer("Both players must finish active PvP matches before starting a duel.")
+                return
         cur = await db.execute(
             "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
             (challenger_id, opponent_id, challenger_id, opponent_id),
@@ -2297,32 +2532,59 @@ async def accept_duel(call: CallbackQuery):
         await call.answer("Invalid duel invitation.", show_alert=True)
         return
     duel_id = int(duel_id_text)
-    await db.execute("BEGIN IMMEDIATE")
-    try:
-        cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
-        duel = await cur.fetchone()
-        if not duel or duel["status"] != "pending":
-            await db.rollback()
-            await call.answer("This duel invitation is no longer active.", show_alert=True)
-            return
-        if call.from_user.id != duel["opponent_id"]:
-            await db.rollback()
-            await call.answer("Only the challenged player can accept.", show_alert=True)
-            return
-        await call.answer()
-        cur = await db.execute(
-            """UPDATE duels SET status='active',turn_user_id=challenger_id
-               WHERE duel_id=? AND status='pending' AND opponent_id=?""",
-            (duel_id, call.from_user.id),
-        )
-        if cur.rowcount != 1:
-            await db.rollback()
-            return
-        await db.commit()
-    except Exception:
-        if db.in_transaction:
-            await db.rollback()
-        raise
+    cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
+    duel = await cur.fetchone()
+    if not duel or duel["status"] != "pending":
+        await call.answer("This duel invitation is no longer active.", show_alert=True)
+        return
+    if call.from_user.id != duel["opponent_id"]:
+        await call.answer("Only the challenged player can accept.", show_alert=True)
+        return
+
+    async with player_pair_lock(duel["challenger_id"], duel["opponent_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM duels WHERE duel_id=?" + lock_suffix,
+                (duel_id,),
+            )
+            duel = await cur.fetchone()
+            if not duel or duel["status"] != "pending" or call.from_user.id != duel["opponent_id"]:
+                await db.rollback()
+                await call.answer("This duel invitation is no longer active.", show_alert=True)
+                return
+            for participant_id in sorted((duel["challenger_id"], duel["opponent_id"])):
+                battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                if (
+                    await battle_cur.fetchone()
+                    or await _has_active_trade(db, participant_id)
+                    or await _has_active_dungeon(db, participant_id)
+                    or await _has_active_party_battle(db, participant_id)
+                    or await _has_active_pvp_match(db, participant_id)
+                    or await _has_active_duel(db, participant_id, exclude_duel_id=duel_id)
+                ):
+                    await db.rollback()
+                    await call.answer(
+                        "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches first.",
+                        show_alert=True,
+                    )
+                    return
+            cur = await db.execute(
+                """UPDATE duels SET status='active',turn_user_id=challenger_id
+                   WHERE duel_id=? AND status='pending' AND opponent_id=?""",
+                (duel_id, call.from_user.id),
+            )
+            if cur.rowcount != 1:
+                await db.rollback()
+                await call.answer("This duel invitation is no longer active.", show_alert=True)
+                return
+            await db.commit()
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+    await call.answer()
     cur = await db.execute("SELECT * FROM duels WHERE duel_id=?", (duel_id,))
     duel = await cur.fetchone()
     await call.message.edit_text(await duel_text(duel), reply_markup=duel_keyboard(duel_id))
@@ -2894,7 +3156,7 @@ async def help_cmd(message: Message):
         "/achievements - View achievements\n/claimachievement achievement_id - Claim an achievement\n"
         "/duel - Challenge a player by replying to their message in a group\n/pvprank - PvP rankings\n"
         "/friend request|accept|decline|list|remove - Friend list\n/online - Recent online friends\n"
-        "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights\n"
+        "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 10 stamina)\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
@@ -3145,8 +3407,27 @@ async def dungeon_command(message: Message):
             dungeon_id = int(args[2])
             if not 1 <= dungeon_id <= 10:
                 raise DungeonError("Dungeon ID must be between 1 and 10.")
-            state = await enter_dungeon(db, message.from_user.id, player["level"], dungeon_id)
-            await travel_to_world(db, message.from_user.id, player["level"], dungeon_id)
+            user_id = message.from_user.id
+            async with player_lock(user_id):
+                await db.execute("BEGIN IMMEDIATE")
+                try:
+                    player = await get_player(user_id)
+                    battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
+                    if await battle_cur.fetchone():
+                        raise DungeonError("Finish your active battle before entering a dungeon.")
+                    if await _has_active_pvp_match(db, user_id):
+                        raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
+                    if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                        raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                    if await _has_active_party_battle(db, user_id):
+                        raise DungeonError("Finish your party's active co-op battle before entering a dungeon.")
+                    state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
+                    await travel_to_world(db, user_id, player["level"], dungeon_id)
+                    await db.commit()
+                except Exception:
+                    if db.in_transaction:
+                        await db.rollback()
+                    raise
             await message.answer("🗝️ Entered <b>" + escape(state["name"]) + "</b>. Room 1/3: defeat a level " + str(state["target_level"]) + " or stronger monster.")
         elif action == "status":
             state = await get_dungeon_state(db, message.from_user.id)
@@ -3595,6 +3876,16 @@ async def _buy_shop_item_unlocked(user_id: int, item_id: str):
         cur=await db.execute("SELECT 1 FROM battles WHERE user_id=?",(user_id,))
         if await cur.fetchone():
             raise ShopError("Finish or escape your current battle before shopping.")
+        if await _has_active_duel(db, user_id):
+            raise ShopError("Finish your active duel before changing equipment.")
+        if await _has_active_trade(db, user_id):
+            raise ShopError("Finish or cancel your active trade before changing equipment.")
+        if await _has_active_dungeon(db, user_id):
+            raise ShopError("Finish or abandon your active dungeon before changing equipment.")
+        if await _has_active_party_battle(db, user_id):
+            raise ShopError("Finish your party's active co-op battle before changing equipment.")
+        if await _has_active_pvp_match(db, user_id):
+            raise ShopError("Leave matchmaking before changing your equipment.")
         if player["level"]<item["level"]:
             raise ShopError(f"You need level {item['level']} to buy {item['name']}.")
         if player["coins"]<item["cost"]:
@@ -4124,11 +4415,18 @@ async def api_dungeon(request: web.Request):
                     # Dungeon entry and world travel must succeed or roll back together.
                     await db.execute("BEGIN IMMEDIATE")
                     try:
+                        if await _has_active_pvp_match(db, user_id):
+                            raise DungeonError("Leave your active PvP queue or match before entering a dungeon.")
+                        if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id):
+                            raise DungeonError("Finish your active duel or trade before entering a dungeon.")
+                        if await _has_active_party_battle(db, user_id):
+                            raise DungeonError("Finish your party's active co-op battle before entering a dungeon.")
                         state = await enter_dungeon(db, user_id, player["level"], dungeon_id)
                         await travel_to_world(db, user_id, player["level"], dungeon_id)
                         await db.commit()
                     except Exception:
-                        await db.rollback()
+                        if db.in_transaction:
+                            await db.rollback()
                         raise
                     message = "Dungeon entered. Defeat the room guardians to progress."
                 elif action == "abandon":
@@ -4205,6 +4503,12 @@ async def api_explore(request: web.Request):
                     await db.rollback()
                     return web.json_response(
                         {"error": "Finish your active PvP match before starting a monster encounter."},
+                        status=409,
+                    )
+                if await _has_active_duel(db, user_id) or await _has_active_trade(db, user_id) or await _has_active_party_battle(db, user_id):
+                    await db.rollback()
+                    return web.json_response(
+                        {"error": "Finish your active duel, trade, or party battle before starting a monster encounter."},
                         status=409,
                     )
                 await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
@@ -4490,7 +4794,32 @@ async def api_social(request: web.Request):
     try:
         async with db_lock:
             await expire_stale_trades()
-            async with player_lock(user_id):
+            player_lock_context = player_lock(user_id)
+            if action.startswith("trade_"):
+                other_player_id = None
+                if action == "trade_create":
+                    candidate_id = payload.get("target_id")
+                    if type(candidate_id) is int and candidate_id > 0:
+                        other_player_id = candidate_id
+                else:
+                    candidate_trade_id = payload.get("trade_id")
+                    if type(candidate_trade_id) is int and candidate_trade_id > 0:
+                        trade_lookup = await db.execute(
+                            "SELECT initiator_id,partner_id FROM trades WHERE trade_id=?",
+                            (candidate_trade_id,),
+                        )
+                        trade_participants = await trade_lookup.fetchone()
+                        if trade_participants and user_id in {
+                            trade_participants["initiator_id"], trade_participants["partner_id"]
+                        }:
+                            other_player_id = (
+                                trade_participants["partner_id"]
+                                if user_id == trade_participants["initiator_id"]
+                                else trade_participants["initiator_id"]
+                            )
+                if other_player_id is not None and other_player_id != user_id:
+                    player_lock_context = player_pair_lock(user_id, other_player_id)
+            async with player_lock_context:
                 player = await get_player(user_id, user.get("username") or user.get("first_name"))
                 if action == "friend_search":
                     if set(payload) != {"action", "query"} or not isinstance(payload["query"], str):
@@ -4581,6 +4910,12 @@ async def api_social(request: web.Request):
                     target = await target_cur.fetchone()
                     if not target or not target["class_selected"] or not player["class_selected"]:
                         return web.json_response({"error": "Both players must finish character registration before trading."}, status=409)
+                    for participant_id in sorted((user_id, target_id)):
+                        battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                        if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id) or await _has_active_party_battle(db, participant_id):
+                            return web.json_response({"error": "Both players must finish active battles, duels, dungeons, and party battles before trading."}, status=409)
+                        if await _has_active_pvp_match(db, participant_id):
+                            return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     active_cur = await db.execute(
                         """SELECT 1 FROM trades WHERE status IN ('pending','open')
                            AND (initiator_id IN (?,?) OR partner_id IN (?,?)) LIMIT 1""",
@@ -4600,6 +4935,26 @@ async def api_social(request: web.Request):
                         await log_invalid_trade_action(action, "malformed trade_id")
                         return web.json_response({"error": "A valid trade_id is required."}, status=400)
                     trade_status = "open" if action == "trade_accept" else "declined"
+                    if action == "trade_accept":
+                        trade_lookup = await db.execute(
+                            "SELECT initiator_id,partner_id FROM trades WHERE trade_id=? AND status='pending'",
+                            (payload["trade_id"],),
+                        )
+                        pending_trade = await trade_lookup.fetchone()
+                        if not pending_trade or pending_trade["partner_id"] != user_id:
+                            return web.json_response({"error": "This trade invitation is no longer available to you."}, status=409)
+                        for participant_id in sorted((pending_trade["initiator_id"], pending_trade["partner_id"])):
+                            battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
+                            if (
+                                await battle_cur.fetchone()
+                                or await _has_active_duel(db, participant_id)
+                                or await _has_active_trade(db, participant_id, exclude_trade_id=payload["trade_id"])
+                                or await _has_active_dungeon(db, participant_id)
+                                or await _has_active_party_battle(db, participant_id)
+                            ):
+                                return web.json_response({"error": "Both players must finish other active battles, trades, duels, dungeons, and party battles before trading."}, status=409)
+                            if await _has_active_pvp_match(db, participant_id):
+                                return web.json_response({"error": "Both players must finish active PvP matches before trading."}, status=409)
                     trade_cur = await db.execute(
                         """UPDATE trades SET status=?
                            WHERE trade_id=? AND partner_id=? AND status='pending'""",
@@ -4624,6 +4979,11 @@ async def api_social(request: web.Request):
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
                         await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if await _trade_has_mode_conflict(db, trade):
+                        await db.rollback()
+                        return web.json_response({
+                            "error": "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before changing offers."
+                        }, status=409)
                     if payload["coins"] > player["coins"] or payload["potions"] > player["potions"]:
                         return web.json_response({"error": "Your offer exceeds your current coins or potions."}, status=409)
                     weapon = player["weapon"] if payload["offer_weapon"] else None
@@ -4657,6 +5017,11 @@ async def api_social(request: web.Request):
                     if not trade or user_id not in {trade["initiator_id"], trade["partner_id"]}:
                         await log_invalid_trade_action(action, "trade access by non-participant", 4)
                         return web.json_response({"error": "This trade is not open for your account."}, status=409)
+                    if await _trade_has_mode_conflict(db, trade):
+                        await db.rollback()
+                        return web.json_response({
+                            "error": "Both players must finish other active battles, trades, dungeons, party battles, and PvP matches before confirming."
+                        }, status=409)
                     if user_id == trade["initiator_id"]:
                         await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'", (payload["trade_id"],))
                     else:
@@ -4664,6 +5029,15 @@ async def api_social(request: web.Request):
                     trade_cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (payload["trade_id"],))
                     trade = await trade_cur.fetchone()
                     if trade["initiator_confirmed"] and trade["partner_confirmed"]:
+                        if not _trade_has_value(trade):
+                            await db.execute(
+                                "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                                (payload["trade_id"],),
+                            )
+                            await db.commit()
+                            return web.json_response({
+                                "error": "A trade must exchange at least one item, coin, or potion. Empty trades cannot be completed."
+                            }, status=409)
                         initiator = await get_player(trade["initiator_id"])
                         partner = await get_player(trade["partner_id"])
                         invalid_equipment = (
