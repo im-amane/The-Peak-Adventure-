@@ -36,9 +36,12 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         main.DB_PATH = self.previous_path
         self.temp_dir.cleanup()
 
-    async def _call(self, handler, payload):
+    async def _call(self, handler, payload, content_length=None):
+        request = FakeRequest(payload)
+        if content_length is not None:
+            request.content_length = content_length
         with patch("main.validate_init_data", return_value=self.user):
-            return await handler(FakeRequest(payload))
+            return await handler(request)
 
     async def _assert_event(self, event_type):
         cur = await main.db.execute(
@@ -327,6 +330,19 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         response = await self._call(main.api_world, {"action": []})
         self.assertEqual(response.status, 400)
         await self._assert_event("invalid_world_action")
+
+
+    async def test_oversized_battle_action_is_rejected_before_json_parsing(self):
+        response = await self._call(main.api_action, {"action": "attack"}, content_length=2049)
+        self.assertEqual(response.status, 413)
+
+    async def test_oversized_exploration_request_is_rejected_before_json_parsing(self):
+        response = await self._call(main.api_explore, {}, content_length=2049)
+        self.assertEqual(response.status, 413)
+
+    async def test_oversized_quest_claim_is_rejected_before_json_parsing(self):
+        response = await self._call(main.api_quest_claim, {"quest_id": "first_win"}, content_length=2049)
+        self.assertEqual(response.status, 413)
 
     async def test_invalid_monster_level_is_logged(self):
         response = await self._call(main.api_explore, {"monster_level": []})
