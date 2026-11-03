@@ -1267,9 +1267,13 @@ async def create_trade(message: Message):
         for participant_id in sorted((initiator_id, partner_id)):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
             if await battle_cur.fetchone() or await _has_active_duel(db, participant_id) or await _has_active_dungeon(db, participant_id) or await _has_active_party_battle(db, participant_id):
+                if db.in_transaction:
+                    await db.rollback()
                 await message.answer("Both players must finish their active battles, duels, dungeons, and party battles before trading.")
                 return
             if await _has_active_pvp_match(db, participant_id):
+                if db.in_transaction:
+                    await db.rollback()
                 await message.answer("Both players must finish their active PvP matches before trading.")
                 return
         cur = await db.execute(
@@ -1278,6 +1282,8 @@ async def create_trade(message: Message):
             (initiator_id, partner_id, initiator_id, partner_id),
         )
         if await cur.fetchone():
+            if db.in_transaction:
+                await db.rollback()
             await message.answer("One of these players already has a pending or open trade.")
             return
         trade_id = await _insert_generated_id(
@@ -2496,9 +2502,13 @@ async def create_duel(message: Message):
         for participant_id in sorted((challenger_id, opponent_id)):
             battle_cur = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (participant_id,))
             if await battle_cur.fetchone() or await _has_active_trade(db, participant_id) or await _has_active_dungeon(db, participant_id) or await _has_active_party_battle(db, participant_id):
+                if db.in_transaction:
+                    await db.rollback()
                 await message.answer("Both players must finish active battles, trades, dungeons, and party battles before starting a duel.")
                 return
             if await _has_active_pvp_match(db, participant_id):
+                if db.in_transaction:
+                    await db.rollback()
                 await message.answer("Both players must finish active PvP matches before starting a duel.")
                 return
         cur = await db.execute(
@@ -2506,6 +2516,8 @@ async def create_duel(message: Message):
             (challenger_id, opponent_id, challenger_id, opponent_id),
         )
         if await cur.fetchone():
+            if db.in_transaction:
+                await db.rollback()
             await message.answer("One of these players is already in an active duel.")
             return
         duel_id = await _insert_generated_id(
