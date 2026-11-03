@@ -209,7 +209,8 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
             from_user=SimpleNamespace(id=987654390),
             answer=AsyncMock(),
         )
-        with patch.object(main, "get_premium_balance", new=AsyncMock(return_value=0)):
+        with patch.object(main, "PREMIUM_PAYMENTS_ENABLED", False), \
+             patch.object(main, "get_premium_balance", new=AsyncMock(return_value=0)):
             async with main.db_lock:
                 await asyncio.wait_for(main.premium_command(message), timeout=1)
         message.answer.assert_awaited_once()
