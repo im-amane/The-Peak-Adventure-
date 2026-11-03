@@ -1966,7 +1966,7 @@ async def party_command(message: Message):
         if action == "info":
             await message.answer(await party_text(user_id))
             return
-    except PartyError as exc:
+    except (PartyError, StaminaError) as exc:
         await message.answer(escape(str(exc)))
         return
     await message.answer(
