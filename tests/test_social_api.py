@@ -472,6 +472,28 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((trade["initiator_id"], trade["partner_id"], trade["status"]),
                          (initiator_id, friend_id, "pending"))
 
+    async def test_legacy_trade_invitation_cannot_be_accepted_during_active_battle(self):
+        initiator_id = 987654932
+        partner_id = 987654933
+        await main.get_player(initiator_id, "LegacyTradeInitiator")
+        await main.get_player(partner_id, "LegacyTradePartner")
+        cur = await main.db.execute(
+            "INSERT INTO trades(chat_id,initiator_id,partner_id,status) VALUES(0,?,?,'pending')",
+            (initiator_id, partner_id),
+        )
+        trade_id = cur.lastrowid
+        await main.db.execute(
+            "INSERT INTO battles(user_id,monster_level,monster_hp) VALUES(?,?,?)",
+            (initiator_id, 1, 100),
+        )
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": partner_id, "first_name": "LegacyTradePartner"}):
+            response = await main.api_social(FakeRequest({"action": "trade_accept", "trade_id": trade_id}))
+        self.assertEqual(response.status, 409)
+        cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade_id,))
+        self.assertEqual((await cur.fetchone())["status"], "pending")
+
     async def test_trade_creation_rejects_players_in_battles_or_duels(self):
         initiator_id = 987654925
         friend_id = 987654926
