@@ -8,6 +8,7 @@ from postgres_adapter import PostgresConnection
 import main
 from matchmaking_system import MatchmakingError, join_matchmaking
 from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
+from party_system import PartyError, create_party, leave_party, start_party_battle
 
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
@@ -136,6 +137,33 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses, {"queued", "matched"})
         cursor = await self.db_one.execute("SELECT COUNT(*) AS count FROM matchmaking_matches")
         self.assertEqual((await cursor.fetchone())["count"], 1)
+
+    async def test_last_member_leaving_serializes_with_party_battle_creation(self):
+        party_id = await create_party(self.db_one, 9_100_000_001)
+
+        async def start_battle():
+            try:
+                return await start_party_battle(
+                    self.db_two, party_id, 9_100_000_001, 10, "Concurrency Warden", 500
+                )
+            except PartyError as exc:
+                return exc
+
+        outcomes = await asyncio.gather(
+            leave_party(self.db_one, 9_100_000_001),
+            start_battle(),
+        )
+        self.assertIsNone(outcomes[0])
+        self.assertTrue(isinstance(outcomes[1], int) or isinstance(outcomes[1], PartyError))
+
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM parties WHERE party_id=?", (party_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["count"], 0)
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM party_battles WHERE party_id=?", (party_id,)
+        )
+        self.assertEqual((await cursor.fetchone())["count"], 0)
 
 
 if __name__ == "__main__":
