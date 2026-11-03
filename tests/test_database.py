@@ -304,6 +304,26 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT status FROM trades WHERE trade_id=?", (trade["trade_id"],))
         self.assertEqual((await cur.fetchone())["status"], "open")
 
+    async def test_battle_potion_consumption_is_atomic_and_caps_hp(self):
+        user_id = 987654395
+        player = await main.get_player(user_id, "PotionTester")
+        await main.db.execute(
+            "UPDATE players SET hp=max_hp-10,potions=1 WHERE user_id=?",
+            (user_id,),
+        )
+        await main.db.commit()
+
+        first = await main.consume_battle_potion(main.db, user_id, 80)
+        second = await main.consume_battle_potion(main.db, user_id, 80)
+        await main.db.commit()
+
+        cur = await main.db.execute("SELECT hp,max_hp,potions FROM players WHERE user_id=?", (user_id,))
+        state = await cur.fetchone()
+        self.assertTrue(first)
+        self.assertFalse(second)
+        self.assertEqual(state["hp"], state["max_hp"])
+        self.assertEqual(state["potions"], 0)
+
     async def test_heal_debits_only_when_hp_is_not_full(self):
         user_id = 987654392
         await main.get_player(user_id, "HealRegression")
