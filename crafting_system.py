@@ -1,5 +1,8 @@
 """Material drops and deterministic equipment crafting."""
 import random
+import time
+
+from matchmaking_system import MAX_QUEUE_WAIT_SECONDS
 
 MATERIALS={
  "iron_ore":"Iron Ore","ember_shard":"Ember Shard","frost_crystal":"Frost Crystal",
@@ -18,6 +21,66 @@ RECIPES={
 
 class CraftingError(ValueError):
     pass
+
+
+def _is_postgres(db):
+    return getattr(db, "dialect", "sqlite") == "postgres"
+
+
+async def _table_exists(db, table):
+    if _is_postgres(db):
+        cur = await db.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=? AND table_type='BASE TABLE'",
+            (table,),
+        )
+    else:
+        cur = await db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        )
+    return await cur.fetchone() is not None
+
+
+async def _lock_crafting_mode(db, user_id):
+    if _is_postgres(db):
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
+
+
+async def _has_blocking_player_activity(db, user_id):
+    checks = (
+        ("battles", "SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (user_id,)),
+        ("duels", "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?) LIMIT 1", (user_id,user_id)),
+        ("trades", "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1", (user_id,user_id)),
+        ("dungeon_runs", "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1", (user_id,)),
+    )
+    if await _table_exists(db, "party_members") and await _table_exists(db, "party_battles"):
+        cur = await db.execute(
+            """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+               WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
+    for table, sql, params in checks:
+        if await _table_exists(db, table):
+            cur = await db.execute(sql, params)
+            if await cur.fetchone():
+                return True
+    if await _table_exists(db, "matchmaking_queue"):
+        cur = await db.execute(
+            """SELECT 1 FROM matchmaking_queue
+               WHERE user_id=? AND (
+                 status='matched' OR (status='queued' AND queued_at>=?)
+               ) LIMIT 1""",
+            (user_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
+        )
+        if await cur.fetchone():
+            return True
+    return False
 
 async def init_crafting_tables(db):
     nested = db.in_transaction
@@ -93,11 +156,24 @@ async def craft_item(db,user_id,player_level,recipe_id):
     else:
         await db.execute("BEGIN IMMEDIATE")
     try:
-        player=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
-        if await player.fetchone() is None:
+        await _lock_crafting_mode(db, user_id)
+        if await _has_blocking_player_activity(db, user_id):
+            raise CraftingError(
+                "Finish your active battle, duel, trade, dungeon, PvP queue, or party battle before crafting equipment."
+            )
+        player=await db.execute(
+            "SELECT weapon_attack,armor_defense FROM players WHERE user_id=?",
+            (user_id,),
+        )
+        current_gear = await player.fetchone()
+        if current_gear is None:
             raise CraftingError("Player account not found.")
         if player_level<recipe["level"]:
             raise CraftingError("This recipe requires player level "+str(recipe["level"])+".")
+        current_stat = current_gear["weapon_attack"] if recipe["slot"] == "weapon" else current_gear["armor_defense"]
+        crafted_stat = recipe["attack"] if recipe["slot"] == "weapon" else recipe["defense"]
+        if crafted_stat <= current_stat:
+            raise CraftingError("Your equipped gear is already as strong or stronger. Crafting only equips real upgrades.")
 
         existing=await db.execute(
             "SELECT 1 FROM crafted_items WHERE user_id=? AND recipe_id=?",
@@ -124,17 +200,13 @@ async def craft_item(db,user_id,player_level,recipe_id):
         )
         if recipe["slot"]=="weapon":
             equipped=await db.execute(
-                """UPDATE players
-                   SET weapon=?,weapon_attack=CASE WHEN weapon_attack>? THEN weapon_attack ELSE ? END
-                   WHERE user_id=?""",
-                (recipe["name"],recipe["attack"],recipe["attack"],user_id),
+                "UPDATE players SET weapon=?,weapon_attack=? WHERE user_id=?",
+                (recipe["name"],recipe["attack"],user_id),
             )
         else:
             equipped=await db.execute(
-                """UPDATE players
-                   SET armor=?,armor_defense=CASE WHEN armor_defense>? THEN armor_defense ELSE ? END
-                   WHERE user_id=?""",
-                (recipe["name"],recipe["defense"],recipe["defense"],user_id),
+                "UPDATE players SET armor=?,armor_defense=? WHERE user_id=?",
+                (recipe["name"],recipe["defense"],user_id),
             )
         if equipped.rowcount!=1:
             raise CraftingError("Player account not found.")
