@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import aiosqlite
 import asyncio
+import time
+
+from matchmaking_system import MAX_QUEUE_WAIT_SECONDS
 from functools import wraps
 
 
@@ -45,6 +48,21 @@ def _serialize_db_write(function):
 
 def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
+
+
+async def _table_exists(db, table):
+    if _is_postgres(db):
+        cur = await db.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema=current_schema() AND table_name=? AND table_type='BASE TABLE'",
+            (table,),
+        )
+    else:
+        cur = await db.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+            (table,),
+        )
+    return await cur.fetchone() is not None
 
 
 def _lock_party_sql(db):
@@ -215,6 +233,33 @@ async def respond_to_party_invite(
         )
         if not await cur.fetchone():
             raise PartyError("Party not found.")
+        cur = await db.execute(
+            "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+            (invite["party_id"],),
+        )
+        if await cur.fetchone():
+            raise PartyError("Wait until the party's active co-op battle ends before joining.")
+        activity_checks = (
+            ("battles", "SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (target_id,)),
+            ("duels", "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?) LIMIT 1", (target_id,target_id)),
+            ("trades", "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1", (target_id,target_id)),
+            ("dungeon_runs", "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1", (target_id,)),
+        )
+        for table, sql, params in activity_checks:
+            if await _table_exists(db, table):
+                activity = await db.execute(sql, params)
+                if await activity.fetchone():
+                    raise PartyError("Finish your active battle, duel, trade, or dungeon before joining a party.")
+        if await _table_exists(db, "matchmaking_queue"):
+            activity = await db.execute(
+                """SELECT 1 FROM matchmaking_queue
+                   WHERE user_id=? AND (
+                     status='matched' OR (status='queued' AND queued_at>=?)
+                   ) LIMIT 1""",
+                (target_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
+            )
+            if await activity.fetchone():
+                raise PartyError("Leave your active PvP queue or match before joining a party.")
         cur = await db.execute("SELECT 1 FROM party_members WHERE user_id=?", (target_id,))
         if await cur.fetchone():
             raise PartyError("You are already in a party.")
@@ -386,6 +431,7 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         raise PartyError("Co-op reward already claimed.") from exc
 
 @_serialize_db_write
+@_serialize_db_write
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not _valid_id(user_id):
         raise PartyError("Invalid player account.")
@@ -401,6 +447,12 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
         (party_id,),
     )
     party = await cur.fetchone()
+    cur = await db.execute(
+        "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+        (party_id,),
+    )
+    if await cur.fetchone():
+        raise PartyError("Finish the active co-op battle before leaving the party.")
     cur = await db.execute(
         "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
         (party_id, user_id),
@@ -446,6 +498,12 @@ async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -
         raise PartyError("Party not found.")
     if party["leader_id"] != user_id:
         raise PartyError("Only the party leader can disband it.")
+    cur = await db.execute(
+        "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+        (party_id,),
+    )
+    if await cur.fetchone():
+        raise PartyError("Finish the active co-op battle before disbanding the party.")
     await db.execute("UPDATE party_invites SET status='cancelled',responded_at=CURRENT_TIMESTAMP WHERE party_id=? AND status='pending'", (party_id,))
     await db.execute("DELETE FROM party_members WHERE party_id=?", (party_id,))
     await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
