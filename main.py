@@ -5122,7 +5122,14 @@ async def api_social(request: web.Request):
                 await db.commit()
                 state = await miniapp_state(user)
     except (FriendError, PartyError, GuildFeatureError) as exc:
+        if db.in_transaction:
+            await db.rollback()
         return web.json_response({"error": str(exc)}, status=409)
+    finally:
+        # Several validation branches return directly. Never leave a
+        # transaction-scoped matchmaking lock attached to the shared connection.
+        if db.in_transaction:
+            await db.rollback()
     return web.json_response({"message": "Social action completed.", "result": result, "state": state})
 
 
