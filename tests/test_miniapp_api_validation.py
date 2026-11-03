@@ -51,6 +51,14 @@ class MiniAppValidationTests(unittest.IsolatedAsyncioTestCase):
         row = await cur.fetchone()
         self.assertEqual(row["event_type"], event_type)
 
+    async def test_quest_claim_rejects_unexpected_payload_fields(self):
+        response = await self._call(
+            main.api_quest_claim,
+            {"quest_id": "first_win", "unexpected": "ignored"},
+        )
+        self.assertEqual(response.status, 400)
+        await self._assert_event("invalid_reward_claim")
+
     async def test_miniapp_attack_executes_and_advances_active_battle(self):
         user_id = self.user["id"]
         await main.db.execute(

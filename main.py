@@ -4232,7 +4232,7 @@ async def api_quest_claim(request: web.Request):
         payload = await request.json()
     except ValueError:
         return web.json_response({"error": "Invalid JSON body."}, status=400)
-    if not isinstance(payload, dict) or not isinstance(payload.get("quest_id"), str) or len(payload["quest_id"]) > 64:
+    if not isinstance(payload, dict) or set(payload) != {"quest_id"} or not isinstance(payload.get("quest_id"), str) or len(payload["quest_id"]) > 64:
         async with db_lock:
             await record_security_event(db, user["id"], "invalid_reward_claim", "invalid quest claim payload", 2)
         return web.json_response({"error": "A valid quest_id is required."}, status=400)
