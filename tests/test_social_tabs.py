@@ -1,6 +1,7 @@
 """Accessibility and structure checks for the Mini App social tabs."""
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 import unittest
 
 
@@ -66,6 +67,23 @@ class SocialTabMarkupTests(unittest.TestCase):
         }
         for element_id in required_ids:
             self.assertEqual(parser.ids.get(element_id), 1, element_id)
+
+    def test_every_javascript_ui_reference_is_bound_to_a_real_html_id(self):
+        parser = SocialTabParser()
+        parser.feed((ROOT / "webapp" / "index.html").read_text(encoding="utf-8"))
+        source = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
+        match = re.search(r"const ui = \{([\\s\\S]*?)\\n  \\};", source)
+        self.assertIsNotNone(match, "Mini App UI binding map must exist")
+        bindings = dict(re.findall(
+            r'^\\s*([A-Za-z_$][\\w$]*)\\s*:\\s*document\\.getElementById\\(["\\']([^"\\']+)["\\']\\)',
+            match.group(1),
+            re.MULTILINE,
+        ))
+        references = set(re.findall(r"\\bui\\.([A-Za-z_$][\\w$]*)", source))
+        self.assertEqual(references - set(bindings), set(), "Every ui.* reference must be initialized")
+        for key in references:
+            element_id = bindings[key]
+            self.assertEqual(parser.ids.get(element_id), 1, f"{key} must bind to one HTML element")
 
     def test_social_tabs_support_click_and_keyboard_navigation(self):
         source = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
