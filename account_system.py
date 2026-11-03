@@ -1,4 +1,6 @@
 """Player privacy settings and explicit account deletion."""
+import time
+
 from guild_system import disband_guild
 
 class AccountError(ValueError):
@@ -268,6 +270,60 @@ async def _delete_player_account_unlocked(db,user_id):
         await db.execute("UPDATE auction_listings SET highest_bidder=NULL,current_bid=0 WHERE highest_bidder=? AND status='active'",(user_id,))
         await db.execute("DELETE FROM auction_stash WHERE user_id=?",(user_id,))
     await db.execute("DELETE FROM trades WHERE initiator_id=? OR partner_id=?",(user_id,user_id))
+
+    # Remove matchmaking rows before deleting the player because these tables
+    # carry foreign keys to both the player and the match. A surviving opponent
+    # must not remain in a phantom active match.
+    if await _table_exists(db, "matchmaking_matches"):
+        cur = await db.execute(
+            """SELECT match_id,player_one_id,player_two_id
+               FROM matchmaking_matches WHERE player_one_id=? OR player_two_id=?""",
+            (user_id,user_id),
+        )
+        matches = await cur.fetchall()
+        if await _table_exists(db, "matchmaking_queue"):
+            stamp = int(time.time())
+            for match in matches:
+                opponent_id = (
+                    match["player_two_id"]
+                    if match["player_one_id"] == user_id
+                    else match["player_one_id"]
+                )
+                await db.execute(
+                    """UPDATE matchmaking_queue
+                       SET status=CASE WHEN status='matched' THEN 'cancelled' ELSE status END,
+                           match_id=NULL,updated_at=?
+                       WHERE user_id=? AND match_id=?""",
+                    (stamp,opponent_id,match["match_id"]),
+                )
+        if await _table_exists(db, "matchmaking_battle_stats"):
+            await db.execute(
+                """DELETE FROM matchmaking_battle_stats
+                   WHERE user_id=? OR match_id IN (
+                     SELECT match_id FROM matchmaking_matches
+                     WHERE player_one_id=? OR player_two_id=?
+                   )""",
+                (user_id,user_id,user_id),
+            )
+        if await _table_exists(db, "matchmaking_battles"):
+            await db.execute(
+                """DELETE FROM matchmaking_battles
+                   WHERE match_id IN (
+                     SELECT match_id FROM matchmaking_matches
+                     WHERE player_one_id=? OR player_two_id=?
+                   )""",
+                (user_id,user_id),
+            )
+        await db.execute(
+            "DELETE FROM matchmaking_matches WHERE player_one_id=? OR player_two_id=?",
+            (user_id,user_id),
+        )
+    if await _table_exists(db, "matchmaking_queue"):
+        await db.execute("DELETE FROM matchmaking_queue WHERE user_id=?",(user_id,))
+    if await _table_exists(db, "matchmaking_rate_limits"):
+        await db.execute("DELETE FROM matchmaking_rate_limits WHERE user_id=?",(user_id,))
+    if await _table_exists(db, "matchmaking_battle_stats"):
+        await db.execute("DELETE FROM matchmaking_battle_stats WHERE user_id=?",(user_id,))
     # Remove records added by optional gameplay services when those services are installed.
     for table, where, params in (
         ("player_reports","reporter_id=? OR target_id=?",(user_id,user_id)),
