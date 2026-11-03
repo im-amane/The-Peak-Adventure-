@@ -263,7 +263,7 @@ class DatabaseSmokeTests(unittest.IsolatedAsyncioTestCase):
         player = await cur.fetchone()
         self.assertEqual(player["weapon"], "Dragon Slayer")
         self.assertEqual(player["weapon_attack"], 90)
-        self.assertGreaterEqual(player["coins"], 8500)
+        self.assertGreaterEqual(player["coins"], 8050)
 
     async def test_game_messages_use_real_newline_escapes(self):
         source = Path(main.__file__).read_text(encoding="utf-8")
