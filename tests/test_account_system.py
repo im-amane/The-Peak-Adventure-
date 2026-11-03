@@ -248,6 +248,58 @@ class AccountSystemTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual((row["current_bid"],row["highest_bidder"],row["status"]),(0,None,"active"))
 
 
+ async def test_delete_account_cleans_matchmaking_and_cancels_opponent_match(self):
+  await self.db.commit()
+  await self.db.execute("PRAGMA foreign_keys=ON")
+  await self.db.executescript("""
+  CREATE TABLE matchmaking_matches(
+   match_id INTEGER PRIMARY KEY,
+   player_one_id INTEGER NOT NULL REFERENCES players(user_id),
+   player_two_id INTEGER NOT NULL REFERENCES players(user_id),
+   status TEXT NOT NULL
+  );
+  CREATE TABLE matchmaking_queue(
+   user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+   status TEXT NOT NULL,
+   match_id INTEGER REFERENCES matchmaking_matches(match_id),
+   updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE matchmaking_rate_limits(
+   user_id INTEGER PRIMARY KEY REFERENCES players(user_id),
+   last_joined_at INTEGER NOT NULL
+  );
+  CREATE TABLE matchmaking_battles(
+   match_id INTEGER PRIMARY KEY REFERENCES matchmaking_matches(match_id),
+   status TEXT NOT NULL
+  );
+  CREATE TABLE matchmaking_battle_stats(
+   match_id INTEGER NOT NULL REFERENCES matchmaking_matches(match_id),
+   user_id INTEGER NOT NULL REFERENCES players(user_id),
+   PRIMARY KEY(match_id,user_id)
+  );
+  INSERT INTO matchmaking_matches VALUES(99,1,2,'matched');
+  INSERT INTO matchmaking_queue VALUES(1,'matched',99,100),(2,'matched',99,100);
+  INSERT INTO matchmaking_rate_limits VALUES(1,100),(2,100);
+  INSERT INTO matchmaking_battles VALUES(99,'active');
+  INSERT INTO matchmaking_battle_stats VALUES(99,1),(99,2);
+  """)
+  await delete_player_account(self.db,1)
+
+  cur=await self.db.execute("SELECT 1 FROM players WHERE user_id=1")
+  self.assertIsNone(await cur.fetchone())
+  for table in ("matchmaking_matches","matchmaking_battles","matchmaking_battle_stats"):
+   cur=await self.db.execute(f"SELECT COUNT(*) n FROM {table}")
+   self.assertEqual((await cur.fetchone())["n"],0,table)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM matchmaking_queue WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
+  cur=await self.db.execute("SELECT status,match_id FROM matchmaking_queue WHERE user_id=2")
+  opponent=await cur.fetchone()
+  self.assertEqual((opponent["status"],opponent["match_id"]),("cancelled",None))
+  cur=await self.db.execute("SELECT COUNT(*) n FROM matchmaking_rate_limits WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
+  cur=await self.db.execute("SELECT COUNT(*) n FROM matchmaking_rate_limits WHERE user_id=2")
+  self.assertEqual((await cur.fetchone())["n"],1)
+
  async def test_delete_account_removes_optional_gameplay_progress(self):
   await self.db.execute("CREATE TABLE player_daily_missions(user_id INTEGER,mission_id TEXT)")
   await self.db.execute("CREATE TABLE player_monster_mastery(user_id INTEGER,monster_level INTEGER)")
