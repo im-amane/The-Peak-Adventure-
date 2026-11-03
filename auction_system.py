@@ -150,6 +150,14 @@ async def _has_active_player_activity(db, user_id):
         )
         if await cur.fetchone():
             return True
+    if await _table_exists(db, "party_members") and await _table_exists(db, "party_battles"):
+        cur = await db.execute(
+            """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+               WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
     return False
 
 
