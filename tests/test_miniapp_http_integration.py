@@ -152,6 +152,38 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["battle_active"])
         self.assertEqual(state["battle"]["level"], 1)
 
+    async def test_http_exploration_rejects_an_active_dungeon(self):
+        await main.db.execute(
+            "INSERT INTO dungeon_runs(user_id,dungeon_id,room,status) VALUES(?,1,1,'active')",
+            (self.user_id,),
+        )
+        await main.db.commit()
+
+        response = await self.client.post(
+            "/api/explore", json={"monster_level": 1}, headers=self.headers
+        )
+        self.assertEqual(response.status, 409)
+        self.assertIn("active dungeon", (await response.json())["error"])
+        cur = await main.db.execute("SELECT 1 FROM battles WHERE user_id=?", (self.user_id,))
+        self.assertIsNone(await cur.fetchone())
+
+    async def test_http_dungeon_entry_rejects_a_live_matchmaking_queue(self):
+        await main.db.execute(
+            """INSERT INTO matchmaking_queue(
+                 user_id,mode,player_level,rating,status,queued_at,updated_at
+               ) VALUES(?,'casual',1,1000,'queued',?,?)""",
+            (self.user_id, int(time.time()), int(time.time())),
+        )
+        await main.db.commit()
+
+        response = await self.client.post(
+            "/api/dungeon", json={"action": "enter", "dungeon_id": 1}, headers=self.headers
+        )
+        self.assertEqual(response.status, 409)
+        self.assertIn("PvP queue", (await response.json())["error"])
+        cur = await main.db.execute("SELECT 1 FROM dungeon_runs WHERE user_id=?", (self.user_id,))
+        self.assertIsNone(await cur.fetchone())
+
     async def test_http_rate_limit_middleware_blocks_authenticated_request(self):
         with patch.object(main.database_api_rate_limiter, "allow", new=AsyncMock(return_value=(False, 9))):
             response = await self.client.get("/api/state", headers=self.headers)
