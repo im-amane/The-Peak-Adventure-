@@ -159,7 +159,7 @@ async def craft_item(db,user_id,player_level,recipe_id):
         await _lock_crafting_mode(db, user_id)
         if await _has_blocking_player_activity(db, user_id):
             raise CraftingError(
-                "Finish your active battle, duel, trade, dungeon, or PvP queue before crafting equipment."
+                "Finish your active battle, duel, trade, dungeon, PvP queue, or party battle before crafting equipment."
             )
         player=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
         if await player.fetchone() is None:
