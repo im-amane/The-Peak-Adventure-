@@ -280,6 +280,12 @@ async def join_matchmaking(
     )
     if await trade.fetchone():
         raise MatchmakingError("Finish or cancel your active trade before joining matchmaking.")
+    dungeon = await db.execute(
+        "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+        (user_id,),
+    )
+    if await dungeon.fetchone():
+        raise MatchmakingError("Finish or abandon your active dungeon before joining matchmaking.")
 
     cursor = await db.execute(
         "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
