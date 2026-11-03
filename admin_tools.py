@@ -301,6 +301,7 @@ async def export_player_data(db, user_id: int) -> dict:
         "player_reports":"player_reports",
         "player_bans":"player_bans",
         "admin_audit":"admin_audit_log",
+        "admin_audit":"admin_audit_log",
     }
     result={"export_version":1,"player_id":user_id,"data":{}}
     for key,(query,params) in tables.items():
