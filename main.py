@@ -159,6 +159,17 @@ async def player_lock(user_id: int):
                     log.exception("Unable to explicitly release PostgreSQL player lock")
 
 
+@asynccontextmanager
+async def player_pair_lock(first_user_id: int, second_user_id: int):
+    """Lock two players in a stable order to prevent cross-process race conditions."""
+    if first_user_id == second_user_id:
+        raise ValueError("A player-pair lock requires two distinct users.")
+    first, second = sorted((first_user_id, second_user_id))
+    async with player_lock(first):
+        async with player_lock(second):
+            yield
+
+
 async def _insert_generated_id(connection, sql: str, parameters, id_column: str) -> int:
     """Insert a row and return its generated ID across SQLite and PostgreSQL."""
     if id_column not in {"trade_id", "duel_id"}:
@@ -1086,17 +1097,19 @@ async def settle_trade_assets(db, trade, initiator, partner):
         )
         cur = await db.execute(
             """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=? AND coins>=? AND potions>=?""",
             (trade["initiator_coins"],trade["partner_coins"],trade["initiator_potions"],trade["partner_potions"],
-             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"]),
+             initiator_weapon[0],initiator_weapon[1],initiator_armor[0],initiator_armor[1],trade["initiator_id"],
+             trade["initiator_coins"],trade["initiator_potions"]),
         )
         if cur.rowcount != 1:
             raise TradeSettlementConflict("The initiating player account could not be updated.")
         cur = await db.execute(
             """UPDATE players SET coins=coins-?+?,potions=potions-?+?,
-               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=?""",
+               weapon=?,weapon_attack=?,armor=?,armor_defense=? WHERE user_id=? AND coins>=? AND potions>=?""",
             (trade["partner_coins"],trade["initiator_coins"],trade["partner_potions"],trade["initiator_potions"],
-             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"]),
+             partner_weapon[0],partner_weapon[1],partner_armor[0],partner_armor[1],trade["partner_id"],
+             trade["partner_coins"],trade["partner_potions"]),
         )
         if cur.rowcount != 1:
             raise TradeSettlementConflict("The receiving player account could not be updated.")
@@ -1150,26 +1163,27 @@ async def create_trade(message: Message):
     if initiator_id == partner_id or message.reply_to_message.from_user.is_bot:
         await message.answer("Choose another human player.")
         return
-    initiator = await get_player(initiator_id, message.from_user.username or message.from_user.full_name)
-    partner = await get_player(partner_id, message.reply_to_message.from_user.username or message.reply_to_message.from_user.full_name)
-    if not initiator["class_selected"] or not partner["class_selected"]:
-        await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
-        return
-    cur = await db.execute(
-        "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
-        "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
-        (initiator_id, partner_id, initiator_id, partner_id),
-    )
-    if await cur.fetchone():
-        await message.answer("One of these players already has a pending or open trade.")
-        return
-    trade_id = await _insert_generated_id(
-        db,
-        "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
-        (message.chat.id, initiator_id, partner_id),
-        "trade_id",
-    )
-    await db.commit()
+    async with player_pair_lock(initiator_id, partner_id):
+        initiator = await get_player(initiator_id, message.from_user.username or message.from_user.full_name)
+        partner = await get_player(partner_id, message.reply_to_message.from_user.username or message.reply_to_message.from_user.full_name)
+        if not initiator["class_selected"] or not partner["class_selected"]:
+            await message.answer("Both players must register with /start and choose a class in the bot's private chat.")
+            return
+        cur = await db.execute(
+            "SELECT 1 FROM trades WHERE status IN ('pending', 'open') "
+            "AND (initiator_id IN (?, ?) OR partner_id IN (?, ?))",
+            (initiator_id, partner_id, initiator_id, partner_id),
+        )
+        if await cur.fetchone():
+            await message.answer("One of these players already has a pending or open trade.")
+            return
+        trade_id = await _insert_generated_id(
+            db,
+            "INSERT INTO trades(chat_id, initiator_id, partner_id, status) VALUES (?, ?, ?, 'pending')",
+            (message.chat.id, initiator_id, partner_id),
+            "trade_id",
+        )
+        await db.commit()
     await message.answer(
         f"🤝 <b>Trade invitation #{trade_id}</b>\n"
         f"{escape(initiator['username'] or 'Player 1')} wants to trade with "
@@ -1279,54 +1293,95 @@ async def confirm_trade(message: Message):
         await message.answer("That trade is not open.")
         return
     user_id = message.from_user.id
-    if user_id == trade["initiator_id"]:
-        await db.execute("UPDATE trades SET initiator_confirmed=1 WHERE trade_id=?", (trade_id,))
-    elif user_id == trade["partner_id"]:
-        await db.execute("UPDATE trades SET partner_confirmed=1 WHERE trade_id=?", (trade_id,))
-    else:
+    if user_id not in {trade["initiator_id"], trade["partner_id"]}:
         await message.answer("You are not part of this trade.")
         return
-    await db.commit()
-    cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
-    trade = await cur.fetchone()
-    if trade["initiator_confirmed"] and trade["partner_confirmed"]:
-        initiator = await get_player(trade["initiator_id"])
-        partner = await get_player(trade["partner_id"])
 
-        if bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"]) or bool(trade["initiator_armor"]) != bool(trade["partner_armor"]):
-            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
-            await db.commit()
-            await message.answer("Equipment must be exchanged slot-for-slot. Both players must offer a weapon or both leave weapon empty; same for armor.")
-            return
-        if (trade["initiator_weapon"] and (initiator["weapon"] != trade["initiator_weapon"] or initiator["weapon_attack"] != trade["initiator_weapon_attack"])) or (trade["partner_weapon"] and (partner["weapon"] != trade["partner_weapon"] or partner["weapon_attack"] != trade["partner_weapon_attack"])) or (trade["initiator_armor"] and (initiator["armor"] != trade["initiator_armor"] or initiator["armor_defense"] != trade["initiator_armor_defense"])) or (trade["partner_armor"] and (partner["armor"] != trade["partner_armor"] or partner["armor_defense"] != trade["partner_armor_defense"])):
-            await db.execute("UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=?", (trade_id,))
-            await db.commit()
-            await message.answer("Trade paused: one equipped item changed. Update your offers and confirm again.")
-            return
-        if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
-                or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
-            await db.execute(
-                "UPDATE trades SET initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=?",
+    # Both player locks serialize confirmations and settlement across PostgreSQL processes.
+    async with player_pair_lock(trade["initiator_id"], trade["partner_id"]):
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+            cur = await db.execute(
+                "SELECT * FROM trades WHERE trade_id=?" + lock_suffix,
                 (trade_id,),
             )
-            await db.commit()
-            await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
-            return
-        if not await settle_trade_assets(db, trade, initiator, partner):
-            await db.commit()
-            await message.answer("Trade paused because an account changed during settlement. Both offers remain intact; confirm again after checking the trade.")
-            return
-        await db.commit()
-        if trade["chat_id"] < 0:
-            try:
-                await record_group_activity_reward(db,trade["chat_id"],"trade",10)
-            except GroupError:
-                pass
-        await record_player_guild_activity(trade["initiator_id"], "trade")
-        await record_player_guild_activity(trade["partner_id"], "trade")
-        await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
+            trade = await cur.fetchone()
+            if not trade or trade["status"] != "open":
+                await db.rollback()
+                await message.answer("That trade is no longer open.")
+                return
+            if user_id == trade["initiator_id"]:
+                await db.execute(
+                    "UPDATE trades SET initiator_confirmed=1 WHERE trade_id=? AND status='open'",
+                    (trade_id,),
+                )
+            elif user_id == trade["partner_id"]:
+                await db.execute(
+                    "UPDATE trades SET partner_confirmed=1 WHERE trade_id=? AND status='open'",
+                    (trade_id,),
+                )
+            else:
+                await db.rollback()
+                await message.answer("You are not part of this trade.")
+                return
+
+            cur = await db.execute("SELECT * FROM trades WHERE trade_id=?", (trade_id,))
+            trade = await cur.fetchone()
+            if not trade["initiator_confirmed"] or not trade["partner_confirmed"]:
+                await db.commit()
+                waiting_summary = await trade_summary(trade)
+            else:
+                initiator = await get_player(trade["initiator_id"])
+                partner = await get_player(trade["partner_id"])
+
+                if bool(trade["initiator_weapon"]) != bool(trade["partner_weapon"]) or bool(trade["initiator_armor"]) != bool(trade["partner_armor"]):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Equipment must be exchanged slot-for-slot. Both players must offer a weapon or both leave weapon empty; same for armor.")
+                    return
+                if (trade["initiator_weapon"] and (initiator["weapon"] != trade["initiator_weapon"] or initiator["weapon_attack"] != trade["initiator_weapon_attack"])) or (trade["partner_weapon"] and (partner["weapon"] != trade["partner_weapon"] or partner["weapon_attack"] != trade["partner_weapon_attack"])) or (trade["initiator_armor"] and (initiator["armor"] != trade["initiator_armor"] or initiator["armor_defense"] != trade["initiator_armor_defense"])) or (trade["partner_armor"] and (partner["armor"] != trade["partner_armor"] or partner["armor_defense"] != trade["partner_armor_defense"])):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0,partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Trade paused: one equipped item changed. Update your offers and confirm again.")
+                    return
+                if (initiator["coins"] < trade["initiator_coins"] or initiator["potions"] < trade["initiator_potions"]
+                        or partner["coins"] < trade["partner_coins"] or partner["potions"] < trade["partner_potions"]):
+                    await db.execute(
+                        "UPDATE trades SET initiator_confirmed=0, partner_confirmed=0 WHERE trade_id=? AND status='open'",
+                        (trade_id,),
+                    )
+                    await db.commit()
+                    await message.answer("Trade paused: one player's balance changed. Update your offers and confirm again.")
+                    return
+                if not await settle_trade_assets(db, trade, initiator, partner):
+                    await db.commit()
+                    await message.answer("Trade paused because an account changed during settlement. Both offers remain intact; confirm again after checking the trade.")
+                    return
+                await db.commit()
+                waiting_summary = None
+        except Exception:
+            if db.in_transaction:
+                await db.rollback()
+            raise
+
+    if waiting_summary is not None:
+        await message.answer(waiting_summary + "\nWaiting for the other player to confirm.")
         return
-    await message.answer((await trade_summary(trade)) + "\nWaiting for the other player to confirm.")
+    if trade["chat_id"] < 0:
+        try:
+            await record_group_activity_reward(db, trade["chat_id"], "trade", 10)
+        except GroupError:
+            pass
+    await record_player_guild_activity(trade["initiator_id"], "trade")
+    await record_player_guild_activity(trade["partner_id"], "trade")
+    await message.answer(f"✅ Trade #{trade_id} completed. Items and coins have been exchanged.")
 
 
 @dp.message(Command("canceltrade"))
@@ -2145,26 +2200,27 @@ async def create_duel(message: Message):
     if challenger_id == opponent_id or target_message.from_user.is_bot:
         await message.answer("You need to challenge another human player.")
         return
-    challenger = await get_player(challenger_id, message.from_user.username or message.from_user.full_name)
-    opponent = await get_player(opponent_id, target_message.from_user.username or target_message.from_user.full_name)
-    if not challenger["class_selected"] or not opponent["class_selected"]:
-        await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
-        return
-    cur = await db.execute(
-        "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
-        (challenger_id, opponent_id, challenger_id, opponent_id),
-    )
-    if await cur.fetchone():
-        await message.answer("One of these players is already in an active duel.")
-        return
-    duel_id = await _insert_generated_id(
-        db,
-        "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
-        "VALUES (?, ?, ?, ?, ?, 'pending')",
-        (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
-        "duel_id",
-    )
-    await db.commit()
+    async with player_pair_lock(challenger_id, opponent_id):
+        challenger = await get_player(challenger_id, message.from_user.username or message.from_user.full_name)
+        opponent = await get_player(opponent_id, target_message.from_user.username or target_message.from_user.full_name)
+        if not challenger["class_selected"] or not opponent["class_selected"]:
+            await message.answer("Both players must use /start in the bot's private chat and choose a hero class first.")
+            return
+        cur = await db.execute(
+            "SELECT 1 FROM duels WHERE status IN ('active', 'pending') AND (challenger_id IN (?, ?) OR opponent_id IN (?, ?))",
+            (challenger_id, opponent_id, challenger_id, opponent_id),
+        )
+        if await cur.fetchone():
+            await message.answer("One of these players is already in an active duel.")
+            return
+        duel_id = await _insert_generated_id(
+            db,
+            "INSERT INTO duels(chat_id, challenger_id, opponent_id, challenger_hp, opponent_hp, status) "
+            "VALUES (?, ?, ?, ?, ?, 'pending')",
+            (message.chat.id, challenger_id, opponent_id, challenger["max_hp"], opponent["max_hp"]),
+            "duel_id",
+        )
+        await db.commit()
     await message.answer(
         f"⚔️ <b>Duel Challenge #{duel_id}</b>\n"
         f"{escape(challenger['username'] or 'Challenger')} challenges "
