@@ -1879,6 +1879,7 @@ async def party_command(message: Message):
                 try:
                     if await _has_active_non_party_mode(db, user_id):
                         raise PartyError("Finish your solo battle, dungeon, duel, trade, or PvP queue before starting a party raid.")
+                    await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
                     battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(members) * 2))
                     await db.commit()
                 except Exception:
