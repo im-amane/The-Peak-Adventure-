@@ -43,7 +43,7 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
   await self.db.execute("INSERT INTO duels VALUES(1,1,2,'active')")
   await self.db.commit()
-  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon"):
+  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon, PvP queue, or party battle"):
    await craft_item(self.db,1,10,"iron_sword")
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
   cur=await self.db.execute("SELECT COUNT(*) AS n FROM crafted_items WHERE user_id=1")
@@ -54,7 +54,7 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
   await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
   await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
   await self.db.commit()
-  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon"):
+  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon, PvP queue, or party battle"):
    await craft_item(self.db,1,10,"iron_sword")
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
 
