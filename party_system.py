@@ -445,6 +445,12 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
         (party_id,),
     )
     party = await cur.fetchone()
+    cur = await db.execute(
+        "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+        (party_id,),
+    )
+    if await cur.fetchone():
+        raise PartyError("Finish the active co-op battle before leaving the party.")
     cur = await db.execute("SELECT party_id FROM party_members WHERE user_id=?", (user_id,))
     current_membership = await cur.fetchone()
     if not current_membership or current_membership["party_id"] != party_id:
@@ -486,6 +492,12 @@ async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -
         raise PartyError("Party not found.")
     if party["leader_id"] != user_id:
         raise PartyError("Only the party leader can disband it.")
+    cur = await db.execute(
+        "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
+        (party_id,),
+    )
+    if await cur.fetchone():
+        raise PartyError("Finish the active co-op battle before disbanding the party.")
     await db.execute("UPDATE party_invites SET status='cancelled',responded_at=CURRENT_TIMESTAMP WHERE party_id=? AND status='pending'", (party_id,))
     await db.execute("DELETE FROM party_members WHERE party_id=?", (party_id,))
     await db.execute("DELETE FROM party_battle_contributions WHERE battle_id IN (SELECT battle_id FROM party_battles WHERE party_id=?)", (party_id,))
