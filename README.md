@@ -122,7 +122,7 @@ Keep `BOT_TOKEN` private. Never deploy production or provision paid resources wi
 - `/premium shop` - Browse gem items; `/premium buy ITEM_ID` - Buy stamina crystals, potion bundles or XP charms
 - `/missions` - View daily objectives and claim completed rewards with `/missions claim MISSION_ID`
 - `/weekly` - View weekly objectives and claim with `/weekly claim QUEST_ID`
-- `/stamina` and `/mana` - View combat resources
+- `/stamina` - View stamina and exploration energy regeneration
 - `/settings` - Set notification preferences and profile visibility
 - `/mana` - View mana, skill cost and regeneration
 - `/online` - View active adventurers and online friends
