@@ -1,6 +1,8 @@
 """Transactional player auction house for equipped weapons and armor."""
 import time
 
+from matchmaking_system import MAX_QUEUE_WAIT_SECONDS
+
 class AuctionError(ValueError):
     pass
 
@@ -102,6 +104,63 @@ async def _has_active_battle(db, user_id):
     cur = await db.execute("SELECT 1 FROM battles WHERE user_id=?", (user_id,))
     return await cur.fetchone() is not None
 
+async def _lock_player_for_equipment(db, user_id):
+    """Coordinate auction equipment changes with gameplay and matchmaking locks."""
+    if _is_postgres(db):
+        # Matchmaking's per-player lock is the shared cross-mode serialization
+        # point. Do not take the general player lock here: settlement locks
+        # multiple users in sorted order and must not invert lock ordering.
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
+
+
+async def _has_active_player_activity(db, user_id):
+    if await _table_exists(db, "duels"):
+        cur = await db.execute(
+            "SELECT 1 FROM duels WHERE status IN ('pending','active') "
+            "AND (challenger_id=? OR opponent_id=?) LIMIT 1",
+            (user_id, user_id),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "trades"):
+        cur = await db.execute(
+            "SELECT 1 FROM trades WHERE status IN ('pending','open') "
+            "AND (initiator_id=? OR partner_id=?) LIMIT 1",
+            (user_id, user_id),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "matchmaking_queue"):
+        cur = await db.execute(
+            """SELECT 1 FROM matchmaking_queue
+               WHERE user_id=? AND (
+                 status='matched' OR (status='queued' AND queued_at>=?)
+               ) LIMIT 1""",
+            (user_id, int(time.time()) - MAX_QUEUE_WAIT_SECONDS),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "dungeon_runs"):
+        cur = await db.execute(
+            "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
+    if await _table_exists(db, "party_members") and await _table_exists(db, "party_battles"):
+        cur = await db.execute(
+            """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+               WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+            (user_id,),
+        )
+        if await cur.fetchone():
+            return True
+    return False
+
+
 async def _return_listing_item(db, seller_id, slot, item_name, item_stat, listing_id, now):
     """Return escrowed gear without overwriting equipment acquired during listing."""
     stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
@@ -113,6 +172,14 @@ async def _return_listing_item(db, seller_id, slot, item_name, item_stat, listin
     if not equipped:
         return False
     current_name, current_stat = equipped[slot], equipped[stat_column]
+    if await _has_active_battle(db, seller_id) or await _has_active_player_activity(db, seller_id):
+        await db.execute(
+            """INSERT INTO auction_stash
+               (user_id,slot,item_name,item_stat,source_listing_id,created_at)
+               VALUES(?,?,?,?,?,?)""",
+            (seller_id, slot, item_name, item_stat, listing_id, now),
+        )
+        return True
     if (current_name, current_stat) != DEFAULTS[slot]:
         await db.execute(
             """INSERT INTO auction_stash
@@ -143,6 +210,14 @@ async def _settle_due(db, now):
             (now,),
         )
         rows = await cur.fetchall()
+        affected_players = {
+            player_id
+            for row in rows
+            for player_id in (row["seller_id"], row["highest_bidder"])
+            if player_id is not None
+        }
+        for player_id in sorted(affected_players):
+            await _lock_player_for_equipment(db, player_id)
         for row in rows:
             if row["highest_bidder"] is not None:
                 seller = await db.execute(
@@ -169,7 +244,7 @@ async def _settle_due(db, now):
                         (row["highest_bidder"],),
                     )
                     equipped = await current.fetchone()
-                    if await _has_active_battle(db, row["highest_bidder"]):
+                    if await _has_active_battle(db, row["highest_bidder"]) or await _has_active_player_activity(db, row["highest_bidder"]):
                         await db.execute(
                             """INSERT INTO auction_stash
                                (user_id,slot,item_name,item_stat,source_listing_id,created_at)
@@ -244,6 +319,7 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
     await _settle_due(db, now)
     try:
         await db.execute("BEGIN IMMEDIATE")
+        await _lock_player_for_equipment(db, seller_id)
         cur = await db.execute(
             _for_update(db, "SELECT * FROM players WHERE user_id=?"),
             (seller_id,),
@@ -253,6 +329,8 @@ async def create_listing(db, seller_id, slot, start_price, duration_hours=24, no
             raise AuctionError("Register before using the auction house.")
         if await _has_active_battle(db, seller_id):
             raise AuctionError("Finish your active battle before listing equipped gear.")
+        if await _has_active_player_activity(db, seller_id):
+            raise AuctionError("Finish your active duel, trade, PvP queue, dungeon, or party battle before listing equipped gear.")
         cur = await db.execute("SELECT 1 FROM auction_listings WHERE seller_id=? AND status='active'", (seller_id,))
         if await cur.fetchone():
             raise AuctionError("You already have an active auction.")
@@ -372,6 +450,7 @@ async def equip_stashed_item(db, user_id, stash_id):
     _positive_id(stash_id, "stash")
     try:
         await db.execute("BEGIN IMMEDIATE")
+        await _lock_player_for_equipment(db, user_id)
         cur = await db.execute(
             _for_update(
                 db, "SELECT * FROM auction_stash WHERE stash_id=? AND user_id=?"
@@ -383,6 +462,8 @@ async def equip_stashed_item(db, user_id, stash_id):
             raise AuctionError("That stored item does not belong to your account.")
         if await _has_active_battle(db, user_id):
             raise AuctionError("Finish your active battle before changing equipment.")
+        if await _has_active_player_activity(db, user_id):
+            raise AuctionError("Finish your active duel, trade, PvP queue, dungeon, or party battle before changing equipment.")
         slot = item["slot"]
         stat_column = "weapon_attack" if slot == "weapon" else "armor_defense"
         cur = await db.execute(
