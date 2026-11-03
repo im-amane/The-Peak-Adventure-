@@ -394,9 +394,20 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not membership:
         raise PartyError("You are not in a party.")
     party_id = membership["party_id"]
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    # Serialize membership removal and leadership handoff against invites,
+    # accepts, battle starts, and other departures in every PostgreSQL process.
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
-    await db.execute("DELETE FROM party_members WHERE user_id=?", (user_id,))
+    cur = await db.execute(
+        "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
+        (party_id, user_id),
+    )
+    if not await cur.fetchone():
+        raise PartyError("You are no longer in that party.")
+    await db.execute("DELETE FROM party_members WHERE user_id=? AND party_id=?", (user_id, party_id))
     await db.execute("DELETE FROM party_battle_contributions WHERE user_id=?", (user_id,))
     await db.execute("DELETE FROM party_battle_cooldowns WHERE user_id=?", (user_id,))
     # Preserve reward claims when a member leaves; otherwise rejoining lets them farm old battles.
@@ -424,7 +435,12 @@ async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
 async def disband_party(db: aiosqlite.Connection, party_id: int, user_id: int) -> None:
     if not _valid_id(party_id) or not _valid_id(user_id):
         raise PartyError("Invalid party or player account.")
-    cur = await db.execute("SELECT leader_id FROM parties WHERE party_id=?", (party_id,))
+    # Lock the parent row so a concurrent leave, invite acceptance, or
+    # battle start cannot mutate the party while it is being disbanded.
+    cur = await db.execute(
+        "SELECT leader_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
     party = await cur.fetchone()
     if not party:
         raise PartyError("Party not found.")
