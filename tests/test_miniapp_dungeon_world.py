@@ -52,5 +52,20 @@ class MiniAppDungeonWorldTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(payload["state"]["worlds"][1]["current"])
 
 
+    async def test_failed_world_travel_rolls_back_dungeon_entry(self):
+        request = Request({"action": "enter", "dungeon_id": 2})
+        with patch("main.validate_init_data", return_value=self.user), patch(
+            "main.travel_to_world", side_effect=main.WorldError("simulated travel failure")
+        ):
+            response = await main.api_dungeon(request)
+
+        self.assertEqual(response.status, 409)
+        cursor = await main.db.execute(
+            "SELECT 1 FROM dungeon_runs WHERE user_id=?",
+            (self.user["id"],),
+        )
+        self.assertIsNone(await cursor.fetchone())
+
+
 if __name__ == "__main__":
     unittest.main()
