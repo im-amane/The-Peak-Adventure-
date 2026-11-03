@@ -1860,13 +1860,26 @@ async def party_command(message: Message):
             try:
                 await db.execute("BEGIN IMMEDIATE")
                 try:
-                    for member_id in sorted(member["user_id"] for member in members):
+                    party_lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+                    party_cur = await db.execute(
+                        "SELECT leader_id FROM parties WHERE party_id=?" + party_lock_suffix,
+                        (party["party_id"],),
+                    )
+                    locked_party = await party_cur.fetchone()
+                    if not locked_party or locked_party["leader_id"] != user_id:
+                        raise PartyError("Only the current party leader can start a shared expedition.")
+                    member_cur = await db.execute(
+                        "SELECT user_id FROM party_members WHERE party_id=? ORDER BY user_id",
+                        (party["party_id"],),
+                    )
+                    member_ids = [row["user_id"] for row in await member_cur.fetchall()]
+                    for member_id in member_ids:
                         if await _has_active_non_party_mode(db, member_id):
                             raise PartyError("Every party member must finish solo battles, dungeons, duels, trades, and PvP matches before an expedition starts.")
                     await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
                     battle_id = await start_party_battle(
                         db, party["party_id"], user_id, monster_level, monster["name"],
-                        monster["hp"] * max(2, len(members) * 2),
+                        monster["hp"] * max(2, len(member_ids) * 2),
                     )
                     await db.commit()
                 except Exception:
@@ -1901,11 +1914,24 @@ async def party_command(message: Message):
                 boss = MONSTER_BY_LEVEL[level]
                 await db.execute("BEGIN IMMEDIATE")
                 try:
-                    for member_id in sorted(member["user_id"] for member in members):
+                    party_lock_suffix = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+                    party_cur = await db.execute(
+                        "SELECT leader_id FROM parties WHERE party_id=?" + party_lock_suffix,
+                        (party_id,),
+                    )
+                    locked_party = await party_cur.fetchone()
+                    if not locked_party or locked_party["leader_id"] != user_id:
+                        raise PartyError("Only the current party leader can start a co-op raid.")
+                    member_cur = await db.execute(
+                        "SELECT user_id FROM party_members WHERE party_id=? ORDER BY user_id",
+                        (party_id,),
+                    )
+                    member_ids = [row["user_id"] for row in await member_cur.fetchall()]
+                    for member_id in member_ids:
                         if await _has_active_non_party_mode(db, member_id):
                             raise PartyError("Every party member must finish solo battles, dungeons, duels, trades, and PvP matches before a raid starts.")
                     await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
-                    battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(members) * 2))
+                    battle_id = await start_party_battle(db, party_id, user_id, level, boss["name"], boss["hp"] * max(2, len(member_ids) * 2))
                     await db.commit()
                 except Exception:
                     if db.in_transaction:
