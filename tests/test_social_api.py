@@ -444,6 +444,36 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((trade["initiator_id"], trade["partner_id"], trade["status"]),
                          (initiator_id, friend_id, "pending"))
 
+    async def test_trade_creation_rejects_players_in_battles_or_duels(self):
+        initiator_id = 987654925
+        friend_id = 987654926
+        for user_id, username in ((initiator_id, "ModeInitiator"), (friend_id, "ModeFriend")):
+            await main.get_player(user_id, username)
+            await main.db.execute("UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,))
+        low_id, high_id = sorted((initiator_id, friend_id))
+        await main.db.execute(
+            """INSERT INTO friend_requests(user_low,user_high,requester_id,target_id,status)
+               VALUES(?,?,?,?, 'accepted')""",
+            (low_id, high_id, initiator_id, friend_id),
+        )
+        await main.db.execute("INSERT INTO battles(user_id,monster_level,monster_hp) VALUES(?,1,100)", (friend_id,))
+        await main.db.commit()
+
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "ModeInitiator"}):
+            battle_blocked = await main.api_social(FakeRequest({"action": "trade_create", "target_id": friend_id}))
+        self.assertEqual(battle_blocked.status, 409)
+
+        await main.db.execute("DELETE FROM battles WHERE user_id=?", (friend_id,))
+        await main.db.execute(
+            """INSERT INTO duels(chat_id,challenger_id,opponent_id,challenger_hp,opponent_hp,status)
+               VALUES(0,?,?,100,100,'pending')""",
+            (friend_id, initiator_id),
+        )
+        await main.db.commit()
+        with patch("main.validate_init_data", return_value={"id": initiator_id, "first_name": "ModeInitiator"}):
+            duel_blocked = await main.api_social(FakeRequest({"action": "trade_create", "target_id": friend_id}))
+        self.assertEqual(duel_blocked.status, 409)
+
     async def test_trade_creation_rejects_self_and_invalid_target(self):
         user_id = 987654922
         await main.get_player(user_id, "TradeSelf")
