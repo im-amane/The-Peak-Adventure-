@@ -5,7 +5,17 @@ from crafting_system import *
 class CraftingTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
   self.db=await aiosqlite.connect(":memory:");self.db.row_factory=aiosqlite.Row
-  await self.db.executescript("CREATE TABLE players(user_id INTEGER PRIMARY KEY,weapon TEXT,weapon_attack INTEGER,armor TEXT,armor_defense INTEGER);INSERT INTO players VALUES(1,'Rusty Sword',0,'Cloth',0);")
+  await self.db.executescript("""
+   CREATE TABLE players(user_id INTEGER PRIMARY KEY,weapon TEXT,weapon_attack INTEGER,armor TEXT,armor_defense INTEGER);
+   INSERT INTO players VALUES(1,'Rusty Sword',0,'Cloth',0);
+   CREATE TABLE battles(user_id INTEGER PRIMARY KEY);
+   CREATE TABLE duels(duel_id INTEGER PRIMARY KEY,challenger_id INTEGER,opponent_id INTEGER,status TEXT);
+   CREATE TABLE trades(trade_id INTEGER PRIMARY KEY,initiator_id INTEGER,partner_id INTEGER,status TEXT);
+   CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,status TEXT);
+   CREATE TABLE matchmaking_queue(user_id INTEGER PRIMARY KEY,status TEXT,queued_at INTEGER DEFAULT 0);
+   CREATE TABLE party_members(party_id INTEGER,user_id INTEGER);
+   CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER,status TEXT);
+  """)
   await init_crafting_tables(self.db)
  async def asyncTearDown(self):await self.db.close()
  async def test_materials_start_empty(self):
@@ -29,6 +39,35 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
   row=await cur.fetchone();self.assertEqual((row["weapon"],row["weapon_attack"]),("Forged Iron Sword",12))
   self.assertEqual(await get_materials(self.db,1),{"ember_shard":0,"iron_ore":0})
+ async def test_crafting_is_blocked_during_active_duel_without_consuming_materials(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.execute("INSERT INTO duels VALUES(1,1,2,'active')")
+  await self.db.commit()
+  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon, PvP queue, or party battle"):
+   await craft_item(self.db,1,10,"iron_sword")
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
+  cur=await self.db.execute("SELECT COUNT(*) AS n FROM crafted_items WHERE user_id=1")
+  self.assertEqual((await cur.fetchone())["n"],0)
+
+ async def test_crafting_is_blocked_during_active_party_battle(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
+  await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
+  await self.db.commit()
+  with self.assertRaisesRegex(CraftingError,"active battle, duel, trade, dungeon, PvP queue, or party battle"):
+   await craft_item(self.db,1,10,"iron_sword")
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
+
+ async def test_weaker_recipe_cannot_rename_stronger_equipment_or_consume_materials(self):
+  await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',3),(1,'ember_shard',1)")
+  await self.db.execute("UPDATE players SET weapon='Stormglass Blade',weapon_attack=20 WHERE user_id=1")
+  await self.db.commit()
+  with self.assertRaisesRegex(CraftingError,"already as strong or stronger"):
+   await craft_item(self.db,1,10,"iron_sword")
+  cur=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+  self.assertEqual(tuple(await cur.fetchone()),("Stormglass Blade",20))
+  self.assertEqual(await get_materials(self.db,1),{"ember_shard":1,"iron_ore":3})
+
  async def test_unique_recipe_cannot_be_crafted_twice(self):
   await self.db.execute("INSERT INTO player_materials VALUES(1,'iron_ore',6),(1,'ember_shard',2)")
   await craft_item(self.db,1,10,"iron_sword")
