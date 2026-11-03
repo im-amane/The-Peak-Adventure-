@@ -168,6 +168,22 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         cur = await main.db.execute("SELECT monster_level FROM battles WHERE user_id=?", (self.user_id,))
         self.assertEqual((await cur.fetchone())["monster_level"], 1)
 
+    async def test_http_exploration_rejects_active_party_battle(self):
+        await main.db.execute("INSERT INTO parties(party_id,leader_id) VALUES(10,?)", (self.user_id,))
+        await main.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,?)", (self.user_id,))
+        await main.db.execute(
+            "INSERT INTO party_battles(party_id,monster_level,monster_name,max_hp,hp,status) VALUES(10,1,'Test Guardian',100,100,'active')"
+        )
+        await main.db.commit()
+
+        response = await self.client.post(
+            "/api/explore", json={"monster_level": 1}, headers=self.headers
+        )
+        self.assertEqual(response.status, 409)
+        self.assertIn("party battle", (await response.json())["error"])
+        cur = await main.db.execute("SELECT 1 FROM battles WHERE user_id=?", (self.user_id,))
+        self.assertIsNone(await cur.fetchone())
+
     async def test_http_dungeon_entry_rejects_a_live_matchmaking_queue(self):
         await main.db.execute(
             """INSERT INTO matchmaking_queue(
