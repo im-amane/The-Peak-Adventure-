@@ -105,7 +105,9 @@ async def _has_active_battle(db, user_id):
 async def _lock_player_for_equipment(db, user_id):
     """Coordinate auction equipment changes with gameplay and matchmaking locks."""
     if _is_postgres(db):
-        await db.execute("SELECT pg_advisory_xact_lock(?)", (user_id,))
+        # Matchmaking's per-player lock is the shared cross-mode serialization
+        # point. Do not take the general player lock here: settlement locks
+        # multiple users in sorted order and must not invert lock ordering.
         await db.execute(
             "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
             (f"peak-adventure-matchmaking-player:{user_id}",),
