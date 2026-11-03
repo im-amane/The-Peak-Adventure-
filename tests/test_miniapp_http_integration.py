@@ -152,7 +152,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["battle_active"])
         self.assertEqual(state["battle"]["level"], 1)
 
-    async def test_http_exploration_rejects_an_active_dungeon(self):
+    async def test_http_exploration_can_start_encounters_inside_an_active_dungeon(self):
         await main.db.execute(
             "INSERT INTO dungeon_runs(user_id,dungeon_id,room,status) VALUES(?,1,1,'active')",
             (self.user_id,),
@@ -162,10 +162,11 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.post(
             "/api/explore", json={"monster_level": 1}, headers=self.headers
         )
-        self.assertEqual(response.status, 409)
-        self.assertIn("active dungeon", (await response.json())["error"])
-        cur = await main.db.execute("SELECT 1 FROM battles WHERE user_id=?", (self.user_id,))
-        self.assertIsNone(await cur.fetchone())
+        self.assertEqual(response.status, 200)
+        payload = await response.json()
+        self.assertTrue(payload["state"]["battle_active"])
+        cur = await main.db.execute("SELECT monster_level FROM battles WHERE user_id=?", (self.user_id,))
+        self.assertEqual((await cur.fetchone())["monster_level"], 1)
 
     async def test_http_dungeon_entry_rejects_a_live_matchmaking_queue(self):
         await main.db.execute(
