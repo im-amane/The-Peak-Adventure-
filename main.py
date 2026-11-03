@@ -1359,9 +1359,23 @@ async def decline_trade(call: CallbackQuery):
     if call.from_user.id != trade["partner_id"]:
         await call.answer("Only the invited player can decline.", show_alert=True)
         return
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            """UPDATE trades SET status='declined',initiator_confirmed=0,partner_confirmed=0
+               WHERE trade_id=? AND status='pending' AND partner_id=?""",
+            (trade_id, call.from_user.id),
+        )
+        if cur.rowcount != 1:
+            await db.rollback()
+            await call.answer("This trade invitation is no longer active.", show_alert=True)
+            return
+        await db.commit()
+    except Exception:
+        if db.in_transaction:
+            await db.rollback()
+        raise
     await call.answer()
-    await db.execute("UPDATE trades SET status='declined' WHERE trade_id=?", (trade_id,))
-    await db.commit()
     await call.message.edit_text("✋ Trade declined.")
 
 
