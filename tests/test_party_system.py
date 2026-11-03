@@ -158,6 +158,22 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
 
 
 
+    async def test_party_membership_cannot_change_during_active_coop_battle(self):
+        party_id = await create_party(self.db, 101)
+        await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, 1, 202, True)
+        await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+
+        with self.assertRaisesRegex(PartyError, "active co-op battle"):
+            await leave_party(self.db, 202)
+        with self.assertRaisesRegex(PartyError, "active co-op battle"):
+            await disband_party(self.db, party_id, 101)
+
+        cur = await self.db.execute("SELECT COUNT(*) AS n FROM party_members WHERE party_id=?", (party_id,))
+        self.assertEqual((await cur.fetchone())["n"], 2)
+        cur = await self.db.execute("SELECT 1 FROM party_battles WHERE party_id=? AND status='active'", (party_id,))
+        self.assertIsNotNone(await cur.fetchone())
+
     async def test_cannot_join_party_during_active_coop_battle(self):
         party_id = await create_party(self.db, 101)
         invite_id = await invite_to_party(self.db, party_id, 101, 202)
