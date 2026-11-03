@@ -3564,7 +3564,7 @@ async def cb_shop(call: CallbackQuery):
     await call.message.answer("🛒 <b>Adventurer's Shop</b>\nChoose an item to buy:", reply_markup=shop_keyboard())
 
 
-async def buy_shop_item(user_id: int, item_id: str):
+async def _buy_shop_item_unlocked(user_id: int, item_id: str):
     """Purchase a coin-shop item atomically, including its inventory effect."""
     assert db is not None
     if not isinstance(user_id,int) or isinstance(user_id,bool) or user_id<=0:
@@ -3628,6 +3628,12 @@ async def buy_shop_item(user_id: int, item_id: str):
         else:
             await db.rollback()
         raise
+
+
+async def buy_shop_item(user_id: int, item_id: str):
+    """Serialize purchases against battles and other equipment changes."""
+    async with player_lock(user_id):
+        return await _buy_shop_item_unlocked(user_id, item_id)
 
 
 class ShopError(ValueError):
