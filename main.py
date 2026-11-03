@@ -681,10 +681,6 @@ async def _start_battle_unlocked(user_id: int, username: str | None, send_target
             await db.rollback()
             await send_target.answer("🤝 Finish or cancel your active trade before entering the wilds.")
             return
-        if await _has_active_dungeon(db, user_id):
-            await db.rollback()
-            await send_target.answer("🗝️ Finish or abandon your active dungeon before entering the wilds.")
-            return
         await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
     except StaminaError as exc:
         await db.rollback()
@@ -4292,12 +4288,6 @@ async def api_explore(request: web.Request):
                     await db.rollback()
                     return web.json_response(
                         {"error": "Finish your active duel or trade before starting a monster encounter."},
-                        status=409,
-                    )
-                if await _has_active_dungeon(db, user_id):
-                    await db.rollback()
-                    return web.json_response(
-                        {"error": "Finish or abandon your active dungeon before starting a monster encounter."},
                         status=409,
                     )
                 await consume_stamina(db, user_id, EXPLORE_COST, commit=False)
