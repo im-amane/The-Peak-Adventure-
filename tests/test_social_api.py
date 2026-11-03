@@ -273,7 +273,7 @@ class MiniAppSocialApiTests(unittest.IsolatedAsyncioTestCase):
         await main.get_player(user_id, "RaidLeader")
         await main.db.execute("UPDATE players SET class_selected=1 WHERE user_id=?", (user_id,))
         party_id = await main.create_party(main.db, user_id)
-        await main.get_stamina(user_id)
+        await main.get_stamina(main.db, user_id)
         await main.db.execute("UPDATE player_stamina SET stamina=0 WHERE user_id=?", (user_id,))
         await main.db.commit()
 
