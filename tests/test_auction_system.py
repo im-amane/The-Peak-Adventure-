@@ -30,6 +30,8 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         );
         CREATE TABLE matchmaking_queue(user_id INTEGER PRIMARY KEY,status TEXT NOT NULL,queued_at INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,status TEXT NOT NULL);
+        CREATE TABLE party_members(party_id INTEGER,user_id INTEGER);
+        CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER,status TEXT NOT NULL);
         """)
         await init_auction_tables(self.db)
     async def asyncTearDown(self): await self.db.close()
@@ -209,6 +211,21 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
         stash=await list_stash(self.db,2)
         self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_list_or_equip_items_during_active_party_battle(self):
+        await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
+        await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, or dungeon"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
 
     async def test_auction_ids_bids_and_timestamps_reject_invalid_types(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
