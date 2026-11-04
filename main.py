@@ -5623,6 +5623,12 @@ def create_web_app():
     async def serve_pathfinding(request: web.Request):
         return web.FileResponse(WEB_DIR / "pathfinding.js")
 
+    async def serve_movement(request: web.Request):
+        return web.FileResponse(WEB_DIR / "movement.js")
+
+    async def serve_character_profiles(request: web.Request):
+        return web.FileResponse(WEB_DIR / "character_profiles.js")
+
     async def healthz(request: web.Request):
         if not await database_healthcheck():
             return web.json_response(
@@ -5643,6 +5649,8 @@ def create_web_app():
     app.router.add_get("/style.css", serve_css)
     app.router.add_get("/game.js", serve_js)
     app.router.add_get("/pathfinding.js", serve_pathfinding)
+    app.router.add_get("/movement.js", serve_movement)
+    app.router.add_get("/character_profiles.js", serve_character_profiles)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)
