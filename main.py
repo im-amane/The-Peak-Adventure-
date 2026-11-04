@@ -3200,6 +3200,31 @@ async def export_account(message: Message):
     await message.answer_document(document,caption="Your personal account data export. Keep this file private.")
 
 
+@dp.message(Command("credits"))
+async def credits_cmd(message: Message):
+    await message.answer(
+        "<b>THE PEAK ADVENTURE</b>\\n"
+        "<b>Created & Developed by Amane Fujimiya</b>\\n"
+        "Creator ID: @im_amane\\n\\n"
+        "<i>Every world begins with an imagination. This one began with mine.</i>"
+    )
+
+
+@dp.message(Command("legacy"))
+async def creator_legacy_cmd(message: Message):
+    await message.answer(
+        "<b>🗝️ SECRET CHRONICLE: THE FORGOTTEN CREATOR</b>\\n"
+        "<i>Rumours speak of a library beyond the Origin Realm, where the first blueprint of this world is kept.</i>\\n\\n"
+        "The First Architect asks: \\u201cBefore the heroes, before the monsters, before the first battle... "
+        "who dared to imagine this world?\\u201d\\n\\n"
+        "A name glows on the final page: <b>Amane Fujimiya</b>.\\n"
+        "Creator ID: <code>@im_amane</code>\\n\\n"
+        "<b>Creator's Emblem</b> · <b>Forgotten Creator</b> · <b>Amane's Legacy</b>\\n"
+        "<i>This is a creator-lore tribute. The creator title and emblem are reserved for the author; "
+        "this command does not grant player rewards or alter progression.</i>"
+    )
+
+
 @dp.message(Command("help"))
 async def help_cmd(message: Message):
     await message.answer(
