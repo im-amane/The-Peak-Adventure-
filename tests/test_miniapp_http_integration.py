@@ -88,6 +88,13 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["hero_class"], "Knight")
         self.assertFalse(payload["battle_active"])
 
+    async def test_healthcheck_fails_closed_when_a_required_miniapp_asset_is_missing(self):
+        with patch("main.WEB_DIR", Path(self.temp_dir.name)):
+            response = await self.client.get("/healthz")
+        self.assertEqual(response.status, 503)
+        self.assertEqual(await response.json(), {"ok": False, "assets": "unavailable"})
+        self.assertEqual(response.headers.get("Cache-Control"), "no-store")
+
     async def test_operations_metrics_require_admin_init_data_and_return_aggregate_health(self):
         unauthorized = await self.client.get("/ops/metrics")
         self.assertEqual(unauthorized.status, 401)
@@ -217,6 +224,21 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(response.status, 405, method)
             self.assertIn("GET", response.headers.get("Allow", ""))
             self.assertIn("POST", response.headers.get("Allow", ""))
+
+    async def test_engine_and_character_runtime_assets_are_served_by_http_application(self):
+        for route, expected in (
+            ("/movement.js", "PeakMovement"),
+            ("/character_profiles.js", "PeakCharacters"),
+        ):
+            response = await self.client.get(route)
+            self.assertEqual(response.status, 200, route)
+            self.assertIn("javascript", response.headers.get("Content-Type", ""))
+            self.assertIn(expected, await response.text())
+
+        index = await self.client.get("/")
+        html = await index.text()
+        self.assertIn('src="/movement.js"', html)
+        self.assertIn('src="/character_profiles.js"', html)
 
     async def test_miniapp_static_entrypoint_is_served_by_http_application(self):
         response = await self.client.get("/")
