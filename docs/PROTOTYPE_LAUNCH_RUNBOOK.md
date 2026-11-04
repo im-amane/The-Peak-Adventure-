@@ -34,6 +34,16 @@ The repository's `render.yaml` defines a single Docker web service in Singapore 
 
 **Cost note:** Render Starter and its persistent disk are paid resources. Review the current price in Render before applying the Blueprint. Do not switch this prototype to a free ephemeral filesystem: player progress would be lost on restart or redeploy.
 
+## Pre-deploy configuration check
+
+Run the read-only preflight in the same environment where the bot will start:
+
+```bash
+python scripts/launch_preflight.py
+```
+
+It checks required Telegram token and HTTPS Mini App URL configuration, admin IDs, database path/URL, server port, backup settings, and payment mode. It never prints secret values and does not connect to or modify live services. Resolve every error before deployment; review warnings before accepting payments or opening the prototype to players.
+
 ## Deploy steps
 
 1. In Render, choose **New → Blueprint** and connect `im-amane/The-Peak-Adventure-` on branch `main`.
