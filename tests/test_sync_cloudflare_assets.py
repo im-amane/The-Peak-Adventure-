@@ -71,14 +71,21 @@ class CloudflareAssetSyncTests(unittest.TestCase):
         with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
             sync_cloudflare_assets.main()
 
-    def test_all_static_assets_run_through_worker_security_headers(self):
+    def test_cloudflare_static_headers_cover_all_assets_without_worker_invocation(self):
+        headers_path = sync_cloudflare_assets.ROOT / "webapp" / "_headers"
+        headers = headers_path.read_text(encoding="utf-8")
+        self.assertTrue(headers.startswith("/*\\n"))
+        self.assertIn("Content-Security-Policy:", headers)
+        self.assertIn("Referrer-Policy: strict-origin-when-cross-origin", headers)
+        self.assertIn("X-Content-Type-Options: nosniff", headers)
+
         config_path = sync_cloudflare_assets.ROOT / "wrangler.jsonc"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         worker_first = set(config["assets"]["run_worker_first"])
-        missing = set(sync_cloudflare_assets.ASSETS) - worker_first
+        static_routes = set(sync_cloudflare_assets.ASSETS)
         self.assertFalse(
-            missing,
-            "Static assets bypass Worker security headers: " + ", ".join(sorted(missing)),
+            static_routes & worker_first,
+            "Static assets should remain edge-served rather than invoke the Worker.",
         )
 
 
