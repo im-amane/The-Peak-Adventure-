@@ -4787,7 +4787,7 @@ async def api_premium_shop(request: web.Request):
         return web.json_response({"error": "Premium shop payload must be valid JSON."}, status=400)
     if not isinstance(payload, dict) or set(payload) != {"item_id"} or not isinstance(payload["item_id"], str):
         async with db_lock:
-            await record_security_event(db, user["id"], "invalid_reward_claim", "invalid premium shop payload", 2)
+            await record_security_event(db, user["id"], "invalid_economy_action", "invalid premium shop payload", 2)
         return web.json_response({"error": "A valid premium item_id is required."}, status=400)
     try:
         async with db_lock:
@@ -4795,6 +4795,11 @@ async def api_premium_shop(request: web.Request):
                 purchase = await buy_premium_item(db, user["id"], payload["item_id"])
                 state = await miniapp_state(user)
     except PremiumError as exc:
+        async with db_lock:
+            await record_security_event(
+                db, user["id"], "invalid_economy_action",
+                f"premium_shop_rejected: {type(exc).__name__}", 2
+            )
         return web.json_response({"error": str(exc)}, status=409)
     return web.json_response({"message": f"Purchased {purchase['title']}.", "purchase": purchase, "state": state})
 
