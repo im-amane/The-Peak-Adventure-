@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from unittest.mock import AsyncMock, patch
 
 import aiosqlite
 
@@ -16,6 +17,7 @@ from party_system import (
     list_pending_party_invites,
     respond_to_party_invite,
     start_party_battle, attack_party_battle, get_party_battle, reward_party_battle,
+    _lock_player_mode,
 )
 
 
@@ -35,6 +37,33 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         await self.db.close()
+
+    async def test_player_mode_lock_uses_shared_cross_mode_advisory_key(self):
+        class FakePostgres:
+            dialect = "postgres"
+
+            def __init__(self):
+                self.calls = []
+
+            async def execute(self, sql, parameters):
+                self.calls.append((sql, parameters))
+
+        fake = FakePostgres()
+        await _lock_player_mode(fake, 202)
+        self.assertEqual(
+            fake.calls,
+            [(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                ("peak-adventure-matchmaking-player:202",),
+            )],
+        )
+
+    async def test_invite_acceptance_acquires_target_cross_mode_lock(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        with patch("party_system._lock_player_mode", new_callable=AsyncMock) as lock:
+            await respond_to_party_invite(self.db, invite_id, 202, True)
+        lock.assert_awaited_once_with(self.db, 202)
 
     async def test_party_creation_and_invite_acceptance(self):
         party_id = await create_party(self.db, 101)
