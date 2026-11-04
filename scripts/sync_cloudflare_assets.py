@@ -14,6 +14,7 @@ ASSETS = {
     "/game.js": (ROOT / "webapp" / "game.js", "application/javascript; charset=utf-8"),
     "/pathfinding.js": (ROOT / "webapp" / "pathfinding.js", "application/javascript; charset=utf-8"),
     "/movement.js": (ROOT / "webapp" / "movement.js", "application/javascript; charset=utf-8"),
+    "/character_profiles.js": (ROOT / "webapp" / "character_profiles.js", "application/javascript; charset=utf-8"),
 }
 MARKER = "const STATIC_ASSETS = "
 END_MARKER = "\n\nconst STATIC_PATHS"
