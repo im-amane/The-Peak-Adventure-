@@ -1364,7 +1364,7 @@
     playRespawnAnimation(){
       if(!this.hero)return;
       this.tweens.killTweensOf(this.hero);
-      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:(this.heroBaseScaleX||1)*(this.heroFacing||1),scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
+      this.tweens.add({targets:this.hero,alpha:1,angle:0,scaleX:(this.heroBaseScaleX||1)*(this.hero.characterAnimations?1:(this.heroFacing||1)),scaleY:1,y:this.hero.y-9,duration:360,ease:"Cubic.easeOut"});
       this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
     }
     playLevelUpAnimation(){
@@ -1447,7 +1447,7 @@
         if(nextFacing!==this.heroFacing){
           this.heroFacing=nextFacing;
           if(this.heroWalkTween){this.heroWalkTween.stop();this.heroWalkTween=null;}
-          this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
+          this.hero.setScale(this.heroBaseScaleX*(this.hero.characterAnimations?1:this.heroFacing),1);
         }
       }
       if(moving){
@@ -1457,7 +1457,7 @@
         }
         if(!this.heroWalkTween){
           this.hero.setScale(this.heroBaseScaleX*this.heroFacing,1);
-          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*this.heroFacing*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
+          this.heroWalkTween=this.tweens.add({targets:this.hero,scaleX:this.heroBaseScaleX*(this.hero.characterAnimations?1:this.heroFacing)*0.96,scaleY:1.04,duration:115,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
         this.hero.setRotation(dx*0.045);
       }else{
