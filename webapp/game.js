@@ -1330,7 +1330,6 @@
         const arm=limbs.rightArm;
         if(arm)this.tweens.add({targets:arm,rotation:action==="skill"?-1.9:-1.45,duration:95,yoyo:true,repeat:1,ease:"Back.easeOut"});
         const target=this.selectedMonster&&this.selectedMonster.sprite;
-        if(target)this.tweens.add({targets:target,x:target.x+9,duration:55,yoyo:true,repeat:2,ease:"Sine.easeInOut"});
         if(action==="skill"){
           const pulse=this.add.circle(this.hero.x,this.hero.y,24,0x8edbff,0.28).setDepth(9);
           this.tweens.add({targets:pulse,scale:2.4,alpha:0,duration:300,onComplete:()=>pulse.destroy()});
@@ -1506,7 +1505,7 @@
         const elapsed=this.time.now-entry.animationStartedAt;
         let pose=window.PeakMonsterAnimation.getPose(entry.animationState,elapsed,
           this.hero.x>=entry.baseX?-1:1);
-        if(pose.complete){
+        if(pose.complete && entry.animationState!=="defeated"){
           entry.animationState="idle";
           entry.animationStartedAt=this.time.now;
           pose=window.PeakMonsterAnimation.getPose("idle",this.time.now);
@@ -1520,6 +1519,7 @@
       });
       let closest=null,closestDistance=Infinity;
       this.monsters.forEach(entry=>{
+        if(entry.animationState==="defeated")return;
         const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,entry.sprite.x,entry.sprite.y);
         if(distance<closestDistance){closestDistance=distance;closest=entry;}
       });
