@@ -143,5 +143,58 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(damage, 3)
 
 
+
+    async def test_battle_victory_rewards_are_applied_only_once(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            previous_path, previous_db = main.DB_PATH, main.db
+            main.DB_PATH = str(Path(temp_dir) / "battle-reward-idempotency.db")
+            main.db = None
+            try:
+                await main.init_db()
+                user_id = 987654323
+                await main.get_player(user_id, "RewardIdempotencyTester")
+                await main.db.execute(
+                    """UPDATE players SET class_selected=1,hp=100,max_hp=100,xp=0,coins=0,wins=0
+                       WHERE user_id=?""",
+                    (user_id,),
+                )
+                await main.db.execute(
+                    """INSERT INTO battles(user_id,monster_level,monster_hp,turn_count,is_elite,is_evolved)
+                       VALUES(?,1,0,1,0,0)""",
+                    (user_id,),
+                )
+                await main.db.commit()
+
+                with (
+                    patch("main.consume_xp_boost", new=AsyncMock(return_value=False)),
+                    patch("main.record_monster_defeat", new=AsyncMock(return_value={"evolved": False, "defeats": 1})),
+                    patch("main.advance_dungeon", new=AsyncMock()),
+                    patch("main.award_material_drop", new=AsyncMock()),
+                    patch("main.record_weekly_progress", new=AsyncMock()),
+                    patch("main.record_daily_progress", new=AsyncMock()),
+                    patch("main.record_player_guild_activity", new=AsyncMock()),
+                    patch("main.refresh_quest_progress", new=AsyncMock()),
+                ):
+                    first_result = await main.finish_battle(user_id, True)
+                    second_result = await main.finish_battle(user_id, True)
+
+                self.assertIn("Victory!", first_result)
+                self.assertIsNone(second_result)
+                player = await main.get_player(user_id)
+                self.assertEqual(player["wins"], 1)
+                self.assertGreater(player["xp"], 0)
+                self.assertGreater(player["coins"], 0)
+                cursor = await main.db.execute(
+                    "SELECT 1 FROM battles WHERE user_id=?",
+                    (user_id,),
+                )
+                self.assertIsNone(await cursor.fetchone())
+            finally:
+                if main.db is not None:
+                    await main.db.close()
+                main.db = previous_db
+                main.DB_PATH = previous_path
+
+
 if __name__ == "__main__":
     unittest.main()
