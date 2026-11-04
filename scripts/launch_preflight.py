@@ -99,6 +99,21 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
     except (TypeError, ValueError):
         add("backup_retention_invalid", "error", "BACKUP_RETENTION must be a positive integer.")
 
+    if database_url and database_url.startswith(("postgres://", "postgresql://")):
+        database_path = str(env.get("DATABASE_PATH", "peak_adventure.db")).strip()
+        default_postgres_dir = str(Path(database_path).parent / "postgres_backups")
+        postgres_backup_dir = str(env.get("POSTGRES_BACKUP_DIR", default_postgres_dir)).strip()
+        if not postgres_backup_dir:
+            add("postgres_backup_dir_missing", "error", "POSTGRES_BACKUP_DIR must name a directory for PostgreSQL logical backups.")
+        elif not Path(postgres_backup_dir).is_absolute():
+            add("postgres_backup_dir_not_absolute", "warning", "POSTGRES_BACKUP_DIR is relative; use a persistent mounted path for hosted deployments.")
+        postgres_retention = str(env.get("POSTGRES_BACKUP_RETENTION", backup_retention)).strip()
+        try:
+            if int(postgres_retention) < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            add("postgres_backup_retention_invalid", "error", "POSTGRES_BACKUP_RETENTION must be a positive integer.")
+
     return issues
 
 
