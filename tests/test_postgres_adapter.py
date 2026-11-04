@@ -1348,6 +1348,10 @@ class PostgresFriendServiceTests(unittest.IsolatedAsyncioTestCase):
             await second.close()
 
     async def test_pending_request_limit_is_enforced(self):
+        await self.db.executemany(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,1)",
+            [(target, f"Target{target}") for target in range(2000, 2011)],
+        )
         for target in range(2000, 2010):
             await send_friend_request(self.db, self.alice, target)
         with self.assertRaises(FriendError):
