@@ -60,6 +60,21 @@ class RuntimeMonitorTests(unittest.TestCase):
         self.assertNotIn("987654321012345678", str(routes))
         self.assertNotIn("0123456789abcdef", str(routes))
 
+    def test_database_and_backup_errors_redact_credentials_before_snapshot(self):
+        monitor = RuntimeMonitor(clock=lambda: 1000.0)
+        monitor.record_database_probe(
+            False,
+            "connect failed postgresql://admin:super-secret@db.internal/game?token=abc123",
+        )
+        monitor.record_backup_failure("upload failed password=hunter2 Bearer eyJhbGciOiJIUzI1NiJ9")
+        snapshot = str(monitor.snapshot(3600))
+        self.assertIn("admin:[redacted]@db.internal", snapshot)
+        self.assertIn("token=[redacted]", snapshot)
+        self.assertIn("password=[redacted]", snapshot)
+        self.assertIn("Bearer [redacted]", snapshot)
+        for secret in ("super-secret", "abc123", "hunter2", "eyJhbGciOiJIUzI1NiJ9"):
+            self.assertNotIn(secret, snapshot)
+
     def test_missing_or_stale_backup_is_reported(self):
         now = [1000.0]
         monitor = RuntimeMonitor(clock=lambda: now[0])
