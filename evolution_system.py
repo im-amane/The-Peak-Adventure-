@@ -110,6 +110,8 @@ def scale_evolved_monster(monster):
 
 def is_evolved_spawn(mastered, roll):
     """A mastered species has a 25% chance to appear in its evolved form."""
+    if type(mastered) is not bool:
+        raise EvolutionError("mastered must be a boolean mastery flag.")
     if not isinstance(roll, int) or isinstance(roll, bool) or not 1 <= roll <= 100:
-        raise ValueError("roll must be an integer from 1 to 100")
-    return bool(mastered) and roll <= 25
+        raise EvolutionError("roll must be an integer from 1 to 100.")
+    return mastered and roll <= 25
