@@ -3229,7 +3229,7 @@ async def creator_legacy_cmd(message: Message):
 async def help_cmd(message: Message):
     await message.answer(
         "<b>📖 Adventure Guide</b>\n"
-        "/start - Main menu\n/profile - Your hero stats\n/stamina - Check stamina\n/explore - Find a monster (10 stamina)\n"
+        "/start - Main menu\n/credits - Game creator and official credits\n/legacy - Read the secret creator chronicle\n/profile - Your hero stats\n/stamina - Check stamina\n/explore - Find a monster (10 stamina)\n"
         "/inventory - Potions and items\n/map - World and boss milestones\n"
         "/quests - Current objectives\n/missions - Daily objectives and rewards\n/weekly - Weekly objectives and rewards\n/event - Shared roaming world event\n/daily - Daily coins and potion\n"
         "/leaderboard - Top adventurers\n/players username - Search visible players\n/heal - Restore HP (uses 30 coins)\n"
