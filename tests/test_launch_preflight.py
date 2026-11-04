@@ -66,6 +66,21 @@ class LaunchPreflightTests(unittest.TestCase):
         self.assertIn("backup_interval_invalid", codes)
         self.assertIn("backup_retention_invalid", codes)
 
+    def test_postgres_backup_configuration_defaults_to_database_mount(self):
+        env = self.valid_environment()
+        env.pop("DATABASE_PATH")
+        env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
+        self.assertEqual(inspect_environment(env), [])
+
+    def test_relative_postgres_backup_directory_warns_and_bad_retention_fails(self):
+        env = self.valid_environment()
+        env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
+        env["POSTGRES_BACKUP_DIR"] = "postgres_backups"
+        env["POSTGRES_BACKUP_RETENTION"] = "0"
+        codes = {issue["code"] for issue in inspect_environment(env)}
+        self.assertIn("postgres_backup_dir_not_absolute", codes)
+        self.assertIn("postgres_backup_retention_invalid", codes)
+
     def test_warns_when_telegram_stars_are_enabled(self):
         env = self.valid_environment()
         env["ENABLE_TELEGRAM_STARS"] = "true"
