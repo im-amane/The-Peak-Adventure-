@@ -156,3 +156,55 @@ def download_backup(
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
+
+def restore_offsite_postgres_backup(
+    *,
+    bucket: str,
+    key: str,
+    database_url: str,
+    confirm_database: str,
+    target_database_is_disposable: bool,
+    region: str = "us-east-1",
+    endpoint_url: str | None = None,
+    s3_client=None,
+) -> dict:
+    """Verify and restore an off-site archive into an explicitly disposable DB.
+
+    The remote object's SHA-256 and byte length are checked before the archive
+    is handed to pg_restore. The target must be explicitly declared disposable
+    and its exact database name must be confirmed by postgres_backup.restore_backup.
+    The downloaded archive and checksum sidecar are always removed afterwards.
+    """
+    if target_database_is_disposable is not True:
+        raise ValueError("Off-site restore requires explicit confirmation that the target database is disposable.")
+    if not isinstance(confirm_database, str) or not confirm_database.strip():
+        raise ValueError("Exact target database confirmation is required.")
+
+    from postgres_backup import restore_backup, verify_backup
+
+    with tempfile.TemporaryDirectory(prefix="peak-offsite-restore-") as directory:
+        archive = download_backup(
+            bucket=bucket,
+            key=key,
+            destination=Path(directory) / "offsite-postgres.dump",
+            region=region,
+            endpoint_url=endpoint_url,
+            write_checksum_sidecar=True,
+            s3_client=s3_client,
+        )
+        if not verify_backup(archive, database_url):
+            raise RuntimeError("Off-site PostgreSQL archive failed local integrity or readability verification.")
+        digest = _sha256(archive)
+        restore_backup(
+            archive,
+            database_url,
+            confirm_database=confirm_database,
+        )
+        return {
+            "object_key": key,
+            "sha256": digest,
+            "target_database": confirm_database,
+            "verified": True,
+            "restored": True,
+        }
+
