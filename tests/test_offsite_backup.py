@@ -1,3 +1,4 @@
+import hashlib
 import os
 import tempfile
 import unittest
@@ -100,8 +101,8 @@ class OffsiteBackupTests(unittest.TestCase):
         self.assertTrue(sidecar.is_file())
         self.assertEqual(
             sidecar.read_text(encoding="ascii"),
-            __import__("hashlib").sha256(destination.read_bytes()).hexdigest()
-            + "  database.dump\\n",
+            hashlib.sha256(destination.read_bytes()).hexdigest()
+            + "  database.dump\n",
         )
 
     def test_download_rejects_missing_checksum_metadata(self):
