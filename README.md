@@ -19,6 +19,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - One-time boss clears, player XP/levels, coins, HP and leaderboards
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
+- Automatic group welcome messages for new members, with onboarding steps, group-registration guidance and Amane Fujimiya creator branding
 - Four-player parties with leader-only invitations, accept/decline controls, roster view, leave, disband and automatic leadership handoff
 - Persistent friend requests, friend list, removal, duplicate-request protection and pending-request anti-spam limits
 - Player trading for coins and health potions with dual confirmation
