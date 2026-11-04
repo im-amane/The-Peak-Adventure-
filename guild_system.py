@@ -332,7 +332,8 @@ async def create_guild_invite(db,guild_id,actor_id,target_id):
 
 @_transactional
 async def respond_guild_invite(db,invite_id,target_id,accept):
-    if not valid_id(invite_id) or not valid_id(target_id): raise GuildFeatureError("Invalid guild invitation.")
+    if not valid_id(invite_id) or not valid_id(target_id) or type(accept) is not bool:
+        raise GuildFeatureError("Invalid guild invitation.")
     cur=await db.execute("SELECT guild_id,target_id,status FROM guild_invites WHERE invite_id=?",(invite_id,))
     invite=await cur.fetchone()
     if not invite or invite["status"]!="pending": raise GuildFeatureError("This invitation is no longer active.")
@@ -360,7 +361,7 @@ async def respond_guild_invite(db,invite_id,target_id,accept):
 
 @_transactional
 async def set_guild_role(db,guild_id,actor_id,target_id,role):
-    if not all(valid_id(x) for x in (guild_id,actor_id,target_id)) or role not in {"officer","member"}:
+    if not all(valid_id(x) for x in (guild_id,actor_id,target_id)) or not isinstance(role, str) or role not in {"officer","member"}:
         raise GuildFeatureError("Invalid guild role update.")
     cur=await db.execute("SELECT role FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,actor_id))
     actor=await cur.fetchone()
@@ -378,7 +379,9 @@ async def send_guild_message(db,guild_id,user_id,message):
         raise GuildFeatureError("Invalid guild chat account.")
     if not await guild_role(db,guild_id,user_id):
         raise GuildFeatureError("Only guild members can use guild chat.")
-    message=" ".join(str(message or "").split())
+    if not isinstance(message, str):
+        raise GuildFeatureError("Guild message must be text.")
+    message=" ".join(message.split())
     if not message or len(message)>500:
         raise GuildFeatureError("Guild messages must contain 1 to 500 characters.")
     insert_sql = (
@@ -400,8 +403,10 @@ async def get_guild_chat(db,guild_id,user_id,limit=10):
 
 @_transactional
 async def set_guild_announcement(db,guild_id,actor_id,message):
+    if not isinstance(message, str):
+        raise GuildFeatureError("Guild announcement must be text.")
     if not await _officer(db,guild_id,actor_id): raise GuildFeatureError("Only guild leaders and officers can post announcements.")
-    message=" ".join(str(message or "").split())
+    message=" ".join(message.split())
     if not message or len(message)>500: raise GuildFeatureError("Announcement must contain 1 to 500 characters.")
     await db.execute("""INSERT INTO guild_announcements(guild_id,message,author_id) VALUES(?,?,?)
       ON CONFLICT(guild_id) DO UPDATE SET message=excluded.message,author_id=excluded.author_id,updated_at=CURRENT_TIMESTAMP""",
@@ -444,7 +449,7 @@ async def get_guild_missions(db,guild_id,mission_date=None):
 
 
 async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
-    key=ACTIVITY.get(kind)
+    key=ACTIVITY.get(kind) if isinstance(kind, str) else None
     if key is None or not valid_id(guild_id) or not valid_id(user_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=20:
         raise GuildFeatureError("Invalid guild activity.")
     cur=await db.execute("SELECT 1 FROM guild_members WHERE guild_id=? AND user_id=?",(guild_id,user_id))
@@ -500,7 +505,9 @@ async def award_guild_xp(db,guild_id,amount):
 
 @_transactional
 async def claim_guild_mission(db,guild_id,user_id,mission_id,mission_date=None):
-    if mission_id not in MISSIONS or not await _officer(db,guild_id,user_id):
+    if not valid_id(guild_id) or not valid_id(user_id) or not isinstance(mission_id, str) or mission_id not in MISSIONS:
+        raise GuildFeatureError("Only guild leaders and officers can claim a completed mission.")
+    if not await _officer(db,guild_id,user_id):
         raise GuildFeatureError("Only guild leaders and officers can claim a completed mission.")
     date=_date(mission_date)
     missions=await get_guild_missions(db,guild_id,date)
