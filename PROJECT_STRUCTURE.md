@@ -209,7 +209,7 @@ The-Peak-Adventure-/
 - [~] Anti-cheat and economy abuse detection
 - [x] Rate limiting and abuse protection audit
 - [x] SQLite backup and restore automation
-- [ ] Durable PostgreSQL backup and restore automation
+- [~] PostgreSQL logical backup and guarded restore utility (scheduling and durable off-host retention remain)
 - [x] Privacy controls and data deletion workflow
 - [~] Production monitoring and alerting
 
@@ -230,8 +230,8 @@ The-Peak-Adventure-/
 ## Progress summary
 - Total tracked tasks: **172**
 - Fully implemented: **155**
-- Partially implemented: **14**
-- Pending: **3**
+- Partially implemented: **15**
+- Pending: **2**
 - Fully implemented coverage: **90%** (155 / 172; partial and pending items are not counted as complete).
 
 Coverage is implementation-checklist progress, not proof of live production readiness.
