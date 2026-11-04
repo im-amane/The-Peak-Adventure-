@@ -7,6 +7,16 @@ MISSIONS = {
     "boss": ("Boss Breakers", 1, 250, 80),
     "trades": ("Fair Exchange", 2, 100, 30),
 }
+
+GROUP_CAMPAIGN = (
+    {"id": 1, "title": "The Broken Watchtower", "kind": "battles", "target": 10, "coins": 100, "xp": 50,
+     "description": "Win 10 battles together and secure the watchtower."},
+    {"id": 2, "title": "The Warden's Challenge", "kind": "boss", "target": 2, "coins": 200, "xp": 100,
+     "description": "Defeat 2 bosses to recover the watchtower seal."},
+    {"id": 3, "title": "Supply Lines", "kind": "trades", "target": 4, "coins": 300, "xp": 150,
+     "description": "Complete 4 fair trades to rebuild the frontier."},
+)
+CAMPAIGN_BY_ID = {chapter["id"]: chapter for chapter in GROUP_CAMPAIGN}
 ACTIVITY = {"battle":"battles", "boss":"boss", "trade":"trades"}
 
 class GroupError(ValueError):
@@ -94,6 +104,10 @@ async def init_group_tables(db):
           chat_id BIGINT NOT NULL,mission_date TEXT NOT NULL,mission_id TEXT NOT NULL,
           progress INTEGER NOT NULL DEFAULT 0,claimed INTEGER NOT NULL DEFAULT 0,
           PRIMARY KEY(chat_id,mission_date,mission_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS group_campaign_progress(
+          chat_id BIGINT NOT NULL,chapter_id INTEGER NOT NULL,progress INTEGER NOT NULL DEFAULT 0,
+          claimed INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(chat_id,chapter_id)
         )""",
         f"""CREATE TABLE IF NOT EXISTS group_raids(
           raid_id {identity},chat_id BIGINT NOT NULL,boss_level INTEGER NOT NULL,
@@ -212,14 +226,25 @@ async def record_group_activity(db,chat_id,kind,amount=1):
     key=ACTIVITY.get(kind)
     if not valid_chat(chat_id) or key is None or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=20:
         raise GroupError("Invalid group activity.")
+    cur=await db.execute("SELECT chat_id FROM group_profiles WHERE chat_id=?"+_lock_group_sql(db),(chat_id,))
+    if not await cur.fetchone(): raise GroupError("Register this group first.")
     date=today()
     await get_group_missions(db,chat_id,date)
+    await get_group_campaign(db,chat_id)
     target=MISSIONS[key][1]
     progress_expression = "LEAST(?,progress+?)" if _is_postgres(db) else "MIN(?,progress+?)"
     cur=await db.execute(f"UPDATE group_missions SET progress={progress_expression} WHERE chat_id=? AND mission_date=? AND mission_id=?",
       (target,amount,chat_id,date,key))
     if cur.rowcount != 1:
         raise GroupError("Group mission progress could not be recorded.")
+    chapter_cur=await db.execute("SELECT chapter_id,progress,claimed FROM group_campaign_progress WHERE chat_id=? AND claimed=0 ORDER BY chapter_id LIMIT 1",(chat_id,))
+    chapter=await chapter_cur.fetchone()
+    if chapter:
+        definition=CAMPAIGN_BY_ID[chapter["chapter_id"]]
+        if definition["kind"]==key and chapter["progress"]<definition["target"]:
+            cap=definition["target"]
+            expression="LEAST(?,progress+?)" if _is_postgres(db) else "MIN(?,progress+?)"
+            await db.execute(f"UPDATE group_campaign_progress SET progress={expression} WHERE chat_id=? AND chapter_id=? AND claimed=0",(cap,amount,chat_id,chapter["chapter_id"]))
     return await get_group_missions(db,chat_id,date)
 
 @_transactional
@@ -237,6 +262,67 @@ async def claim_group_mission(db,chat_id,user_id,mission_id):
         raise GroupError("This group mission reward was already claimed or is no longer complete.")
     await award_group_xp(db,chat_id,mission["xp"])
     return mission["reward"],mission["xp"]
+
+
+@_transactional
+async def get_group_campaign(db,chat_id):
+    """Return the ordered, persistent group campaign and its claim gates."""
+    if not valid_chat(chat_id):
+        raise GroupError("Invalid Telegram group.")
+    cur=await db.execute("SELECT 1 FROM group_profiles WHERE chat_id=?",(chat_id,))
+    if not await cur.fetchone():
+        raise GroupError("Register this group first.")
+    await db.executemany(
+        "INSERT INTO group_campaign_progress(chat_id,chapter_id) VALUES(?,?) ON CONFLICT(chat_id,chapter_id) DO NOTHING",
+        [(chat_id,chapter["id"]) for chapter in GROUP_CAMPAIGN],
+    )
+    cur=await db.execute("SELECT chapter_id,progress,claimed FROM group_campaign_progress WHERE chat_id=? ORDER BY chapter_id",(chat_id,))
+    rows={row["chapter_id"]:row for row in await cur.fetchall()}
+    result=[]
+    previous_claimed=True
+    for chapter in GROUP_CAMPAIGN:
+        row=rows[chapter["id"]]
+        completed=row["progress"]>=chapter["target"]
+        result.append({
+            **chapter,"progress":row["progress"],"completed":completed,
+            "claimed":bool(row["claimed"]),
+            "unlocked":previous_claimed,
+        })
+        previous_claimed=bool(row["claimed"])
+    return result
+
+
+@_transactional
+async def claim_group_campaign_reward(db,chat_id,user_id,chapter_id):
+    """Claim one completed campaign chapter, advancing the chain atomically."""
+    if not valid_chat(chat_id) or not valid_user(user_id) or not isinstance(chapter_id,int) or isinstance(chapter_id,bool):
+        raise GroupError("Invalid group campaign claim.")
+    if chapter_id not in CAMPAIGN_BY_ID or not await is_group_admin(db,chat_id,user_id):
+        raise GroupError("Only verified group admins can claim a valid campaign chapter.")
+    cur=await db.execute("SELECT chat_id FROM group_profiles WHERE chat_id=?"+_lock_group_sql(db),(chat_id,))
+    if not await cur.fetchone():
+        raise GroupError("Register this group first.")
+    cur=await db.execute("SELECT progress,claimed FROM group_campaign_progress WHERE chat_id=? AND chapter_id=?",(chat_id,chapter_id))
+    row=await cur.fetchone()
+    chapter=CAMPAIGN_BY_ID[chapter_id]
+    if not row or row["progress"]<chapter["target"]:
+        raise GroupError("Complete this campaign chapter before claiming its reward.")
+    if row["claimed"]:
+        raise GroupError("This campaign chapter reward was already claimed.")
+    if chapter_id>1:
+        cur=await db.execute("SELECT claimed FROM group_campaign_progress WHERE chat_id=? AND chapter_id=?",(chat_id,chapter_id-1))
+        previous=await cur.fetchone()
+        if not previous or not previous["claimed"]:
+            raise GroupError("Claim the previous campaign chapter first.")
+    cur=await db.execute("UPDATE group_campaign_progress SET claimed=1 WHERE chat_id=? AND chapter_id=? AND claimed=0 AND progress>=?",
+        (chat_id,chapter_id,chapter["target"]))
+    if cur.rowcount!=1:
+        raise GroupError("This campaign chapter reward was already claimed.")
+    await award_group_xp(db,chat_id,chapter["xp"])
+    cur=await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(chapter["coins"],user_id))
+    if cur.rowcount!=1:
+        raise GroupError("The campaign reward could not be credited.")
+    return chapter["coins"],chapter["xp"]
 
 
 
