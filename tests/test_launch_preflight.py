@@ -16,7 +16,9 @@ class LaunchPreflightTests(unittest.TestCase):
         }
 
     def test_valid_controlled_prototype_configuration_passes(self):
-        self.assertEqual(inspect_environment(self.valid_environment()), [])
+        issues = inspect_environment(self.valid_environment())
+        self.assertEqual({issue["code"] for issue in issues}, {"offsite_backup_not_configured"})
+        self.assertEqual(issues[0]["severity"], "warning")
 
     def test_missing_webapp_url_is_an_error_without_echoing_bot_token(self):
         env = self.valid_environment()
@@ -55,7 +57,10 @@ class LaunchPreflightTests(unittest.TestCase):
         env.pop("DATABASE_PATH")
         env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
         env["POSTGRES_BACKUP_DIR"] = "/data/postgres_backups"
-        self.assertEqual(inspect_environment(env), [])
+        self.assertEqual(
+            {issue["code"] for issue in inspect_environment(env)},
+            {"offsite_backup_not_configured"},
+        )
 
     def test_invalid_port_and_backup_settings_are_errors(self):
         env = self.valid_environment()
@@ -72,7 +77,10 @@ class LaunchPreflightTests(unittest.TestCase):
         env.pop("DATABASE_PATH")
         env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
         env["POSTGRES_BACKUP_DIR"] = "/data/postgres_backups"
-        self.assertEqual(inspect_environment(env), [])
+        self.assertEqual(
+            {issue["code"] for issue in inspect_environment(env)},
+            {"offsite_backup_not_configured"},
+        )
 
     def test_relative_postgres_backup_directory_warns_and_bad_retention_fails(self):
         env = self.valid_environment()
@@ -82,6 +90,13 @@ class LaunchPreflightTests(unittest.TestCase):
         codes = {issue["code"] for issue in inspect_environment(env)}
         self.assertIn("postgres_backup_dir_not_absolute", codes)
         self.assertIn("postgres_backup_retention_invalid", codes)
+
+    def test_warns_when_offsite_backup_is_not_configured(self):
+        env = self.valid_environment()
+        issues = inspect_environment(env)
+        warning = next(issue for issue in issues if issue["code"] == "offsite_backup_not_configured")
+        self.assertEqual(warning["severity"], "warning")
+        self.assertIn("off-site", warning["message"])
 
     def test_warns_when_telegram_stars_are_enabled(self):
         env = self.valid_environment()
