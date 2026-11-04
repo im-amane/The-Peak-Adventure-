@@ -5,9 +5,15 @@ player content are retained in this module.
 """
 from __future__ import annotations
 
+import math
 import time
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from typing import Callable
+
+RECENT_WINDOW_SECONDS = 300
+MIN_RECENT_REQUESTS = 20
+SERVER_ERROR_RATE_THRESHOLD = 0.20
+P95_LATENCY_THRESHOLD_MS = 2_000
 
 
 class RuntimeMonitor:
@@ -20,6 +26,9 @@ class RuntimeMonitor:
         self.routes: dict[str, dict] = defaultdict(
             lambda: {"requests": 0, "failed": 0, "total_latency_ms": 0.0, "last_request_at": None}
         )
+        # Store only timestamp, HTTP status and duration. Never retain request
+        # paths, user IDs, headers, tokens or payloads in the rolling window.
+        self._recent_requests = deque()
         self.database_last_success_at = None
         self.database_last_error = None
         self.backup_last_attempt_at = None
@@ -34,14 +43,40 @@ class RuntimeMonitor:
             route = "/_other"
         status_key = str(status)
         failed = status >= 400
+        latency_ms = max(0.0, float(duration_seconds)) * 1000
         stats = self.routes[route]
         self.requests_total += 1
         self.failed_requests_total += int(failed)
         self.status_counts[status_key] += 1
         stats["requests"] += 1
         stats["failed"] += int(failed)
-        stats["total_latency_ms"] += max(0.0, float(duration_seconds)) * 1000
+        stats["total_latency_ms"] += latency_ms
         stats["last_request_at"] = now
+        self._recent_requests.append((now, int(status), latency_ms))
+        self._prune_recent_requests(now)
+
+    def _prune_recent_requests(self, now: float) -> None:
+        cutoff = now - RECENT_WINDOW_SECONDS
+        while self._recent_requests and self._recent_requests[0][0] < cutoff:
+            self._recent_requests.popleft()
+
+    def _recent_request_summary(self, now: float) -> dict:
+        self._prune_recent_requests(now)
+        entries = list(self._recent_requests)
+        total = len(entries)
+        server_errors = sum(1 for _, status, _ in entries if status >= 500)
+        latencies = sorted(duration for _, _, duration in entries)
+        p95 = (
+            round(latencies[max(0, math.ceil(total * 0.95) - 1)], 2)
+            if total else 0.0
+        )
+        return {
+            "window_seconds": RECENT_WINDOW_SECONDS,
+            "requests": total,
+            "server_errors": server_errors,
+            "server_error_rate": round(server_errors / total, 4) if total else 0.0,
+            "p95_latency_ms": p95,
+        }
 
     def record_database_probe(self, healthy: bool, error: str | None = None) -> None:
         if healthy:
@@ -66,9 +101,19 @@ class RuntimeMonitor:
         backup_reference = self.backup_last_success_at or self.started_at
         backup_stale = current - backup_reference > max(60, backup_interval_seconds * 2)
         backup_failed = self.backup_last_error is not None
+        recent = self._recent_request_summary(current)
+        enough_traffic = recent["requests"] >= MIN_RECENT_REQUESTS
         return {
             "database_unavailable": self.database_last_error is not None,
             "backup_unhealthy": backup_failed or backup_stale,
+            "http_error_rate": (
+                enough_traffic
+                and recent["server_error_rate"] >= SERVER_ERROR_RATE_THRESHOLD
+            ),
+            "slow_responses": (
+                enough_traffic
+                and recent["p95_latency_ms"] >= P95_LATENCY_THRESHOLD_MS
+            ),
         }
 
     def snapshot(self, backup_interval_seconds: int, now: float | None = None) -> dict:
@@ -91,6 +136,7 @@ class RuntimeMonitor:
             "requests_total": self.requests_total,
             "failed_requests_total": self.failed_requests_total,
             "status_counts": dict(self.status_counts),
+            "recent_http": self._recent_request_summary(current),
             "routes": routes,
             "database": {
                 "last_success_at": self.database_last_success_at,
