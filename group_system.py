@@ -1,5 +1,5 @@
 """Persistent Telegram group progression, missions, raids and moderation."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import wraps
 
 MISSIONS = {
@@ -216,11 +216,26 @@ async def award_group_xp(db,chat_id,amount):
 def today():
     return datetime.now(timezone.utc).date().isoformat()
 
+
+def _mission_date(value=None):
+    if value is None:
+        return today()
+    if not isinstance(value, str):
+        raise GroupError("Invalid group mission date.")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise GroupError("Invalid group mission date.") from exc
+    if parsed.isoformat() != value:
+        raise GroupError("Invalid group mission date.")
+    return value
+
+
 @_transactional
 async def get_group_missions(db,chat_id,mission_date=None):
     if not valid_chat(chat_id):
         raise GroupError("Invalid Telegram group.")
-    date=mission_date or today()
+    date=_mission_date(mission_date)
     for key in MISSIONS:
         await db.execute("INSERT INTO group_missions(chat_id,mission_date,mission_id) VALUES(?,?,?) ON CONFLICT DO NOTHING",(chat_id,date,key))
     cur=await db.execute("SELECT mission_id,progress,claimed FROM group_missions WHERE chat_id=? AND mission_date=?",(chat_id,date))

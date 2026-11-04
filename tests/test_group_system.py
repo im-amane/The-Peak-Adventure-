@@ -45,6 +45,13 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(await award_group_xp(self.db,-1001,500),(2,0))
  async def test_invalid_xp(self):
   with self.assertRaises(GroupError): await award_group_xp(self.db,-1001,0)
+ async def test_group_mission_reads_reject_noncanonical_dates(self):
+  for value in (True, [], "not-a-date", "2026-02-30", "2026-1-1", "2026-W01"):
+   with self.subTest(value=value),self.assertRaisesRegex(GroupError,"mission date"):
+    await get_group_missions(self.db,-1001,value)
+  cur=await self.db.execute("SELECT COUNT(*) FROM group_missions WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())[0],0)
+
  async def test_daily_mission_progress(self):
   rows=await record_group_activity(self.db,-1001,"battle",10); self.assertTrue(next(x for x in rows if x["id"]=="battles")["completed"])
  async def test_claim_once_and_admin_only(self):
