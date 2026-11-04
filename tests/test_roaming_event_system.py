@@ -27,6 +27,18 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["event_id"], second["event_id"])
         self.assertEqual(second["monster_name"], "Mire Colossus")
 
+    async def test_nonexistent_player_cannot_damage_or_join_roaming_event(self):
+        event = await get_or_create_roaming_event(self.db, 1, 3, "Mire Colossus", 100, now=1000)
+        with self.assertRaisesRegex(RoamingEventError, "Player account not found"):
+            await attack_roaming_event(self.db, event["event_id"], 999, 50, now=1000)
+        cur = await self.db.execute("SELECT hp FROM roaming_events WHERE event_id=?", (event["event_id"],))
+        self.assertEqual((await cur.fetchone())["hp"], 2000)
+        cur = await self.db.execute(
+            "SELECT COUNT(*) AS total FROM roaming_event_participants WHERE event_id=? AND user_id=999",
+            (event["event_id"],),
+        )
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_attack_cooldown_and_shared_damage(self):
         event = await get_or_create_roaming_event(self.db, 1, 3, "Mire Colossus", 5, now=1000)
         result = await attack_roaming_event(self.db, event["event_id"], 1, 20, now=1000)
