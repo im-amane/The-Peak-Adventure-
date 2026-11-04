@@ -79,6 +79,7 @@ async def init_roaming_event_tables(db):
           ends_at INTEGER NOT NULL
         )""",
         "CREATE INDEX IF NOT EXISTS idx_roaming_events_world_status ON roaming_events(world_id,status,ends_at)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_roaming_one_active_per_world ON roaming_events(world_id) WHERE status='active'",
         """CREATE TABLE IF NOT EXISTS roaming_event_participants(
           event_id BIGINT NOT NULL,
           user_id BIGINT NOT NULL,
@@ -112,6 +113,11 @@ async def get_or_create_roaming_event(
     stamp = int(time.time()) if now is None else now
     if not _valid_timestamp(stamp):
         raise RoamingEventError("Invalid event timestamp.")
+    if _is_postgres(db):
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-roaming-world:{world_id}",),
+        )
     await db.execute(
         "UPDATE roaming_events SET status='expired' WHERE status='active' AND ends_at<=?",
         (stamp,),
