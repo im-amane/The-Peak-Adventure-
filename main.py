@@ -5652,6 +5652,8 @@ def miniapp_assets_available() -> bool:
         "pathfinding.js",
         "movement.js",
         "character_profiles.js",
+        "character_animation.js",
+        "monster_animation.js",
     )
     return all((WEB_DIR / filename).is_file() for filename in required)
 
@@ -5675,6 +5677,12 @@ def create_web_app():
 
     async def serve_character_profiles(request: web.Request):
         return web.FileResponse(WEB_DIR / "character_profiles.js")
+
+    async def serve_character_animation(request: web.Request):
+        return web.FileResponse(WEB_DIR / "character_animation.js")
+
+    async def serve_monster_animation(request: web.Request):
+        return web.FileResponse(WEB_DIR / "monster_animation.js")
 
     async def healthz(request: web.Request):
         if not await database_healthcheck():
@@ -5704,6 +5712,8 @@ def create_web_app():
     app.router.add_get("/pathfinding.js", serve_pathfinding)
     app.router.add_get("/movement.js", serve_movement)
     app.router.add_get("/character_profiles.js", serve_character_profiles)
+    app.router.add_get("/character_animation.js", serve_character_animation)
+    app.router.add_get("/monster_animation.js", serve_monster_animation)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)
