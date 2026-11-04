@@ -16,6 +16,7 @@ ASSETS = {
     "/movement.js": (ROOT / "webapp" / "movement.js", "application/javascript; charset=utf-8"),
     "/character_profiles.js": (ROOT / "webapp" / "character_profiles.js", "application/javascript; charset=utf-8"),
     "/character_animation.js": (ROOT / "webapp" / "character_animation.js", "application/javascript; charset=utf-8"),
+    "/monster_animation.js": (ROOT / "webapp" / "monster_animation.js", "application/javascript; charset=utf-8"),
 }
 MARKER = "const STATIC_ASSETS = "
 END_MARKER = "\n\nconst STATIC_PATHS"
