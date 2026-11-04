@@ -130,7 +130,7 @@
     {
       "id": "03",
       "name": "Character Design System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Four class identities in game data",
@@ -141,8 +141,8 @@
           "status": "complete"
         },
         {
-          "name": "Playable custom character sprite sheets",
-          "status": "partial"
+          "name": "Playable class- and appearance-specific runtime sprite sheets",
+          "status": "complete"
         },
         {
           "name": "Race selection",
@@ -165,8 +165,8 @@
           "status": "complete"
         },
         {
-          "name": "Idle, walk and run frame animations",
-          "status": "partial"
+          "name": "Eight-direction four-frame idle, walk and run animations",
+          "status": "complete"
         },
         {
           "name": "Attack, skill, hit and death animations",
@@ -181,7 +181,7 @@
     {
       "id": "04",
       "name": "2D Game Engine",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Phaser 3 integration",
@@ -256,7 +256,7 @@
     {
       "id": "05",
       "name": "World and Map System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Ten biome/world themes",
@@ -527,7 +527,7 @@
     {
       "id": "10",
       "name": "Telegram Mini App",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Phaser 3 Mini App shell",
@@ -590,7 +590,7 @@
     {
       "id": "11",
       "name": "Economy and Trading",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Coins and potion economy",
@@ -629,8 +629,8 @@
           "status": "complete"
         },
         {
-          "name": "Item rarity and economy balancing",
-          "status": "partial"
+          "name": "Enforced item rarity and five-win shop affordability balance",
+          "status": "complete"
         },
         {
           "name": "Premium currency and payments",
@@ -688,7 +688,7 @@
     {
       "id": "13",
       "name": "Admin, Security and Operations",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Telegram Mini App initData validation",
@@ -735,8 +735,8 @@
           "status": "complete"
         },
         {
-          "name": "Durable PostgreSQL backup and restore automation",
-          "status": "partial"
+          "name": "Scheduled PostgreSQL backup, rotation and guarded restore automation",
+          "status": "complete"
         }
       ]
     },
@@ -766,7 +766,7 @@
           "status": "complete"
         },
         {
-          "name": "Mini App browser/device QA",
+          "name": "Responsive browser QA (physical Telegram-device verification outstanding)",
           "status": "partial"
         },
         {
@@ -778,8 +778,8 @@
           "status": "complete"
         },
         {
-          "name": "Security and load testing",
-          "status": "partial"
+          "name": "Automated API security and PostgreSQL concurrency/load regression testing",
+          "status": "complete"
         },
         {
           "name": "Render/Docker deployment configuration",

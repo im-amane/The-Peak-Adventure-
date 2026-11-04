@@ -79,3 +79,110 @@ jobs:
       - run: python -m unittest discover -s tests -p "test_matchmaking_postgres.py" -v
       - run: python -m unittest discover -s tests -p "test_miniapp_postgres_http.py" -v
       - run: python -m unittest discover -s tests -p "test_postgres_backup_integration.py" -v
+
+  miniapp-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install --no-save --package-lock=false playwright
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke test responsive Mini App and generated character atlas
+        run: |
+          python3 -m http.server 8765 --directory webapp >/tmp/peak-miniapp-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8765/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { chromium } from "playwright";
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const page = await browser.newPage({
+              viewport: { width: 390, height: 844 },
+              isMobile: true,
+              hasTouch: true
+            });
+            await page.addInitScript(() => {
+              window.Phaser = {
+                Scene: class {},
+                AUTO: 0,
+                Scale: { FIT: 1, CENTER_BOTH: 1 },
+                Input: { Keyboard: { KeyCodes: { SHIFT: "SHIFT" }, JustDown: () => false } },
+                Math: {
+                  Clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+                  Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) }
+                }
+              };
+            });
+            const pageErrors = [];
+            page.on("pageerror", error => pageErrors.push(error.message));
+            await page.route("https://telegram.org/**", route => route.abort());
+            await page.route("https://cdn.jsdelivr.net/**", route => route.abort());
+            await page.goto("http://127.0.0.1:8765/", { waitUntil: "domcontentloaded" });
+            await page.waitForFunction(() =>
+              window.PeakCharacterAnimation && window.PeakCharacters && window.PeakMovement
+            );
+
+            const result = await page.evaluate(() => {
+              const calls = [];
+              const fakeScene = {
+                textures: {
+                  addSpriteSheet(key, canvas, config) {
+                    calls.push({ key, width: canvas.width, height: canvas.height, config });
+                  }
+                },
+                add: {
+                  sprite(x, y, key, frame) {
+                    return {
+                      x, y, key, frame,
+                      setOrigin() { return this; },
+                      setDepth() { return this; },
+                      play(animationKey) { this.initialAnimation = animationKey; return this; }
+                    };
+                  }
+                },
+                anims: {
+                  create(config) { calls.push({ animation: config.key, frames: config.frames.length }); },
+                  generateFrameNumbers(_key, range) {
+                    return Array.from({ length: range.end - range.start + 1 }, (_, index) => range.start + index);
+                  }
+                }
+              };
+              const profile = window.PeakCharacters.resolveCharacterProfile("Archer", {
+                race: "Elf", hair: "long", skin: "deep", outfit: "ranger", body: "broad"
+              });
+              const sprite = window.PeakCharacterAnimation.createSpriteSheet(fakeScene, profile, 80, 90);
+              return {
+                title: document.title,
+                touchDirections: document.querySelectorAll("[data-dir]").length,
+                sprintControl: Boolean(document.getElementById("sprint-control")),
+                canvas: calls.find(call => call.width),
+                animationCount: calls.filter(call => call.animation).length,
+                clipCount: sprite.characterAnimations.length,
+                initialAnimation: sprite.initialAnimation,
+                profileClass: sprite.characterProfile.className
+              };
+            });
+
+            assert.equal(result.title, "The Peak Adventure");
+            assert.equal(result.touchDirections, 4);
+            assert.equal(result.sprintControl, true);
+            assert.deepEqual([result.canvas.width, result.canvas.height], [256, 1920]);
+            assert.equal(result.canvas.config.frameWidth, 64);
+            assert.equal(result.canvas.config.frameHeight, 80);
+            assert.equal(result.animationCount, 24);
+            assert.equal(result.clipCount, 24);
+            assert.match(result.initialAnimation, /idle-south$/);
+            assert.equal(result.profileClass, "Archer");
+            assert.deepEqual(pageErrors, []);
+          } finally {
+            await browser.close();
+          }
+          NODE

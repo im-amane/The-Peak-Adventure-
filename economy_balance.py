@@ -56,3 +56,24 @@ def audit_shop_affordability(shop_items: dict) -> list[dict]:
             "wins_to_afford": wins_to_afford(cost, reward),
         })
     return report
+
+
+
+def validate_shop_affordability(shop_items: dict, *, max_wins: int = 5) -> list[dict]:
+    """Fail startup when an item costs more than the allowed clean-win budget."""
+    if type(max_wins) is not int or max_wins < 1:
+        raise ValueError("max_wins must be a positive integer")
+    report = audit_shop_affordability(shop_items)
+    over_budget = [
+        item for item in report
+        if item["wins_to_afford"] > max_wins
+    ]
+    if over_budget:
+        offenders = ", ".join(
+            f'{item["item_id"]} ({item["wins_to_afford"]} wins)'
+            for item in over_budget
+        )
+        raise ValueError(
+            f"Shop affordability exceeds the {max_wins}-win progression budget: {offenders}"
+        )
+    return report

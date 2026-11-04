@@ -2,7 +2,7 @@
 
 A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is maintained in this dedicated repository, separate from the original music-bot repository.
 
-**Project status:** 163 of 172 tracked implementation items are complete (95%); 7 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) for exact status; [the project structure](PROJECT_STRUCTURE.md) describes repository layout.
+**Project status:** 168 of 172 tracked implementation items are complete (98%); 2 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) for exact status; [the project structure](PROJECT_STRUCTURE.md) describes repository layout.
 
 ## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
@@ -161,20 +161,19 @@ node --test cloudflare/worker.test.mjs
 The repository includes a GitHub Actions workflow configured to compile Python, import the bot module and run the automated test suite on pushes and pull requests to `main`.
 
 ## Remaining development and launch readiness
-Implemented in the repository: ten world biomes, level-gated travel with walk-up portals and landmarks, A-star tap-to-move navigation around obstacles, three-room dungeons, boss-gated hidden areas, daily and weekly missions, party co-op encounters, guild chat/raids/wars, player search, equipment auctions, monster evolution and elite encounters, face/body/hair/outfit customization with class-based weapon and armor visuals, suspicious-activity telemetry with admin review, procedural attack/skill/hit/death and level-up/respawn effects, ambient music with saved sound preferences, and the authenticated Mini App HUD. The Peak Gems wallet, Telegram Stars invoices, idempotent payment crediting, gem shop consumables and XP boosts are implemented.
+Implemented in the repository: ten world biomes, level-gated travel with walk-up portals and landmarks, A-star tap-to-move navigation around obstacles, three-room dungeons, boss-gated hidden areas, daily and weekly missions, party co-op encounters, guild chat/raids/wars, player search, equipment auctions, monster evolution and elite encounters, face/body/hair/outfit customization, class- and appearance-specific 96-frame character sprite sheets with eight-direction idle/walk/run animation, class-based weapon and armor visuals, suspicious-activity telemetry with admin review, procedural attack/skill/hit/death and level-up/respawn effects, ambient music with saved sound preferences, and the authenticated Mini App HUD. Shop rarity tiers and a five-clean-win affordability guard are validated at startup. PostgreSQL logical backup, rotation, checksum verification and guarded restore automation are integrated with the database scheduler. The Peak Gems wallet, Telegram Stars invoices, idempotent payment crediting, gem shop consumables and XP boosts are implemented.
 
 Work still needed before calling the game production-ready:
 - Expand portal-linked biomes into larger connected zones with secret areas and richer traversal.
-- Replace procedural character presentation with polished sprite sheets and complete idle/run/death/level-up animations; class-based weapon visuals and basic procedural movement/combat effects are already present.
-- Finish balance and economy testing across all classes, monster traits, evolved/elite variants, crafting, auctions, premium purchases and multiplayer rewards.
-- Run browser and real-device QA, including Android Telegram Mini App testing, reconnects, and concurrent multiplayer sessions.
-- Configure the production Python backend origin and persistent database, then verify the complete Telegram → Cloudflare Worker → backend flow.
-- Complete live Telegram bot, production backup-restore, security and load testing.
-- Give the 100-monster narrative catalogue a final editorial pass so every entry feels individually authored.
+- Finish broader economy balance testing across class matchups, monster traits, evolved/elite variants, crafting, auctions, premium purchases and multiplayer rewards; shop rarity and unlock-level affordability guardrails are already automated.
+- Complete physical-device QA on Android/iOS Telegram WebViews, including reconnects and concurrent multiplayer sessions. A responsive mobile Chromium smoke test now runs in CI.
+- Configure and verify the production Python backend origin, HTTPS endpoint and persistent PostgreSQL database, then test the full Telegram → Cloudflare Worker → backend flow.
+- Run the live Telegram bot smoke test with the production bot token and an authorized test chat.
+- Rehearse production off-site backup/restore and run controlled production-like traffic tests; automated PostgreSQL restore and concurrent rate-limit regression tests already run in CI.
 
 Telegram Stars purchases are disabled by default. Enable them only after setting package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true. The in-game gem shop can still spend gems already in a player wallet.
 
-The PR #201 regression run completed successfully: both the standard `test` job and the PostgreSQL 16 `postgres-adapter` job passed. The workflow also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests. This automated result does not replace live Telegram, Android WebView, production database or off-site restore validation. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
+The PR #204 regression run completed successfully: both the standard `test` job and the PostgreSQL 16 `postgres-adapter` job passed. The workflow also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests, Worker tests and PostgreSQL backup/restore integration. The new PR adds a mobile Chromium smoke job for touch controls and generated sprite sheets. Automated checks do not replace physical Android/iOS WebView, live Telegram, production database or production off-site restore validation. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
 
 The current hosting configuration is the single-instance Render prototype in `render.yaml`. No production launch or live end-to-end Telegram verification has been certified. Do not provision paid resources or deploy until the owner explicitly authorizes it.
 
