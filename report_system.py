@@ -93,6 +93,9 @@ async def submit_player_report(db, reporter_id, target_id, reason, now=None):
     stamp = int(time.time()) if now is None else now
     if not isinstance(stamp,int) or isinstance(stamp,bool) or stamp<0:
         raise ReportError("Invalid report timestamp.")
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (reporter_id,))
+    if not await cur.fetchone():
+        raise ReportError("Reporter account not found.")
     cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (target_id,))
     if not await cur.fetchone():
         raise ReportError("That player account does not exist.")
