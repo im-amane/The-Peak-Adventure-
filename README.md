@@ -2,7 +2,7 @@
 
 A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is maintained in this dedicated repository, separate from the original music-bot repository.
 
-**Project status:** 161 of 172 tracked implementation items are complete (93%); 9 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) and [the synchronized project structure](PROJECT_STRUCTURE.md) for exact scope and remaining launch gates.
+**Project status:** 163 of 172 tracked implementation items are complete (95%); 7 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) for exact status; [the project structure](PROJECT_STRUCTURE.md) describes repository layout.
 
 ## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
@@ -248,7 +248,7 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 
 ## Security and abuse monitoring
 - Mini App gameplay remains server-authoritative; clients submit actions, never damage or rewards.
-- Malformed battle, world, dungeon, story and social requests are recorded in a bounded-detail security event log.
+- Malformed battle, world, dungeon, story, social and premium-shop requests are recorded in a bounded-detail security event log.
 - Administrators can review aggregated suspicious activity with `/admin security` or inspect a player with `/admin security PLAYER_ID`.
 - Security telemetry is reviewed for investigation and does not automatically ban players.
 
