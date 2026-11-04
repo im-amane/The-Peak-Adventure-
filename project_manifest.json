@@ -241,7 +241,7 @@
         },
         {
           "name": "Advanced physics and pathfinding",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Particle and spell effects",
@@ -579,7 +579,7 @@
         },
         {
           "name": "Polished responsive visual design and accessibility audit",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Privacy and notification settings screen",
@@ -798,17 +798,17 @@
   ],
   "progress_summary": {
     "total_items": 172,
-    "complete_items": 156,
-    "partial_items": 14,
+    "complete_items": 158,
+    "partial_items": 12,
     "pending_items": 2,
-    "fully_implemented_percent": 91,
+    "fully_implemented_percent": 92,
     "calculation": "complete_items / total_items; partial and pending items are excluded"
   },
   "progress": {
-    "complete": 156,
-    "partial": 14,
+    "complete": 158,
+    "partial": 12,
     "pending": 2,
     "total": 172,
-    "percentage": 91
+    "percentage": 92
   }
 }
