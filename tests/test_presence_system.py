@@ -30,6 +30,11 @@ class PresenceTests(unittest.IsolatedAsyncioTestCase):
    cur=await db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='player_presence'")
    self.assertIsNone(await cur.fetchone())
   finally: await db.close()
+ async def test_presence_touch_does_not_create_orphan_for_missing_player(self):
+  await touch_presence(self.db,999)
+  cur=await self.db.execute("SELECT COUNT(*) AS total FROM player_presence WHERE user_id=999")
+  self.assertEqual((await cur.fetchone())["total"],0)
+
  async def test_presence_touch_creates_online_record(self):
   await touch_presence(self.db,1)
   self.assertEqual(await count_online_players(self.db),1)
