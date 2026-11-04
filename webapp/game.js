@@ -1277,8 +1277,10 @@
         const y=h*(index%2===0?0.68:0.76);
         const sprite=makeMonster(this,x,y,monster.level,monsterColor);
         const label=this.add.text(x,y-48,(monster.boss?"👑 ":"")+monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
-        this.tweens.add({targets:sprite,y:sprite.y-5,duration:800+index*90,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
-        return {sprite,data:monster,label};
+        return {
+          sprite,data:monster,label,baseX:x,baseY:y,
+          animationState:"idle",animationStartedAt:this.time.now
+        };
       });
       this.selectedMonster=null;
       this.movePath=[];
@@ -1315,10 +1317,16 @@
       });
       this.physics=null;
     }
+    setMonsterAnimation(entry,state){
+      if(!entry)return;
+      entry.animationState=state;
+      entry.animationStartedAt=this.time.now;
+    }
     playCombatAnimation(action){
       if(!this.hero)return;
       const limbs=this.hero.limbs||{};
       if(action==="attack"||action==="skill"){
+        this.setMonsterAnimation(this.selectedMonster,"hit");
         const arm=limbs.rightArm;
         if(arm)this.tweens.add({targets:arm,rotation:action==="skill"?-1.9:-1.45,duration:95,yoyo:true,repeat:1,ease:"Back.easeOut"});
         const target=this.selectedMonster&&this.selectedMonster.sprite;
@@ -1331,10 +1339,12 @@
         const aura=this.add.circle(this.hero.x,this.hero.y,22,0x8bd89b,0.24).setDepth(9);
         this.tweens.add({targets:aura,scale:2,alpha:0,duration:380,onComplete:()=>aura.destroy()});
       }else if(action==="hit"){
+        this.setMonsterAnimation(this.selectedMonster,"attack");
         this.tweens.add({targets:this.hero,alpha:0.35,duration:65,yoyo:true,repeat:2});
       }else if(action==="death"){
         this.tweens.add({targets:this.hero,alpha:0.12,angle:82,y:this.hero.y+9,duration:420,ease:"Cubic.easeIn"});
       }else if(action==="victory"){
+        this.setMonsterAnimation(this.selectedMonster,"defeated");
         this.tweens.add({targets:this.hero,y:this.hero.y-22,duration:180,yoyo:true,ease:"Back.easeOut"});
       }
     }
@@ -1492,6 +1502,22 @@
         this.npc.limbs.leftArm.rotation=idle;
         this.npc.limbs.rightArm.rotation=-idle;
       }
+      this.monsters.forEach(entry=>{
+        const elapsed=this.time.now-entry.animationStartedAt;
+        let pose=window.PeakMonsterAnimation.getPose(entry.animationState,elapsed,
+          this.hero.x>=entry.baseX?-1:1);
+        if(pose.complete){
+          entry.animationState="idle";
+          entry.animationStartedAt=this.time.now;
+          pose=window.PeakMonsterAnimation.getPose("idle",this.time.now);
+        }else if(entry.animationState==="idle"){
+          pose=window.PeakMonsterAnimation.getPose("idle",this.time.now);
+        }
+        entry.sprite.setPosition(entry.baseX+pose.offsetX,entry.baseY+pose.offsetY);
+        entry.sprite.setScale(pose.scaleX,pose.scaleY);
+        entry.sprite.setRotation(pose.rotation);
+        entry.sprite.setAlpha(pose.alpha);
+      });
       let closest=null,closestDistance=Infinity;
       this.monsters.forEach(entry=>{
         const distance=Phaser.Math.Distance.Between(this.hero.x,this.hero.y,entry.sprite.x,entry.sprite.y);
