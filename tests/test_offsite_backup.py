@@ -109,7 +109,7 @@ class OffsiteBackupTests(unittest.TestCase):
         destination = Path(self.temp.name) / "database.dump"
         destination.write_bytes(b"known good local file")
         sidecar = Path(str(destination) + ".sha256")
-        sidecar.write_text("known-good-checksum\\n", encoding="ascii")
+        sidecar.write_text("known-good-checksum\n", encoding="ascii")
         original_write_text = Path.write_text
         def fail_new_sidecar(path, data, *args, **kwargs):
             if path.name.endswith(".tmp") and ".sha256" in path.name:
@@ -123,7 +123,7 @@ class OffsiteBackupTests(unittest.TestCase):
                     s3_client=self.client,
                 )
         self.assertEqual(destination.read_bytes(), b"known good local file")
-        self.assertEqual(sidecar.read_text(encoding="ascii"), "known-good-checksum\\n")
+        self.assertEqual(sidecar.read_text(encoding="ascii"), "known-good-checksum\n")
         self.assertFalse(any(path.name.startswith(".offsite-download-") for path in Path(self.temp.name).iterdir()))
 
     def test_download_rejects_missing_checksum_metadata(self):
