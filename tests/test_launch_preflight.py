@@ -77,7 +77,10 @@ class LaunchPreflightTests(unittest.TestCase):
         env.pop("DATABASE_PATH")
         env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
         env["POSTGRES_BACKUP_DIR"] = "/data/postgres_backups"
-        self.assertEqual(inspect_environment(env), [])
+        self.assertEqual(
+            {issue["code"] for issue in inspect_environment(env)},
+            {"offsite_backup_not_configured"},
+        )
 
     def test_relative_postgres_backup_directory_warns_and_bad_retention_fails(self):
         env = self.valid_environment()
