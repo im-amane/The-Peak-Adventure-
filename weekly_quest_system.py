@@ -1,5 +1,6 @@
 """Weekly rotating objectives with persistent progress and one-time rewards."""
 from datetime import datetime, timezone, timedelta
+import math
 import time
 
 WEEKLY_QUESTS = (
@@ -39,8 +40,19 @@ async def _rollback_transaction(db, nested, savepoint):
         await db.rollback()
 
 
+def _timestamp(now=None):
+    value = time.time() if now is None else now
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise WeeklyQuestError("Invalid weekly quest timestamp.")
+    try:
+        datetime.fromtimestamp(value, timezone.utc)
+    except (OverflowError, OSError, ValueError) as exc:
+        raise WeeklyQuestError("Invalid weekly quest timestamp.") from exc
+    return value
+
+
 def current_week_key(now=None):
-    stamp = datetime.fromtimestamp(time.time() if now is None else now, timezone.utc)
+    stamp = datetime.fromtimestamp(_timestamp(now), timezone.utc)
     iso = stamp.isocalendar()
     return f"{iso.year}-W{iso.week:02d}"
 
@@ -71,7 +83,7 @@ async def _ensure_week(db, user_id, week_key):
 async def record_weekly_progress(db, user_id, kind, amount=1, now=None):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise WeeklyQuestError("Invalid player account.")
-    if kind not in {"wins", "bosses", "crafts", "landmarks"}:
+    if not isinstance(kind, str) or kind not in {"wins", "bosses", "crafts", "landmarks"}:
         raise WeeklyQuestError("Unknown weekly progress type.")
     if not isinstance(amount, int) or isinstance(amount, bool) or not 1 <= amount <= 100:
         raise WeeklyQuestError("Invalid weekly progress amount.")
@@ -94,7 +106,7 @@ async def record_weekly_progress(db, user_id, kind, amount=1, now=None):
 async def get_weekly_quests(db, user_id, now=None):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise WeeklyQuestError("Invalid player account.")
-    stamp = int(time.time() if now is None else now)
+    stamp = _timestamp(now)
     week_key = current_week_key(stamp)
     savepoint = "weekly_quest_read"
     nested = await _begin_transaction(db, savepoint)
