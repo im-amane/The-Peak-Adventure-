@@ -256,6 +256,20 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("javascript", pathfinding.headers.get("Content-Type", ""))
         self.assertIn("PeakPathfinding", await pathfinding.text())
 
+    async def test_operations_alert_loop_notifies_admin_about_http_error_spike(self):
+        main.ADMIN_IDS = {self.user_id}
+        for index in range(20):
+            main.runtime_monitor.record_request("/api/action", 500 if index < 5 else 200, 0.02)
+        bot = type("FakeBot", (), {})()
+        bot.send_message = AsyncMock()
+        with patch("main.database_healthcheck", new=AsyncMock(return_value=True)), patch(
+            "main.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await main.operations_alert_loop(bot)
+        bot.send_message.assert_awaited_once()
+        self.assertIn("server-error rate", bot.send_message.await_args.args[1])
+
 
 if __name__ == "__main__":
     unittest.main()
