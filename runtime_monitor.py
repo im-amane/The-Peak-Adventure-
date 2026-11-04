@@ -28,7 +28,7 @@ class RuntimeMonitor:
         )
         # Store only timestamp, HTTP status and duration. Never retain request
         # paths, user IDs, headers, tokens or payloads in the rolling window.
-        self._recent_requests = deque()
+        self._recent_requests = deque(maxlen=5000)
         self.database_last_success_at = None
         self.database_last_error = None
         self.backup_last_attempt_at = None
@@ -72,6 +72,7 @@ class RuntimeMonitor:
         )
         return {
             "window_seconds": RECENT_WINDOW_SECONDS,
+            "sample_cap": 5000,
             "requests": total,
             "server_errors": server_errors,
             "server_error_rate": round(server_errors / total, 4) if total else 0.0,
