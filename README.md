@@ -2,6 +2,8 @@
 
 A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is maintained in this dedicated repository, separate from the original music-bot repository.
 
+**Project status:** 161 of 172 tracked implementation items are complete (93%); 9 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) and [the synchronized project structure](PROJECT_STRUCTURE.md) for exact scope and remaining launch gates.
+
 ## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
 - 100-level monster catalogue, 10 boss milestones and the original power curve
@@ -130,7 +132,6 @@ Keep `BOT_TOKEN` private. Never deploy production or provision paid resources wi
 - `/party explore` - Start a shared world encounter (leader pays stamina)
 - `/party battle start|status|attack` - Run a shared party boss encounter
 - `/players username` - Search public and friend-visible player profiles
-- `/friend request|accept|decline|list|remove` - Friend system (request by replying to a player in a group)
 - `/guild create|join|leave|info|top|disband` - Guild management
 - `/guild invite|accept|decline` - Guild invitations
 - `/guild role player_id officer|member` - Leader-controlled guild roles
@@ -173,7 +174,7 @@ Work still needed before calling the game production-ready:
 
 Telegram Stars purchases are disabled by default. Enable them only after setting package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true. The in-game gem shop can still spend gems already in a player wallet.
 
-The latest main-branch CI run after PR #145 completed successfully, including the full Python suite and PostgreSQL adapter/integration jobs. CI also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
+The PR #201 regression run completed successfully: both the standard `test` job and the PostgreSQL 16 `postgres-adapter` job passed. The workflow also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests. This automated result does not replace live Telegram, Android WebView, production database or off-site restore validation. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
 
 The current hosting configuration is the single-instance Render prototype in `render.yaml`. No production launch or live end-to-end Telegram verification has been certified. Do not provision paid resources or deploy until the owner explicitly authorizes it.
 
