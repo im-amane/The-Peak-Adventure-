@@ -135,7 +135,9 @@ async def init_group_tables(db):
 async def register_group(db,chat_id,title,owner_id):
     if not valid_chat(chat_id) or not valid_user(owner_id):
         raise GroupError("Only Telegram groups and supergroups can be registered.")
-    title=" ".join(str(title or "").split())[:100]
+    if not isinstance(title, str):
+        raise GroupError("Group title must be text.")
+    title=" ".join(title.split())[:100]
     if not title: raise GroupError("Group title cannot be empty.")
     await db.execute("""INSERT INTO group_profiles(chat_id,title,owner_id) VALUES(?,?,?)
       ON CONFLICT(chat_id) DO UPDATE SET title=excluded.title,owner_id=excluded.owner_id""",
@@ -146,7 +148,7 @@ async def register_group(db,chat_id,title,owner_id):
 
 @_transactional
 async def set_group_admin(db,chat_id,user_id,role):
-    if not valid_chat(chat_id) or not valid_user(user_id) or role not in {"owner","admin"}:
+    if not valid_chat(chat_id) or not valid_user(user_id) or not isinstance(role, str) or role not in {"owner","admin"}:
         raise GroupError("Invalid group administrator.")
     cur=await db.execute("SELECT 1 FROM group_profiles WHERE chat_id=?",(chat_id,))
     if not await cur.fetchone(): raise GroupError("Register this group first.")
@@ -223,7 +225,7 @@ async def get_group_missions(db,chat_id,mission_date=None):
 
 @_transactional
 async def record_group_activity(db,chat_id,kind,amount=1):
-    key=ACTIVITY.get(kind)
+    key=ACTIVITY.get(kind) if isinstance(kind, str) else None
     if not valid_chat(chat_id) or key is None or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=20:
         raise GroupError("Invalid group activity.")
     cur=await db.execute("SELECT chat_id FROM group_profiles WHERE chat_id=?"+_lock_group_sql(db),(chat_id,))
@@ -249,7 +251,9 @@ async def record_group_activity(db,chat_id,kind,amount=1):
 
 @_transactional
 async def claim_group_mission(db,chat_id,user_id,mission_id):
-    if mission_id not in MISSIONS or not await is_group_admin(db,chat_id,user_id):
+    if not valid_chat(chat_id) or not valid_user(user_id) or not isinstance(mission_id, str) or mission_id not in MISSIONS:
+        raise GroupError("Only verified group admins can claim a valid group mission.")
+    if not await is_group_admin(db,chat_id,user_id):
         raise GroupError("Only verified group admins can claim a valid group mission.")
     date=today()
     missions=await get_group_missions(db,chat_id,date)
