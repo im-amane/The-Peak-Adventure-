@@ -83,6 +83,13 @@ class PlayerReportTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_report_timestamp_is_rejected(self):
         with self.assertRaises(ReportError):
             await submit_player_report(self.db, 1, 2, "Repeatedly abusing other players", now=True)
+    async def test_review_note_rejects_non_string_values(self):
+        report_id = await submit_player_report(self.db, 1, 2, "Repeatedly abusing other players", now=1000)
+        for note in (None, True, 123, ["reviewed"], {"note": "reviewed"}):
+            with self.subTest(note=note), self.assertRaisesRegex(ReportError, "Review note must be text"):
+                await resolve_player_report(self.db, report_id, 900, "reviewed", note)
+        self.assertEqual(len(await list_open_reports(self.db)), 1)
+
     async def test_admin_can_resolve_report_once(self):
         report_id = await submit_player_report(self.db, 1, 2, "Repeatedly abusing other players", now=1000)
         self.assertTrue(await resolve_player_report(self.db, report_id, 900, "reviewed", "Checked chat logs"))
