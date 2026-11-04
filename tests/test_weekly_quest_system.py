@@ -78,6 +78,19 @@ class WeeklyQuestTests(unittest.IsolatedAsyncioTestCase):
         hunter=next(row for row in rows if row["id"]=="weekly_hunter")
         self.assertFalse(hunter["claimed"])
 
+    async def test_weekly_operations_reject_missing_player_without_creating_rows(self):
+        now = 1790000000
+        operations = (
+            lambda: record_weekly_progress(self.db, 999, "wins", now=now),
+            lambda: get_weekly_quests(self.db, 999, now=now),
+            lambda: claim_weekly_reward(self.db, 999, "weekly_hunter", now=now),
+        )
+        for operation in operations:
+            with self.assertRaisesRegex(WeeklyQuestError, "Player account not found"):
+                await operation()
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM player_weekly_quests WHERE user_id=999")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_non_string_quest_id_is_rejected(self):
         with self.assertRaises(WeeklyQuestError):
             await claim_weekly_reward(self.db,1,[],now=1790000000)

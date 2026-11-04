@@ -73,6 +73,12 @@ async def init_weekly_tables(db):
         raise
 
 
+async def _require_player(db, user_id):
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise WeeklyQuestError("Player account not found.")
+
+
 async def _ensure_week(db, user_id, week_key):
     await db.executemany(
         "INSERT INTO player_weekly_quests(user_id,week_key,quest_id) VALUES(?,?,?) ON CONFLICT(user_id,week_key,quest_id) DO NOTHING",
@@ -91,6 +97,7 @@ async def record_weekly_progress(db, user_id, kind, amount=1, now=None):
     savepoint = "weekly_quest_progress"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_week(db, user_id, week_key)
         for quest in WEEKLY_QUESTS:
             if quest["kind"] == kind:
@@ -111,6 +118,7 @@ async def get_weekly_quests(db, user_id, now=None):
     savepoint = "weekly_quest_read"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_week(db, user_id, week_key)
         cur = await db.execute(
             "SELECT quest_id,progress,claimed FROM player_weekly_quests WHERE user_id=? AND week_key=?",
@@ -149,6 +157,7 @@ async def claim_weekly_reward(db, user_id, quest_id, now=None):
     savepoint = "weekly_quest_claim"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_week(db, user_id, week_key)
         cur = await db.execute(
             "SELECT progress,claimed FROM player_weekly_quests WHERE user_id=? AND week_key=? AND quest_id=?",
