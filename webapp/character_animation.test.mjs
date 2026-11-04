@@ -20,8 +20,8 @@ test("selects walking pose and swings opposite limbs", () => {
 });
 
 test("selects running pose with a stronger gait", () => {
-  const walk = getPose(120, 0, false, 150);
-  const run = getPose(120, 0, true, 150);
+  const walk = getPose(120, 0, false, 50);
+  const run = getPose(120, 0, true, 50);
   assert.equal(run.state, "run");
   assert.ok(Math.abs(run.gait) > Math.abs(walk.gait));
   assert.ok(run.bodyBob >= walk.bodyBob);
