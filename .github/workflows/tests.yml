@@ -109,6 +109,18 @@ jobs:
               isMobile: true,
               hasTouch: true
             });
+            await page.addInitScript(() => {
+              window.Phaser = {
+                Scene: class {},
+                AUTO: 0,
+                Scale: { FIT: 1, CENTER_BOTH: 1 },
+                Input: { Keyboard: { KeyCodes: { SHIFT: "SHIFT" }, JustDown: () => false } },
+                Math: {
+                  Clamp: (value, min, max) => Math.min(max, Math.max(min, value)),
+                  Distance: { Between: (x1, y1, x2, y2) => Math.hypot(x2 - x1, y2 - y1) }
+                }
+              };
+            });
             const pageErrors = [];
             page.on("pageerror", error => pageErrors.push(error.message));
             await page.route("https://telegram.org/**", route => route.abort());
