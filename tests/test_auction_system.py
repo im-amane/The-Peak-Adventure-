@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from pathlib import Path
 import aiosqlite
 from auction_system import *
@@ -76,6 +76,12 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         await cancel_listing(self.db,1,listing,now=1001)
         row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
         self.assertEqual(tuple(await row.fetchone()),("Stormblade",25))
+
+    async def test_cancel_listing_takes_cross_mode_player_lock(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        with patch("auction_system._lock_player_for_equipment", new_callable=AsyncMock) as player_lock:
+            await cancel_listing(self.db,1,listing,now=1001)
+        player_lock.assert_awaited_once_with(self.db,1)
     async def test_cannot_cancel_after_bid(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
