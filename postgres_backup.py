@@ -154,6 +154,8 @@ def create_backup(
     except Exception:
         temporary.unlink(missing_ok=True)
         checksum_temporary.unlink(missing_ok=True)
+        final_path.unlink(missing_ok=True)
+        Path(str(final_path) + ".sha256").unlink(missing_ok=True)
         raise
 
     backups = sorted(
