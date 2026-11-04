@@ -2810,25 +2810,61 @@ async def pvprank(message: Message):
     await message.answer(await pvp_rankings_text())
 
 
+@dp.message(F.new_chat_members)
+async def welcome_new_group_members(message: Message):
+    """Welcome people joining a group and introduce the adventure."""
+    if message.chat.type not in {"group", "supergroup"}:
+        return
+    for member in message.new_chat_members:
+        if member.is_bot:
+            if member.id == message.bot.id:
+                await message.answer(
+                    "🌌 <b>The Peak Adventure has entered the realm!</b>\n\n"
+                    "I bring quests, guilds, group missions and boss raids to this group.\n"
+                    "Group admins: begin with <code>/group register</code>, then explore "
+                    "<code>/group info</code> and <code>/group missions</code>.\n\n"
+                    "Created & developed by <b>Amane Fujimiya</b> · @im_amane"
+                )
+            continue
+        name = escape(member.full_name or "Adventurer")
+        await message.answer(
+            f"✨ Welcome to the party, <a href=\"tg://user?id={member.id}\">{name}</a>! ✨\n\n"
+            "A new adventurer has arrived. The world is wide, the monsters are restless, "
+            "and legends are waiting to be written.\n"
+            "Start your journey in private with /start, choose your hero class, "
+            "and return ready for the adventure.\n\n"
+            "🏰 Group quests and raids are available after an admin runs /group register.\n"
+            "<i>Forge your story. Leave your mark.</i>\n"
+            "— <b>Amane Fujimiya</b> · @im_amane"
+        )
+
+
 @dp.message(Command("start"))
 async def start(message: Message):
     p = await get_player(message.from_user.id, message.from_user.username or message.from_user.full_name)
     if not p["class_selected"]:
         await message.answer(
-            "🌟 <b>Choose Your Hero Class</b>\n\n"
-            "🛡️ Knight: high HP and defence.\n"
-            "🔮 Mage: powerful magic attacks.\n"
-            "🏹 Archer: fast and precise.\n"
-            "🪓 Berserker: massive damage, lower defence.",
+            "🌟 <b>Every legend begins with a choice.</b>\n"
+        "The Peak is calling, adventurer. Your story starts here.\n\n"
+        "🛡️ <b>Knight</b> · Stand firm when the world breaks. High HP and defence.\n"
+        "🔮 <b>Mage</b> · Bend arcane power to your will. Powerful magic attacks.\n"
+        "🏹 <b>Archer</b> · Strike true before danger draws near. Fast and precise.\n"
+        "🪓 <b>Berserker</b> · Turn fury into force. Massive damage, lower defence.\n\n"
+        "<i>Choose wisely. Your legend will remember.</i>",
             reply_markup=class_keyboard(),
         )
         return
     await message.answer(
-        "🌌 <b>THE PEAK ADVENTURE</b>\n\n"
-        "A quiet world is breaking. Strange creatures are changing, old kingdoms have fallen, "
-        "and a forgotten force is waking beneath the earth. Your journey begins with one small slime...\n\n"
-        "Explore, fight monsters, grow stronger, and uncover the mystery behind the 100 levels.\n\n"
-        "Use the buttons below or /help.",
+        "🌌 <b>THE PEAK ADVENTURE</b>\n"
+        "<i>One world. A hundred levels. A legend with your name on it.</i>\n\n"
+        "The old kingdoms have fallen. Ancient seals are breaking. Beyond the last known road, "
+        "something is calling from the dark. Even the smallest slime may guard the first clue.\n\n"
+        "⚔️ Explore forgotten lands. Face monsters and legendary bosses.\n"
+        "🛡️ Build your hero, master your class and earn your place in the chronicles.\n"
+        "🤝 Join friends, form parties and make your guild a name the world remembers.\n\n"
+        "<i>Your choices shape the journey. Your courage writes the legend.</i>\n\n"
+        "Use the buttons below or /help.\n"
+        "A world imagined and built by <b>Amane Fujimiya</b> · @im_amane",
         reply_markup=menu(include_webapp=message.chat.type == "private"))
 
 
