@@ -48,6 +48,10 @@ class SecretAreaTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT coins,potions FROM players WHERE user_id=101")
         self.assertEqual(tuple(await cur.fetchone()), (350, 2))
 
+    async def test_secret_area_state_rejects_missing_player(self):
+        with self.assertRaisesRegex(SecretAreaError, "Player account not found"):
+            await get_secret_area_state(self.db, 999, 10, 1)
+
     async def test_discovery_requires_five_wins_and_valid_world(self):
         await self.db.execute("INSERT INTO boss_defeats VALUES(101,10)")
         await self.db.commit()
