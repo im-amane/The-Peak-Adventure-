@@ -79,3 +79,19 @@ Do not call the prototype live-tested until these steps have actually passed on 
 - Do not collect payments. Telegram Stars are disabled.
 - Do not use real customer/player data or announce a public launch until production persistence, external backups, security, concurrency, restart, and load checks are complete.
 - The Worker forwards only routes in its explicit allowlist. The Mini App matchmaking route is included in the current prototype patch and covered by a regression test.
+
+
+## Optional S3-compatible off-site backups
+
+The scheduler can export each completed local SQLite or PostgreSQL backup to an S3-compatible object store. Configure these environment variables in the hosting provider, not in Git:
+
+- `OFFSITE_BACKUP_BUCKET`: required bucket name to enable export.
+- `OFFSITE_BACKUP_REGION`: AWS-style region; defaults to `AWS_REGION` or `us-east-1`.
+- `OFFSITE_BACKUP_PREFIX`: object-key prefix; defaults to `peak-adventure-backups`.
+- `OFFSITE_BACKUP_ENDPOINT_URL`: optional endpoint for an S3-compatible provider.
+- `OFFSITE_BACKUP_KMS_KEY_ID`: optional customer-managed KMS key. Without it, uploads request S3-managed AES-256 encryption.
+- Credentials are resolved through boto3's standard credential chain. Prefer a scoped role or dedicated access key limited to writing backups in this bucket. Never commit credentials.
+
+The exporter uploads only after the local backup provider has completed its integrity checks. It attaches a SHA-256 checksum as object metadata and never deletes remote objects. Configure object lifecycle/retention and access controls in the storage provider. If upload fails, the local backup remains and the scheduled backup operation reports failure; monitor logs and alert on that failure.
+
+Preflight warns when no bucket is configured. When configured, it still warns that downloading an archived object and rehearsing an actual off-site restore remain operational requirements. CI mocks the S3 client; it does not contact a real cloud account.
