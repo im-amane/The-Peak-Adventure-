@@ -798,17 +798,17 @@
   ],
   "progress_summary": {
     "total_items": 172,
-    "complete_items": 161,
-    "partial_items": 9,
+    "complete_items": 168,
+    "partial_items": 2,
     "pending_items": 2,
-    "fully_implemented_percent": 93,
+    "fully_implemented_percent": 98,
     "calculation": "complete_items / total_items; partial and pending items are excluded"
   },
   "progress": {
-    "complete": 161,
-    "partial": 9,
+    "complete": 168,
+    "partial": 2,
     "pending": 2,
     "total": 172,
-    "percentage": 93
+    "percentage": 98
   }
 }
