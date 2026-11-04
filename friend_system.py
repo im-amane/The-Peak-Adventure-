@@ -198,7 +198,9 @@ async def search_players(db: Any, searcher_id: int, query: str, limit: int = 10)
     """Search public profiles and friends-only profiles visible to accepted friends."""
     if not _valid_user_id(searcher_id):
         raise FriendError("Invalid player account.")
-    clean = " ".join(str(query or "").strip().lstrip("@").split())
+    if not isinstance(query, str):
+        raise FriendError("Player search must be text.")
+    clean = " ".join(query.strip().lstrip("@").split())
     if not 2 <= len(clean) <= 32:
         raise FriendError("Player search must be between 2 and 32 characters.")
     if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 20:
