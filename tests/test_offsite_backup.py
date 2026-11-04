@@ -4,15 +4,26 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from offsite_backup import upload_backup, upload_backup_from_environment
+from offsite_backup import download_backup, upload_backup, upload_backup_from_environment
 
 
 class FakeS3Client:
-    def __init__(self):
+    def __init__(self, data=b"verified backup bytes"):
         self.calls = []
+        self.data = data
 
     def upload_file(self, filename, bucket, key, ExtraArgs):
         self.calls.append((filename, bucket, key, ExtraArgs))
+
+    def head_object(self, Bucket, Key):
+        import hashlib
+        return {
+            "ContentLength": len(self.data),
+            "Metadata": {"sha256": hashlib.sha256(self.data).hexdigest()},
+        }
+
+    def download_file(self, bucket, key, filename):
+        Path(filename).write_bytes(self.data)
 
 
 class OffsiteBackupTests(unittest.TestCase):
@@ -54,6 +65,42 @@ class OffsiteBackupTests(unittest.TestCase):
             upload_backup(self.path, bucket="Bad_Bucket", s3_client=self.client)
         with self.assertRaisesRegex(ValueError, "unsafe path"):
             upload_backup(self.path, bucket="peak-backups", prefix="../escape", s3_client=self.client)
+
+    def test_download_verifies_checksum_before_publishing_file(self):
+        destination = Path(self.temp.name) / "restored" / "database.dump"
+        result = download_backup(
+            bucket="peak-backups", key="prod/postgres/database.dump",
+            destination=destination, s3_client=self.client,
+        )
+        self.assertEqual(result, destination)
+        self.assertEqual(destination.read_bytes(), b"verified backup bytes")
+
+    def test_download_rejects_checksum_mismatch_and_preserves_existing_destination(self):
+        destination = Path(self.temp.name) / "database.dump"
+        destination.write_bytes(b"known good local file")
+        client = FakeS3Client(data=b"tampered remote bytes")
+        client.head_object = lambda **kwargs: {
+            "ContentLength": len(b"tampered remote bytes"),
+            "Metadata": {"sha256": "0" * 64},
+        }
+        with self.assertRaisesRegex(ValueError, "SHA-256 verification"):
+            download_backup(
+                bucket="peak-backups", key="database.dump",
+                destination=destination, s3_client=client,
+            )
+        self.assertEqual(destination.read_bytes(), b"known good local file")
+
+    def test_download_rejects_missing_checksum_metadata(self):
+        client = FakeS3Client()
+        client.head_object = lambda **kwargs: {
+            "ContentLength": len(client.data), "Metadata": {},
+        }
+        with self.assertRaisesRegex(ValueError, "missing valid SHA-256"):
+            download_backup(
+                bucket="peak-backups", key="database.dump",
+                destination=Path(self.temp.name) / "database.dump",
+                s3_client=client,
+            )
 
     def test_environment_export_is_disabled_without_bucket(self):
         with patch.dict(os.environ, {}, clear=True):
