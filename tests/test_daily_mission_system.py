@@ -86,6 +86,19 @@ class DailyMissionTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(value=value), self.assertRaises(DailyMissionError):
                 current_day_key(value)
 
+    async def test_daily_mission_operations_reject_missing_player_without_creating_rows(self):
+        now = 1_800_000_000
+        operations = (
+            lambda: record_daily_progress(self.db, 999, "wins", now=now),
+            lambda: get_daily_missions(self.db, 999, now=now),
+            lambda: claim_daily_mission(self.db, 999, "daily_hunter", now=now),
+        )
+        for operation in operations:
+            with self.assertRaisesRegex(DailyMissionError, "Player account not found"):
+                await operation()
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM player_daily_missions WHERE user_id=999")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_unknown_progress_type_rejected(self):
         with self.assertRaises(DailyMissionError):
             await record_daily_progress(self.db, 101, "pvp", now=1_800_000_000)
