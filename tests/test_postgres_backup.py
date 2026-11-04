@@ -26,9 +26,9 @@ class PostgreSQLBackupTests(unittest.TestCase):
     def test_connection_options_keep_password_out_of_arguments(self):
         args, env, database = postgres_backup._connection_options(self.url)
         self.assertEqual(database, "game_db")
-        self.assertIn("--host", args)
-        self.assertIn("db.example.test", args)
-        self.assertIn("--port", args)
+        self.assertIn("--dbname", args)
+        self.assertIn("db.example.test:5433", " ".join(args))
+        self.assertIn("sslmode=require", " ".join(args))
         self.assertNotIn("secret@pass", " ".join(args))
         self.assertEqual(env["PGPASSWORD"], "secret@pass")
 
