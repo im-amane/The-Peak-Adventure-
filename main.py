@@ -56,6 +56,7 @@ from evolution_system import EvolutionError, get_evolution_state, init_evolution
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 from runtime_monitor import RuntimeMonitor
 from item_economy import get_item_rarity, validate_shop_catalog
+from economy_balance import calculate_battle_coin_reward
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -1069,10 +1070,14 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
         return "💀 You were defeated and returned to camp. Your HP is 0. Use /heal to recover before exploring again."
     p = await get_player(user_id)
     reward_xp = 35 + m["level"] * 18 + (m["level"] * 30 if m["boss"] else 0)
-    reward_coins = 15 + m["level"] * 7 + (m["level"] * 25 if m["boss"] else 0)
+    reward_coins = calculate_battle_coin_reward(
+        m["level"],
+        is_boss=m["boss"],
+        is_elite=bool(b["is_elite"]),
+        is_evolved=bool(b["is_evolved"]),
+    )
     if b["is_elite"] or b["is_evolved"]:
         reward_xp = int(reward_xp * (1.5 if b["is_elite"] else 1.0) * (1.5 if b["is_evolved"] else 1.0))
-        reward_coins = int(reward_coins * (1.5 if b["is_elite"] else 1.0) * (1.5 if b["is_evolved"] else 1.0))
     xp_boosted = await consume_xp_boost(db, user_id)
     if xp_boosted:
         reward_xp *= 2
