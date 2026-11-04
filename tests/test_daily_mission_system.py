@@ -77,6 +77,15 @@ class DailyMissionTests(unittest.IsolatedAsyncioTestCase):
         hunter = next(row for row in rows if row["id"] == "daily_hunter")
         self.assertFalse(hunter["claimed"])
 
+    async def test_unhashable_progress_type_is_rejected_cleanly(self):
+        with self.assertRaises(DailyMissionError):
+            await record_daily_progress(self.db, 101, [], now=1_800_000_000)
+
+    async def test_invalid_timestamps_are_rejected_cleanly(self):
+        for value in (True, float("nan"), float("inf"), "tomorrow", 10**100):
+            with self.subTest(value=value), self.assertRaises(DailyMissionError):
+                current_day_key(value)
+
     async def test_unknown_progress_type_rejected(self):
         with self.assertRaises(DailyMissionError):
             await record_daily_progress(self.db, 101, "pvp", now=1_800_000_000)
