@@ -1301,13 +1301,6 @@
       const idx=Math.max(0,Math.min(9,(gameState.world_id||1)-1));
       ui.status.textContent="Wanderer: "+this.npcDialog[idx];
     }
-    blockedAt(x,y){
-      const radius=13;
-      return this.obstacles.some(o=>
-        x+radius>o.x-o.width/2 && x-radius<o.x+o.width/2 &&
-        y+radius>o.y-o.height/2 && y-radius<o.y+o.height/2
-      );
-    }
     update(_,delta){
       if(!this.hero)return;
       this.cycleTime = (this.cycleTime + delta) % 90000;
@@ -1394,10 +1387,16 @@
           this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
       }
-      const nextX=Phaser.Math.Clamp(this.hero.x+dx*speed,24,this.worldWidth-24);
-      if(!this.blockedAt(nextX,this.hero.y))this.hero.x=nextX;
-      const nextY=Phaser.Math.Clamp(this.hero.y+dy*speed,this.worldHeight*0.46,this.worldHeight-24);
-      if(!this.blockedAt(this.hero.x,nextY))this.hero.y=nextY;
+      const movement=window.PeakMovement.moveWithCollisions(
+        this.hero.x,
+        this.hero.y,
+        dx*speed,
+        dy*speed,
+        this.obstacles,
+        {minX:24,maxX:this.worldWidth-24,minY:this.worldHeight*0.46,maxY:this.worldHeight-24},
+        13
+      );
+      this.hero.setPosition(movement.x,movement.y);
       const walking=Boolean(dx||dy);
       const gait=walking?Math.sin(this.time.now/(sprinting?46:76))*(sprinting?0.82:0.52):Math.sin(this.time.now/430)*0.065;
       if(this.hero.limbs){
