@@ -1218,17 +1218,23 @@
           this.obstacleGraphics.fillCircle(obstacle.x+8,obstacle.y-5,3);
         }
       });
-      const zoneLabels=["THE OUTER REACH","THE WILD HEART","THE INNER FRONTIER"];
-      zoneLabels.forEach((label,index)=>{
-        const x=w*(index+0.5)/3;
-        this.add.text(x,h*0.47,label,{
+      layout.zones.forEach((zone,index)=>{
+        this.add.text(zone.centerX,h*0.47,zone.name.toUpperCase(),{
           fontFamily:"Georgia",fontSize:"11px",fontStyle:"bold",color:"#fff1cf",
-          stroke:"#17232a",strokeThickness:3,letterSpacing:2
-        }).setOrigin(0.5).setAlpha(0.72).setDepth(2);
+          stroke:"#17232a",strokeThickness:3,letterSpacing:1
+        }).setOrigin(0.5).setAlpha(0.82).setDepth(2);
+        const landmark=this.add.graphics().setDepth(1);
+        const markX=zone.centerX,markY=h*0.55;
+        landmark.fillStyle(palette.accent,0.24);landmark.fillCircle(markX,markY,20);
+        landmark.lineStyle(2,palette.accent,0.62);
+        if(index%4===0){landmark.strokeCircle(markX,markY,13);landmark.lineBetween(markX,markY-17,markX,markY+17);}
+        else if(index%4===1){landmark.strokeTriangle(markX-16,markY+12,markX,markY-17,markX+16,markY+12);landmark.lineBetween(markX,markY-10,markX,markY+10);}
+        else if(index%4===2){landmark.strokeRect(markX-12,markY-13,24,26);landmark.lineBetween(markX-5,markY-13,markX-5,markY+13);landmark.lineBetween(markX+5,markY-13,markX+5,markY+13);}
+        else{landmark.strokeCircle(markX,markY,16);landmark.strokeCircle(markX,markY,8);}
         if(index>0){
           const divider=this.add.graphics().setDepth(1);
-          divider.lineStyle(2,palette.accent,0.22);
-          divider.lineBetween(x-w/6,h*0.49,x-w/6,h*0.96);
+          divider.lineStyle(2,palette.accent,0.25);
+          divider.lineBetween(zone.startX,h*0.49,zone.startX,h*0.96);
         }
       });
       this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
