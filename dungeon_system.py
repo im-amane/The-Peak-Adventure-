@@ -77,7 +77,8 @@ async def enter_dungeon(db,user_id,player_level,dungeon_id):
         raise DungeonError(f"This dungeon unlocks at level {(dungeon['world']-1)*10+1}.")
     nested=await _begin_transaction(db,"enter_dungeon")
     try:
-        cur=await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+        player_lock = " FOR UPDATE" if getattr(db, "dialect", "sqlite") == "postgres" else ""
+        cur=await db.execute("SELECT 1 FROM players WHERE user_id=?" + player_lock, (user_id,))
         if await cur.fetchone() is None:
             raise DungeonError("Player account not found.")
         cur=await db.execute("SELECT dungeon_id,status FROM dungeon_runs WHERE user_id=?",(user_id,))
