@@ -1,77 +1,84 @@
-# Heroku Deployment Readiness
+# Heroku Deployment Readiness (Historical)
 
-**Status: blocked pending persistence and process-model work. No Heroku resources have been provisioned and no deployment has been performed.**
+**This document is retained for reference only. Heroku is not the selected hosting target.** The controlled playable prototype currently targets the single-instance Render Blueprint in `render.yaml`; follow [PROTOTYPE_LAUNCH_RUNBOOK.md](PROTOTYPE_LAUNCH_RUNBOOK.md) for that path. The README records the longer-term production blockers.
 
-Heroku is the selected hosting target for The Peak Adventure. This document records what is already compatible, what is not, and the checks required before a deployment can safely hold real player data.
+No Heroku resources have been provisioned and no Heroku deployment has been performed.
 
-## Current repository facts
+## Historical Heroku compatibility notes
 
 - `Procfile` declares `web: python main.py`.
 - `main.py` reads the platform-provided `PORT` value for its aiohttp server.
-- The same process currently starts Telegram long polling and the HTTP server.
-- SQLite through `aiosqlite` remains the default when `DATABASE_URL` is unset. Setting `DATABASE_URL` explicitly selects the Psycopg 3 PostgreSQL adapter; connection or schema initialization failures stop startup rather than silently falling back to a new SQLite file.
-- PostgreSQL runtime selection is wired and opt-in, but it is not production-verified. The existing adapter and service-level tests do not replace full schema, transaction, concurrency and migration validation on a representative database. PostgreSQL player-scoped actions use session-level advisory locks across processes; broader group/guild/party and multi-account mutation paths still need a complete coordination audit.
-- With SQLite selected, the automated backup loop creates snapshots under the configured local directory. With PostgreSQL selected, that path is disabled and the monitor reports the missing durable PostgreSQL backup provider.
+- The same process currently starts Telegram long polling and the HTTP server. Do not scale this combined process to multiple dynos.
+- SQLite is the default when `DATABASE_URL` is unset. Setting `DATABASE_URL` selects the Psycopg 3 PostgreSQL adapter. Runtime selection is implemented, but full production PostgreSQL compatibility and concurrency safety have not been certified.
 - The Cloudflare Worker is the Mini App edge gateway; its `BACKEND_ORIGIN` must point to the HTTPS Python backend.
 - The Mini App requires a public HTTPS `WEBAPP_URL` registered with BotFather.
 
-## Deployment blockers
+## Current backup implementation
 
-### 1. Persistent database
+The earlier statement that PostgreSQL backup automation was missing is obsolete.
 
-Heroku dyno filesystems are ephemeral and isolated. Local files are not a durable database and are not shared between dynos. The current SQLite database and local backup snapshots therefore cannot be treated as production persistence.
+- `backup_scheduler.py` dispatches scheduled backups according to the active database dialect.
+- SQLite uses the existing online snapshot utility.
+- PostgreSQL uses `postgres_backup.py` to create custom-format `pg_dump` archives, verify archive readability with `pg_restore --list`, publish SHA-256 sidecars, and rotate retained local backups.
+- The Docker image installs PostgreSQL client tools for this workflow.
+- The launch preflight validates PostgreSQL backup directory and retention configuration.
 
-Required work:
-- Complete the PostgreSQL persistence audit and explicit, versioned schema migrations. The runtime can now opt into the existing Psycopg adapter with `DATABASE_URL`, but the application still has SQLite-specific paths and compatibility gaps to resolve.
-- Audit SQLite-specific SQL and APIs, including placeholders, `PRAGMA`, `lastrowid`, row handling, transaction/savepoint semantics and locking.
-- Preserve transaction atomicity and idempotency across all gameplay, economy, trading, guild and multiplayer operations.
-- Add PostgreSQL integration tests and migration/rollback tests.
-- Verify that concurrent requests and multiple application processes cannot duplicate rewards or corrupt state.
+**Remaining backup blocker:** scheduled backups currently land on the configured local filesystem/persistent disk. Off-site storage, encryption/access policy for exported archives, and a demonstrated restore drill against a disposable database are still required before production. A local backup on the same disk is not disaster recovery.
 
-Do not attempt to solve this by setting `DATABASE_URL` alone. The current application is not a drop-in PostgreSQL application.
+## Remaining production blockers
 
-### 2. Durable backups and restore
+### 1. PostgreSQL validation and migrations
 
-The SQLite backup utility takes an online consistent snapshot, runs an integrity check, flushes the verified file and directory metadata before/after atomic publication, rotates old snapshots, and refuses restore while WAL/SHM sidecars exist. These protections improve local snapshot integrity but do not make dyno-local files durable. PostgreSQL backup automation is not implemented; when PostgreSQL is selected, the SQLite snapshot path is deliberately disabled and the runtime monitor reports the missing durable backup provider. Before production:
-- Choose a durable backup destination or a database-native backup strategy.
-- Encrypt and restrict access to backups.
-- Verify backup integrity and perform a restore drill against a disposable database.
-- Document retention, recovery point and recovery time expectations.
+The PostgreSQL adapter is opt-in and covered by automated adapter tests, but this is not equivalent to production verification. Complete:
+- A full audit of SQLite-specific SQL and APIs, including placeholders, `PRAGMA`, `lastrowid`, row handling, transaction/savepoint semantics and locking.
+- Explicit, versioned schema migrations and migration/rollback tests.
+- Integration tests against a representative PostgreSQL service.
+- Atomicity, idempotency and cross-process coordination checks for gameplay, economy, trading, guild and multiplayer mutations.
+- A clean-database and representative-upgrade validation.
+
+Do not assume setting `DATABASE_URL` alone makes every application path production-safe.
+
+### 2. Off-site backups and restore
+
+Before production:
+- Select a durable off-site backup destination or managed database backup strategy.
+- Encrypt backups and restrict access.
+- Export scheduled archives away from the application disk.
+- Verify integrity and perform a restore drill against a disposable database.
+- Document retention, recovery point and recovery time objectives.
 - Keep restore operations separate from normal web requests.
 
 ### 3. Bot polling and web process model
 
-The current `web` process runs both Telegram polling and the aiohttp server. Do not scale this combined process to multiple dynos: each instance would start another polling loop. PostgreSQL player-scoped actions now use session-level advisory locks that coordinate across processes, but this does not prove that every group, guild, party or multi-account workflow is safe across dynos; SQLite player locks remain process-local.
-
-Before horizontal scaling:
+The current process runs Telegram polling and the aiohttp server together. A single instance is required for the controlled prototype. Before horizontal scaling:
 - Separate Telegram polling into a dedicated worker process type.
 - Keep the HTTP API in the web process.
-- Use PostgreSQL transactions and database-level coordination for shared state, and extend/verify locking and idempotency for group, guild, party and multi-account mutations.
+- Use database-level coordination and verify idempotency for group, guild, party and multi-account mutations.
 - Validate graceful shutdown, restart behavior and duplicate-update handling.
-
-A single combined dyno may be used only for a controlled, explicitly approved test after PostgreSQL and backup prerequisites are met. It is not a production scaling design.
 
 ### 4. Cloudflare and Telegram configuration
 
 After the backend has been deployed and verified:
-- Set Heroku config vars for `BOT_TOKEN`, `ADMIN_IDS`, and the HTTPS `WEBAPP_URL`.
-- Set the Cloudflare Worker secret `BACKEND_ORIGIN` to the Heroku HTTPS origin only, without an API path.
+- Set backend secrets for `BOT_TOKEN` and `ADMIN_IDS`, and set the HTTPS `WEBAPP_URL`.
+- Set the Cloudflare Worker secret `BACKEND_ORIGIN` to the backend HTTPS origin only, without an API path.
 - Set `WEBAPP_URL` to the public Cloudflare Worker URL.
 - Register the Worker hostname as the Telegram Mini App domain with BotFather.
 - Never place `BOT_TOKEN` in Cloudflare Worker variables or client-side assets.
+
+For the current Render prototype values and exact sequence, use the prototype runbook rather than this historical Heroku note.
 
 ### 5. Release verification
 
 Required before a public launch:
 - CI passes on the exact release commit.
-- PostgreSQL migrations succeed on a clean database and on a representative upgraded database.
+- PostgreSQL migrations succeed on clean and upgraded databases.
 - Registration, class selection, state loading, exploration, battle, rewards, inventory, quests and world travel pass in a real Telegram bot.
 - The Mini App passes Android Telegram WebView and browser/device QA with real initData.
-- A dyno restart and redeploy preserve all player progress.
+- A restart and redeploy preserve all player progress.
 - Backup and restore are demonstrated against a test database.
 - Duplicate and concurrent reward, trade, battle and multiplayer actions remain safe.
 - Security and load testing are completed against a representative environment.
-- Cloudflare-to-Heroku routing and health checks are verified.
+- Cloudflare-to-backend routing and health checks are verified.
 
 ## Runtime monitoring implemented in the application
 
@@ -79,25 +86,14 @@ Required before a public launch:
 - `/ops/metrics` requires valid Telegram initData from an ID in `ADMIN_IDS`. It exposes aggregate request/status counts, bounded route latency summaries, database probe state, and backup freshness/error state. It does not retain Telegram IDs or request payloads.
 - The runtime monitor sends Telegram admin alerts when database availability or backup health changes, and sends recovery notices when those conditions clear.
 - These counters and alert-transition states are in memory and reset when the process restarts. They are operational signals, not a durable monitoring history or an external alerting integration.
-- Configure `ADMIN_IDS` to receive alerts. Before public production launch, connect Heroku log drains/metrics or an external monitoring provider and verify alert delivery with a controlled failure drill.
-
-## Intended deployment shape
-
-| Component | Target | Current status |
-|---|---|---|
-| Python HTTP API | Heroku web dyno | Existing combined bot/API process; not deployed |
-| Telegram bot polling | Dedicated Heroku worker after process split | Currently combined with web process |
-| Player persistence | Heroku Postgres | Opt-in PostgreSQL runtime adapter implemented; production database not configured or verified |
-| Durable backups | Database-native or external object storage | Current backups are local files |
-| Mini App static/API edge | Cloudflare Worker | Existing Worker; backend origin must be verified |
-| Telegram Mini App | HTTPS Worker URL | Requires final backend and BotFather configuration |
+- Configure `ADMIN_IDS` to receive alerts. Before public production launch, connect host log drains/metrics or an external monitoring provider and verify alert delivery with a controlled failure drill.
 
 ## Cost and authorization boundary
 
 - No Heroku app, dyno, database add-on or paid resource has been created by this work.
 - Do not run provisioning, scaling or deployment commands until the owner explicitly authorizes the cost and action.
-- Telegram Stars purchases remain disabled.
-- The existing `render.yaml` is retained as a legacy artifact and is not the selected deployment target.
+- Telegram Stars remain disabled by default.
+- The current controlled prototype target is Render, defined by `render.yaml`; this file is not the active deployment guide.
 
 ## Official Heroku references
 
