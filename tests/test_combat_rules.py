@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, patch
 
 import main
 
-from game_rules import calculate_enemy_damage
+from game_rules import calculate_enemy_damage, resolve_enemy_turn, resolve_player_attack
 
 
 class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
@@ -225,6 +225,28 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
                     await main.db.close()
                 main.db = previous_db
                 main.DB_PATH = previous_path
+
+
+    def test_player_attack_rejects_unhashable_action_as_value_error(self):
+        with self.assertRaisesRegex(ValueError, "unknown player combat action"):
+            resolve_player_attack(
+                [], player_level=1, class_attack=5, weapon_attack=3,
+                monster_defense=2, class_element="Fire", monster_element="Nature",
+                monster_weakness="Fire", trait_effect="regenerate",
+                next_turn=1, random_bonus=0,
+            )
+
+    def test_enemy_turn_rejects_unhashable_action_as_value_error(self):
+        with self.assertRaisesRegex(ValueError, "invalid player action"):
+            resolve_enemy_turn(
+                trait_effect="regenerate", turn_count=1,
+                monster_hp_before=100, monster_hp_after_action=90,
+                monster_max_hp=100, monster_attack_power=20, monster_speed=10,
+                player_hp=100, player_max_hp=100, player_level=1,
+                armor_defense=0, class_defense=0, class_speed=0,
+                player_damage=10, action=[], random_bonus=0, dodge_roll=100,
+                is_boss=False, boss_name="Test Monster", hero_class="Knight",
+            )
 
 
 if __name__ == "__main__":
