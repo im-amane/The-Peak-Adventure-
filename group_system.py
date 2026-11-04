@@ -139,6 +139,8 @@ async def register_group(db,chat_id,title,owner_id):
         raise GroupError("Group title must be text.")
     title=" ".join(title.split())[:100]
     if not title: raise GroupError("Group title cannot be empty.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(owner_id,))
+    if not await cur.fetchone(): raise GroupError("Group owner account not found.")
     await db.execute("""INSERT INTO group_profiles(chat_id,title,owner_id) VALUES(?,?,?)
       ON CONFLICT(chat_id) DO UPDATE SET title=excluded.title,owner_id=excluded.owner_id""",
       (chat_id,title,owner_id))
@@ -152,6 +154,8 @@ async def set_group_admin(db,chat_id,user_id,role):
         raise GroupError("Invalid group administrator.")
     cur=await db.execute("SELECT 1 FROM group_profiles WHERE chat_id=?",(chat_id,))
     if not await cur.fetchone(): raise GroupError("Register this group first.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone(): raise GroupError("Group administrator account not found.")
     if role=="owner":
         await db.execute("UPDATE group_admins SET role='admin' WHERE chat_id=? AND role='owner'",(chat_id,))
         await db.execute("UPDATE group_profiles SET owner_id=? WHERE chat_id=?",(user_id,chat_id))
@@ -169,6 +173,8 @@ async def record_group_player(db,chat_id,user_id,username,level):
         raise GroupError("Invalid group player.")
     cur=await db.execute("SELECT 1 FROM group_profiles WHERE chat_id=?",(chat_id,))
     if not await cur.fetchone(): raise GroupError("Register this group first.")
+    cur=await db.execute("SELECT 1 FROM players WHERE user_id=?",(user_id,))
+    if not await cur.fetchone(): raise GroupError("Group player account not found.")
     name=" ".join(str(username or "Adventurer").split())[:64]
     await db.execute("""INSERT INTO group_players(chat_id,user_id,username,player_level) VALUES(?,?,?,?)
       ON CONFLICT(chat_id,user_id) DO UPDATE SET username=excluded.username,player_level=excluded.player_level,last_seen=CURRENT_TIMESTAMP""",
