@@ -83,8 +83,9 @@ class SecretAreaTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_missing_player_does_not_leave_discovery_or_reward(self):
         await self.db.execute("INSERT INTO boss_defeats VALUES(999,10)")
-        for _ in range(5):
-            await record_monster_defeat(self.db, 999, 1)
+        await self.db.execute(
+            "INSERT INTO player_monster_mastery(user_id,monster_level,defeats) VALUES(999,1,5)"
+        )
         await self.db.commit()
         with self.assertRaisesRegex(SecretAreaError, "Player account not found"):
             await discover_secret_area(self.db, 999, 10, 1)
