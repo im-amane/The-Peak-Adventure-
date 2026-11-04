@@ -70,6 +70,9 @@ def validate_shop_catalog(items: dict) -> None:
         if rarity not in RARITY_COIN_BANDS:
             raise ValueError(f"Unknown rarity for shop item: {item_id}")
         cost, level, bonus = item.get("cost"), item.get("level"), item.get("bonus")
+        item_type = item.get("type")
+        if item_type not in {"weapon", "armor", "potion"}:
+            raise ValueError(f"Shop item {item_id} has an invalid equipment type.")
         if any(type(value) is not int for value in (cost, level, bonus)):
             raise ValueError(f"Shop item {item_id} has non-integer economy values.")
         if cost <= 0 or level < 1 or bonus < 0:
@@ -77,3 +80,32 @@ def validate_shop_catalog(items: dict) -> None:
         low, high = RARITY_COIN_BANDS[rarity]
         if not low <= cost <= high:
             raise ValueError(f"Shop item {item_id} price does not fit its {rarity} tier.")
+
+    # Equipment progression must trade more coins for a meaningful, predictable
+    # stat increase. A tier cannot regress in unlock level, rarity, price or
+    # power, and cost per stat point cannot jump by more than 2x at one upgrade.
+    for slot in ("weapon", "armor"):
+        upgrades = sorted(
+            (
+                (item["level"], RARITY_ORDER.index(SHOP_ITEM_RARITY[item_id]),
+                 item["cost"], item["bonus"], item_id)
+                for item_id, item in items.items()
+                if item["type"] == slot
+            ),
+            key=lambda entry: entry[0],
+        )
+        if len(upgrades) < 2:
+            raise ValueError(f"Shop catalog needs at least two {slot} upgrades.")
+        previous = None
+        for level, rarity_rank, cost, bonus, item_id in upgrades:
+            if bonus <= 0:
+                raise ValueError(f"Shop item {item_id} must provide a positive {slot} bonus.")
+            if previous is not None:
+                prev_level, prev_rarity, prev_cost, prev_bonus, prev_id = previous
+                if level <= prev_level or rarity_rank < prev_rarity:
+                    raise ValueError(f"{slot.title()} unlock levels and rarity tiers must progress forward.")
+                if cost <= prev_cost or bonus <= prev_bonus:
+                    raise ValueError(f"{slot.title()} upgrade cost and bonus must increase.")
+                if cost * prev_bonus > prev_cost * bonus * 2:
+                    raise ValueError(f"{slot.title()} upgrade {item_id} is over-priced for its stat gain.")
+            previous = (level, rarity_rank, cost, bonus, item_id)
