@@ -1283,6 +1283,7 @@
       this.selectedMonster=null;
       this.movePath=[];
       this.movePathIndex=0;
+      this.heroVelocity={x:0,y:0};
       // Idle animation changes scale, not world position, so it cannot fight movement.
       this.heroIdle = this.tweens.add({
         targets:this.hero, scaleY:1.025, duration:650, yoyo:true, repeat:-1, ease:"Sine.easeInOut"
@@ -1393,7 +1394,7 @@
           this.weatherGraphics.fillCircle(x,y,1+(i%3));
         }
       }
-      if(gameState && gameState.battle_active){clearMovementInput();ui.encounter.disabled=true;return;}
+      if(gameState && gameState.battle_active){clearMovementInput();this.heroVelocity={x:0,y:0};ui.encounter.disabled=true;return;}
       // Clamp long frames after tab suspension to prevent large movement jumps.
       const frameDelta=Phaser.Math.Clamp(Number(delta)||0,0,50);
       const baseSpeed=0.18*frameDelta;
@@ -1454,17 +1455,24 @@
           this.heroIdle=this.tweens.add({targets:this.hero,scaleY:1.025,duration:650,yoyo:true,repeat:-1,ease:"Sine.easeInOut"});
         }
       }
+      const deltaSeconds=frameDelta/1000;
+      this.heroVelocity=window.PeakMovement.integrateVelocity(
+        this.heroVelocity.x,this.heroVelocity.y,dx,dy,deltaSeconds,
+        {maxSpeed:180*(sprintHeld?1.45:1),acceleration:900,friction:1200}
+      );
       const movement=window.PeakMovement.moveWithCollisions(
         this.hero.x,
         this.hero.y,
-        dx*speed,
-        dy*speed,
+        this.heroVelocity.x*deltaSeconds,
+        this.heroVelocity.y*deltaSeconds,
         this.obstacles,
         {minX:24,maxX:this.worldWidth-24,minY:this.worldHeight*0.46,maxY:this.worldHeight-24},
         13
       );
+      if(movement.blockedX)this.heroVelocity.x=0;
+      if(movement.blockedY)this.heroVelocity.y=0;
       this.hero.setPosition(movement.x,movement.y);
-      const walking=Boolean(dx||dy);
+      const walking=Math.hypot(this.heroVelocity.x,this.heroVelocity.y)>8;
       const gait=walking?Math.sin(this.time.now/(sprinting?46:76))*(sprinting?0.82:0.52):Math.sin(this.time.now/430)*0.065;
       if(this.hero.limbs){
         this.hero.limbs.leftArm.rotation=-gait*0.92;
