@@ -458,9 +458,8 @@ async def record_guild_activity(db,guild_id,user_id,kind,amount=1):
         raise
 
 
-@_transactional
-async def award_guild_xp(db,guild_id,amount):
-    """Award guild XP without losing concurrent rewards from other connections."""
+async def _award_guild_xp_unlocked(db,guild_id,amount):
+    """Apply guild progression inside a transaction already owned by the caller."""
     if not valid_id(guild_id) or not isinstance(amount,int) or isinstance(amount,bool) or not 1<=amount<=50000:
         raise GuildFeatureError("Invalid guild XP award.")
     cur=await db.execute(
@@ -481,6 +480,12 @@ async def award_guild_xp(db,guild_id,amount):
     if cur.rowcount != 1:
         raise GuildFeatureError("Guild XP could not be recorded.")
     return level,xp
+
+
+@_transactional
+async def award_guild_xp(db,guild_id,amount):
+    """Award guild XP with an atomic boundary for standalone callers."""
+    return await _award_guild_xp_unlocked(db,guild_id,amount)
 
 
 @_transactional
@@ -644,7 +649,7 @@ async def record_guild_war_duel(db, challenger_id, opponent_id, winner_id, duel_
         winner=updated["challenger_guild"] if updated["challenger_score"]>updated["target_score"] else updated["target_guild"]
         cur = await db.execute("UPDATE guild_wars SET status='completed',winner_guild=? WHERE war_id=? AND status='active'", (winner, war["war_id"]))
         if cur.rowcount != 1: raise GuildFeatureError("This guild war has already completed.")
-        await award_guild_xp(db, winner, 150)
+        await _award_guild_xp_unlocked(db, winner, 150)
     cur=await db.execute("SELECT * FROM guild_wars WHERE war_id=?",(war["war_id"],))
     return await cur.fetchone()
 
