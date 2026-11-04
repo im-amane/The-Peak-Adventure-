@@ -83,6 +83,12 @@ Before a broader launch, complete versioned schema migrations and full PostgreSQ
 Keep `BOT_TOKEN` private. Never deploy production or provision paid resources without explicit authorization.
 
 
+## Creator legacy and attribution
+
+The Peak Adventure is created and developed by **Amane Fujimiya** (creator ID: **@im_amane**). In the Telegram bot, use `/credits` for the permanent creator credit and `/legacy` to read the hidden creator chronicle, **The Forgotten Creator**. The First Architect, Creator's Emblem, Forgotten Creator title and Amane's Legacy are part of the creator-lore identity.
+
+The creator credit is attribution, not a player-grant mechanism. The secret chronicle is currently a narrative tribute; it does not award a gameplay item or bypass progression. Creator-only title/emblem ownership must remain reserved for the project author. See [the creator legacy specification](docs/CREATOR_LEGACY.md).
+
 ## Commands
 - `/start` - Create your hero and open the game menu
 - `/profile` - Hero stats, class and equipment
