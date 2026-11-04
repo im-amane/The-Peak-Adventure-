@@ -403,6 +403,9 @@ async def cancel_listing(db, seller_id, listing_id, now=None):
     await _settle_due(db, now)
     try:
         await db.execute("BEGIN IMMEDIATE")
+        # Cancellation returns escrowed equipment, so serialize it with every
+        # other gameplay/equipment action for this player before checking state.
+        await _lock_player_for_equipment(db, seller_id)
         cur = await db.execute(
             _for_update(
                 db,
