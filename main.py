@@ -29,7 +29,7 @@ from friend_system import FriendError, init_friend_tables, list_friends, list_pe
 from party_system import PartyError, create_party, disband_party, get_party_info, init_party_tables, invite_to_party, leave_party, list_pending_party_invites, respond_to_party_invite, start_party_battle, attack_party_battle, get_party_battle, reward_party_battle
 from matchmaking_system import (MAX_QUEUE_WAIT_SECONDS, MatchmakingError, cancel_matchmaking, get_matchmaking_status, init_matchmaking_tables, join_matchmaking)
 from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
-from group_system import GroupError, attack_group_raid_and_reward, claim_group_mission_reward, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
+from group_system import GroupError, attack_group_raid_and_reward, claim_group_campaign_reward, claim_group_mission_reward, get_group_campaign, get_group_missions, get_group_profile, group_raid_status, init_group_tables, is_group_admin, is_group_banned, list_group_players, record_group_activity_reward, record_group_player, register_group, set_group_admin, set_group_ban, start_group_raid, top_groups
 from admin_tools import AdminError, adjust_player_coins, dashboard_stats, export_player_data, init_admin_tables, parse_admin_ids, perform_audited_action, recent_admin_actions
 from character_system import AppearanceError, get_appearance, init_character_tables, save_appearance
 from account_system import AccountError, delete_player_account, get_settings, init_account_tables, update_settings
@@ -2138,6 +2138,34 @@ async def group_command(message: Message):
         rows=await get_group_missions(db,cid); lines=["📜 <b>Daily group missions</b>"]
         for r in rows: lines.append(f"{'✅' if r['completed'] else '▫️'} {r['title']}: {r['progress']}/{r['target']} · {r['reward']} coins")
         await message.answer("\n".join(lines)); return
+    if action=="campaign":
+        parts=(message.text or "").split()
+        if len(parts)>2 and parts[2].lower()=="claim":
+            if len(parts)<4 or not parts[3].isdigit():
+                await message.answer("Usage: /group campaign claim CHAPTER"); return
+            try:
+                if not await verify_live_group_admin(message) or not await is_group_admin(db,cid,uid):
+                    raise GroupError("Only current, verified Telegram group admins can claim campaign rewards.")
+                coins,xp=await claim_group_campaign_reward(db,cid,uid,int(parts[3]))
+                await message.answer(f"🏆 Campaign chapter claimed: +{coins} coins and +{xp} group XP.")
+            except GroupError as exc:
+                await message.answer(escape(str(exc)))
+            return
+        rows=await get_group_campaign(db,cid)
+        lines=["📖 <b>THE PEAK · GROUP CAMPAIGN</b>"]
+        for chapter in rows:
+            marker="🔒"
+            if chapter["claimed"]: marker="✅"
+            elif chapter["completed"]: marker="🎁"
+            elif chapter["unlocked"]: marker="🟢"
+            lines.append(f"{marker} <b>Chapter {chapter['id']}: {escape(chapter['title'])}</b>")
+            lines.append(f"{escape(chapter['description'])}")
+            lines.append(f"Progress: {chapter['progress']}/{chapter['target']} · Reward: {chapter['coins']} coins + {chapter['xp']} group XP")
+            if chapter["completed"] and not chapter["claimed"]:
+                lines.append(f"Claim: /group campaign claim {chapter['id']}")
+        lines.append("The next chapter unlocks after the current chapter reward is claimed.")
+        await message.answer("\n".join(lines))
+        return
     if action=="claim":
         if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
         try:
@@ -3179,7 +3207,7 @@ async def help_cmd(message: Message):
         "/friend request|accept|decline|list|remove - Friend list\n/online - Recent online friends\n"
         "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 10 stamina)\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
-        "/group register|info|members|missions|claim|raid|ban|unban|top - Telegram group features\n"
+        "/group register|info|members|missions|claim|campaign|raid|ban|unban|top - Telegram group features\n"
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
                 "/auction - Browse; /auction sell weapon|armor price [hours]\n/auction cancel ID; /bid ID amount\n/auction stash; /auction equip ID\n"
@@ -5624,6 +5652,8 @@ def miniapp_assets_available() -> bool:
         "pathfinding.js",
         "movement.js",
         "character_profiles.js",
+        "character_animation.js",
+        "monster_animation.js",
     )
     return all((WEB_DIR / filename).is_file() for filename in required)
 
@@ -5647,6 +5677,12 @@ def create_web_app():
 
     async def serve_character_profiles(request: web.Request):
         return web.FileResponse(WEB_DIR / "character_profiles.js")
+
+    async def serve_character_animation(request: web.Request):
+        return web.FileResponse(WEB_DIR / "character_animation.js")
+
+    async def serve_monster_animation(request: web.Request):
+        return web.FileResponse(WEB_DIR / "monster_animation.js")
 
     async def healthz(request: web.Request):
         if not await database_healthcheck():
@@ -5676,6 +5712,8 @@ def create_web_app():
     app.router.add_get("/pathfinding.js", serve_pathfinding)
     app.router.add_get("/movement.js", serve_movement)
     app.router.add_get("/character_profiles.js", serve_character_profiles)
+    app.router.add_get("/character_animation.js", serve_character_animation)
+    app.router.add_get("/monster_animation.js", serve_monster_animation)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)
