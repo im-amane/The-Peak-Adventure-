@@ -536,12 +536,16 @@ class PostgresEvolutionServiceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
         await self.db.execute("DROP TABLE IF EXISTS player_monster_mastery")
+        await self.db.execute("DROP TABLE IF EXISTS players")
+        await self.db.execute("CREATE TABLE players(user_id BIGINT PRIMARY KEY)")
+        await self.db.executemany("INSERT INTO players(user_id) VALUES(?)", [(value,) for value in (701, 702, 703, 704)])
         await self.db.commit()
         await init_evolution_tables(self.db)
         await self.db.commit()
 
     async def asyncTearDown(self):
         await self.db.execute("DROP TABLE IF EXISTS player_monster_mastery")
+        await self.db.execute("DROP TABLE IF EXISTS players")
         await self.db.commit()
         await self.db.close()
 

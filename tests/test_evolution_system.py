@@ -16,6 +16,9 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db = await aiosqlite.connect(":memory:")
         self.db.row_factory = aiosqlite.Row
+        await self.db.execute("CREATE TABLE players(user_id INTEGER PRIMARY KEY)")
+        await self.db.executemany("INSERT INTO players(user_id) VALUES(?)", [(value,) for value in (101,202,303,404,405)])
+        await self.db.commit()
         await init_evolution_tables(self.db)
 
     async def asyncTearDown(self):
@@ -57,6 +60,14 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(is_evolved_spawn(False, 1))
         with self.assertRaises(ValueError):
             is_evolved_spawn(True, 101)
+
+    async def test_mastery_operations_reject_missing_player_accounts(self):
+        with self.assertRaisesRegex(EvolutionError, "Player account not found"):
+            await record_monster_defeat(self.db, 999, 7)
+        with self.assertRaisesRegex(EvolutionError, "Player account not found"):
+            await get_evolution_state(self.db, 999, 7)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM player_monster_mastery WHERE user_id=999")
+        self.assertEqual((await cur.fetchone())["total"], 0)
 
     async def test_invalid_mastery_input_is_rejected(self):
         with self.assertRaises(EvolutionError):
