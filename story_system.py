@@ -147,6 +147,38 @@ async def get_story_chapters(db,user_id,player_level):
             }
         },
         10: {
+            "opening_path": {
+                "mira": " The lantern Mira first carried still burns at your side.",
+                "wanderer": " The masked Wanderer stands at the summit, the compass finally pointing home."
+            },
+            "trust_path": {
+                "mira": " Mira keeps the compass close, honoring the trust you placed in her.",
+                "wanderer": " The Wanderer lays the compass at your feet, its needle steady at last."
+            },
+            "memory_path": {
+                "truth": " The names you spoke are carved into the summit stone, no longer hidden.",
+                "silence": " The sealed name remains yours to reveal when you are ready."
+            },
+            "echo_path": {
+                "freed": " The freed voices rise together beneath the dawn.",
+                "questioned": " Echo's question remains unanswered, waiting beyond the final light."
+            },
+            "crown_path": {
+                "mercy": " The Ashen King's key rests in Mira's hand, a promise that mercy can outlive fire.",
+                "revenge": " The Ashen King's warning follows you: the fire was never meant to kill you."
+            },
+            "forgiveness_path": {
+                "forgiven": " Mira stands beside you without fear, the old wound finally allowed to close.",
+                "time": " Mira stands beside you without demanding an answer; trust has room to grow."
+            },
+            "bargain_path": {
+                "refused": " The Herald's false promise is gone, but a true voice answers from beyond the rift.",
+                "deception": " The silver crack in the rift remains, proof that the bargain may yet demand its price."
+            },
+            "lantern_path": {
+                "together": " The lantern answers every companion's light, brighter than it has ever been.",
+                "alone": " The lantern remembers the weight you carried alone, even as your companions gather."
+            },
             "burden_path": {
                 "shared": " Your companions stand at the summit beside you; the final hour belongs to all of you.",
                 "solo": " Your companions refuse to leave you alone at the summit; the cost will not be yours alone."
