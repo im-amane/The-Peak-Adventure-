@@ -50,6 +50,54 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   await set_group_ban(self.db,-1001,202,404,False); self.assertFalse(await is_group_banned(self.db,-1001,404))
  async def test_owner_cannot_be_banned(self):
   with self.assertRaises(GroupError): await set_group_ban(self.db,-1001,202,101,True)
+ async def test_group_campaign_progress_is_sequential_and_persistent(self):
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertTrue(rows[0]["unlocked"])
+  self.assertFalse(rows[1]["unlocked"])
+  await record_group_activity(self.db,-1001,"battle",10)
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertTrue(rows[0]["completed"])
+  self.assertFalse(rows[1]["unlocked"])
+  await claim_group_campaign_reward(self.db,-1001,202,1)
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertTrue(rows[1]["unlocked"])
+  self.assertEqual(rows[0]["progress"],10)
+
+ async def test_group_campaign_requires_matching_activity(self):
+  await record_group_activity(self.db,-1001,"trade",4)
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertEqual(rows[0]["progress"],0)
+  self.assertEqual(rows[2]["progress"],0)
+
+ async def test_group_campaign_claim_requires_completion_and_admin(self):
+  with self.assertRaisesRegex(GroupError,"Complete"):
+   await claim_group_campaign_reward(self.db,-1001,202,1)
+  await record_group_activity(self.db,-1001,"battle",10)
+  with self.assertRaisesRegex(GroupError,"verified group admins"):
+   await claim_group_campaign_reward(self.db,-1001,303,1)
+  self.assertEqual(await claim_group_campaign_reward(self.db,-1001,202,1),(100,50))
+  with self.assertRaisesRegex(GroupError,"already claimed"):
+   await claim_group_campaign_reward(self.db,-1001,202,1)
+
+ async def test_group_campaign_reward_rolls_back_claim_and_xp_if_coin_credit_fails(self):
+  await record_group_activity(self.db,-1001,"battle",10)
+  await self.db.execute("CREATE TRIGGER reject_campaign_coins BEFORE UPDATE OF coins ON players WHEN OLD.user_id=202 BEGIN SELECT RAISE(ABORT,'coin credit unavailable'); END")
+  await self.db.commit()
+  with self.assertRaises(Exception):
+   await claim_group_campaign_reward(self.db,-1001,202,1)
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertFalse(rows[0]["claimed"])
+  cur=await self.db.execute("SELECT group_xp FROM group_profiles WHERE chat_id=-1001")
+  self.assertEqual((await cur.fetchone())[0],0)
+
+ async def test_group_campaign_preserves_outer_transaction(self):
+  await self.db.execute("BEGIN")
+  await record_group_activity(self.db,-1001,"battle",3)
+  self.assertTrue(self.db.in_transaction)
+  await self.db.rollback()
+  rows=await get_group_campaign(self.db,-1001)
+  self.assertEqual(rows[0]["progress"],0)
+
  async def test_group_ranking(self):
   await register_group(self.db,-1002,"Summit",303); await award_group_xp(self.db,-1002,500)
   self.assertEqual((await top_groups(self.db))[0]["chat_id"],-1002)
