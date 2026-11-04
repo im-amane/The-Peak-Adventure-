@@ -1165,9 +1165,11 @@
     constructor(){super("adventure");}
     create(){
       sceneRef=this;
-      const w=this.scale.width*2.6,h=this.scale.height*1.5;
-      this.worldWidth=w;this.worldHeight=h;
       const idx=Math.max(0,Math.min(9,gameState ? (gameState.world_id||1)-1:0));
+      const layout=window.PeakWorldLayout.createLayout(this.scale.width,this.scale.height,idx+1);
+      const w=layout.width,h=layout.height;
+      this.worldLayout=layout;
+      this.worldWidth=w;this.worldHeight=h;
       const palette=worldPalettes[idx];
       this.cameras.main.setBackgroundColor(palette.sky);
       const ground=this.add.graphics();
@@ -1200,18 +1202,9 @@
       }else{
         for(let i=0;i<8;i++){const x=i*120+30;scenery.lineStyle(8,0x725c69,0.9);scenery.beginPath();scenery.moveTo(x,h*0.95);scenery.lineTo(x+20,h*0.65);scenery.lineTo(x-12,h*0.45);scenery.lineTo(x+18,h*0.25);scenery.strokePath();scenery.fillStyle(0xe2c17c,0.7);scenery.fillCircle(x+18,h*0.25,5);}
       }
-      // Spread deterministic blockers across the expanded three-zone map.
+      // Spread deterministic blockers across the expanded four-zone map.
       // Keep the hero spawn, Wanderer and world gate clear for reliable first input.
-      this.obstacles = [
-        {x:w*0.14,y:h*0.61,width:42,height:58},
-        {x:w*0.32,y:h*0.77,width:58,height:34},
-        {x:w*0.43,y:h*0.51,width:46,height:54},
-        {x:w*0.62,y:h*0.84,width:50,height:28},
-        {x:w*0.76,y:h*0.59,width:54,height:42},
-        {x:w*0.86,y:h*0.88,width:46,height:58},
-        {x:w*0.27,y:h*0.53,width:38,height:48},
-        {x:w*0.69,y:h*0.48,width:44,height:36}
-      ];
+      this.obstacles = layout.obstacles.map(obstacle=>({...obstacle}));
       this.obstacleGraphics = this.add.graphics();
       this.obstacles.forEach((obstacle,index)=>{
         const color = index % 2 ? 0x514b48 : 0x3b5140;
@@ -1225,31 +1218,37 @@
           this.obstacleGraphics.fillCircle(obstacle.x+8,obstacle.y-5,3);
         }
       });
-      const zoneLabels=["THE OUTER REACH","THE WILD HEART","THE INNER FRONTIER"];
-      zoneLabels.forEach((label,index)=>{
-        const x=w*(index+0.5)/3;
-        this.add.text(x,h*0.47,label,{
+      layout.zones.forEach((zone,index)=>{
+        this.add.text(zone.centerX,h*0.47,zone.name.toUpperCase(),{
           fontFamily:"Georgia",fontSize:"11px",fontStyle:"bold",color:"#fff1cf",
-          stroke:"#17232a",strokeThickness:3,letterSpacing:2
-        }).setOrigin(0.5).setAlpha(0.72).setDepth(2);
+          stroke:"#17232a",strokeThickness:3,letterSpacing:1
+        }).setOrigin(0.5).setAlpha(0.82).setDepth(2);
+        const landmark=this.add.graphics().setDepth(1);
+        const markX=zone.centerX,markY=h*0.55;
+        landmark.fillStyle(palette.accent,0.24);landmark.fillCircle(markX,markY,20);
+        landmark.lineStyle(2,palette.accent,0.62);
+        if(index%4===0){landmark.strokeCircle(markX,markY,13);landmark.lineBetween(markX,markY-17,markX,markY+17);}
+        else if(index%4===1){landmark.strokeTriangle(markX-16,markY+12,markX,markY-17,markX+16,markY+12);landmark.lineBetween(markX,markY-10,markX,markY+10);}
+        else if(index%4===2){landmark.strokeRect(markX-12,markY-13,24,26);landmark.lineBetween(markX-5,markY-13,markX-5,markY+13);landmark.lineBetween(markX+5,markY-13,markX+5,markY+13);}
+        else{landmark.strokeCircle(markX,markY,16);landmark.strokeCircle(markX,markY,8);}
         if(index>0){
           const divider=this.add.graphics().setDepth(1);
-          divider.lineStyle(2,palette.accent,0.22);
-          divider.lineBetween(x-w/6,h*0.49,x-w/6,h*0.96);
+          divider.lineStyle(2,palette.accent,0.25);
+          divider.lineBetween(zone.startX,h*0.49,zone.startX,h*0.96);
         }
       });
-      this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
+      this.hero=makeHero(this,layout.spawn.x,layout.spawn.y,gameState.hero_class,gameState.appearance);
       this.heroBaseScaleX=this.hero.scaleX||1;
       this.heroFacing=1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
-      this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
+      this.npc = makeHero(this,layout.npc.x,layout.npc.y,"Mage");
       this.npc.setScale(0.9);
       this.obstacles.push({x:this.npc.x,y:this.npc.y,width:34,height:34});
-      this.npcLabel = this.add.text(w*0.49,h*0.7-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
+      this.npcLabel = this.add.text(layout.npc.x,layout.npc.y-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
       const nextWorld=gameState.worlds.find(world=>world.id===gameState.world_id+1);
-      this.portalX=this.worldWidth-78;
-      this.portalY=h*0.69;
+      this.portalX=layout.portal.x;
+      this.portalY=layout.portal.y;
       this.portalGraphics=this.add.graphics().setDepth(3);
       this.portalGraphics.fillStyle(0x142a42,0.82);
       this.portalGraphics.fillCircle(this.portalX,this.portalY,31);
@@ -1275,10 +1274,11 @@
       ];
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
       const roster=Array.isArray(gameState.nearby_monsters)&&gameState.nearby_monsters.length?gameState.nearby_monsters:[gameState.monster];
-      const positions=roster.length===1?[0.77]:roster.length===2?[0.65,0.84]:[0.57,0.73,0.89];
+      const monsterSpawns=layout.monsterPositions(Math.min(roster.length,3));
       this.monsters=roster.map((monster,index)=>{
-        const x=w*positions[Math.min(index,positions.length-1)];
-        const y=h*(index%2===0?0.68:0.76);
+        const spawn=monsterSpawns[Math.min(index,monsterSpawns.length-1)];
+        const x=spawn.x;
+        const y=spawn.y;
         const sprite=makeMonster(this,x,y,monster.level,monsterColor);
         const label=this.add.text(x,y-48,(monster.boss?"👑 ":"")+monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
         return {
