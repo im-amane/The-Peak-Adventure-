@@ -677,7 +677,7 @@
         },
         {
           "name": "World and group quest chains",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "100-monster story editorial rewrite",
@@ -798,17 +798,17 @@
   ],
   "progress_summary": {
     "total_items": 172,
-    "complete_items": 155,
-    "partial_items": 15,
+    "complete_items": 156,
+    "partial_items": 14,
     "pending_items": 2,
-    "fully_implemented_percent": 90,
+    "fully_implemented_percent": 91,
     "calculation": "complete_items / total_items; partial and pending items are excluded"
   },
   "progress": {
-    "complete": 155,
-    "partial": 15,
+    "complete": 156,
+    "partial": 14,
     "pending": 2,
     "total": 172,
-    "percentage": 90
+    "percentage": 91
   }
 }
