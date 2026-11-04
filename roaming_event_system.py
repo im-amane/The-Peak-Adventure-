@@ -149,6 +149,9 @@ async def attack_roaming_event(db, event_id, user_id, damage, now=None, cooldown
     stamp = int(time.time()) if now is None else now
     if not _valid_timestamp(stamp):
         raise RoamingEventError("Invalid event timestamp.")
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise RoamingEventError("Player account not found.")
     cur = await db.execute("SELECT * FROM roaming_events WHERE event_id=?", (event_id,))
     event = await cur.fetchone()
     if not event or event["status"] != "active" or event["ends_at"] <= stamp:
