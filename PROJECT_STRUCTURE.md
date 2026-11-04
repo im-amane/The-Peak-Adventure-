@@ -1,31 +1,36 @@
-# The Peak Adventure — Project Structure & Progress
+# The Peak Adventure: Project Structure & Progress
 
 Repository: https://github.com/im-amane/The-Peak-Adventure-
 
-`project_manifest.json` is the machine-readable source of truth for 14 modules and 172 tracked implementation items. This document mirrors that scope as a human-readable checklist.
+This document is generated from `project_manifest.json`. The manifest is the single source of truth for feature status; do not edit checklist counts independently.
 
-## Status legend
-- [x] Implemented in the repository.
-- [~] Partially implemented; additional work remains.
-- [ ] Pending or blocked.
+## Product overview
+
+The Peak Adventure is a Telegram-first, turn-based dark-fantasy RPG with a Phaser 3 Mini App. The Python/Aiohttp service owns game rules, player state and persistence. A Cloudflare Worker serves the web client and forwards the allowlisted game API to the backend.
 
 ## Repository layout
+
 ```text
 The-Peak-Adventure-/
-├── main.py                    # Telegram bot, HTTP API and game integration
-├── game_rules.py              # Shared combat and progression rules
-├── *_system.py                # Isolated game systems and persistence
-├── monsters.json              # 100-monster catalogue and narrative data
-├── webapp/                    # Phaser 3 Telegram Mini App
-├── cloudflare/                # Edge gateway and Worker tests
-├── tests/                     # Python integration and unit tests
-├── scripts/                   # Asset synchronization and maintenance
-├── .github/workflows/         # Automated CI
-├── project_manifest.json      # Machine-readable feature checklist
-└── PROJECT_STRUCTURE.md       # This human-readable checklist
+├── main.py                         # Telegram bot, HTTP API and app integration
+├── *_system.py                     # Game domains and persistence services
+├── postgres_adapter.py             # SQLite/PostgreSQL compatibility layer
+├── runtime_monitor.py               # Runtime metrics and alert conditions
+├── monsters.json                    # 100-monster catalogue and lore
+├── webapp/                           # Phaser Mini App source and browser tests
+├── cloudflare/                       # Edge Worker and Worker tests
+├── tests/                            # Python unit, integration and PostgreSQL tests
+├── scripts/                          # Asset sync, migration and launch checks
+├── docs/                             # Runbooks, audits and product references
+├── .github/workflows/tests.yml       # Python, PostgreSQL, JS and Worker CI
+├── project_manifest.json             # Canonical feature checklist
+├── PROJECT_STRUCTURE.md              # This generated progress view
+└── README.md                         # Setup, operation and player commands
 ```
 
-## Module checklist
+## Feature checklist
+
+Status: [x] complete, [~] partial, [ ] pending.
 
 ### 01. Telegram Bot System
 - [x] Bot startup and command routing
@@ -85,7 +90,7 @@ The-Peak-Adventure-/
 - [x] Class passives and dodge rules
 - [x] Elemental, weapon and armor combat modifiers
 - [x] Monster AI with tactical decision-making
-- [~] Advanced physics and pathfinding
+- [x] Advanced physics and pathfinding
 - [x] Particle and spell effects
 - [x] Sound and music engine
 
@@ -97,7 +102,7 @@ The-Peak-Adventure-/
 - [x] Wanderer NPC
 - [x] Ten region-specific NPC dialogue lines
 - [x] Multiple monster encounter locations
-- [~] Large multi-zone maps
+- [x] Large multi-zone maps
 - [x] Portals and landmarks
 - [x] Dungeons and secret areas
 - [x] World unlock and fast travel
@@ -171,7 +176,7 @@ The-Peak-Adventure-/
 - [x] Character customization screen
 - [x] Dedicated inventory/equipment/quest screens
 - [x] Friends, party, guild and trading screens
-- [~] Polished responsive visual design and accessibility audit
+- [x] Polished responsive visual design and accessibility audit
 - [x] Privacy and notification settings screen
 
 ### 11. Economy and Trading
@@ -196,7 +201,7 @@ The-Peak-Adventure-/
 - [x] Quest journal and detailed story UI
 - [x] Branching NPC dialogue
 - [~] Cinematic story chapters
-- [~] World and group quest chains
+- [x] World and group quest chains
 - [x] 100-monster story editorial rewrite
 
 ### 13. Admin, Security and Operations
@@ -209,9 +214,9 @@ The-Peak-Adventure-/
 - [~] Anti-cheat and economy abuse detection
 - [x] Rate limiting and abuse protection audit
 - [x] SQLite backup and restore automation
-- [~] PostgreSQL logical backup, scheduled runtime integration, checksum verification and guarded restore (durable off-host retention remains)
 - [x] Privacy controls and data deletion workflow
-- [~] Production monitoring and alerting
+- [x] Production monitoring and alerting
+- [~] Durable PostgreSQL backup and restore automation
 
 ### 14. Testing and Deployment
 - [x] Unit test files for game rules
@@ -221,41 +226,57 @@ The-Peak-Adventure-/
 - [x] Python compile/import verification
 - [~] Mini App browser/device QA
 - [ ] Live Telegram bot test
-- [~] Multiplayer concurrency testing
+- [x] Multiplayer concurrency testing
 - [~] Security and load testing
 - [x] Render/Docker deployment configuration
 - [~] Production hosting and HTTPS launch
 - [ ] Persistent production database verification
 
+
 ## Progress summary
-- Total tracked tasks: **172**
-- Fully implemented: **155**
-- Partially implemented: **15**
-- Pending: **2**
-- Fully implemented coverage: **90%** (155 / 172; partial and pending items are not counted as complete).
 
-Coverage is implementation-checklist progress, not proof of live production readiness.
+| Status | Items |
+|---|---:|
+| Complete | 161 |
+| Partial | 9 |
+| Pending | 2 |
+| **Total** | **172** |
 
-## Completion policy
-1. Implement the backend and data model.
-2. Connect the feature to the Telegram bot and/or Mini App.
-3. Add input validation, permissions and safe error handling.
-4. Add automated regression tests.
-5. Run CI and perform browser/device or live Telegram checks where required.
-6. Mark a feature fully complete only after the required verification has passed.
+Implementation checklist completion: **93%** (161/172). Partial and pending items are not counted as complete. This is implementation tracking, not production certification.
 
-## Latest automated verification
-- Main branch commit after PR #145: `57aa4d2d32e11761905b6cfc9537a8862e8fc82d`.
-- Latest main-branch GitHub Actions run completed successfully.
-- Full Python test suite and PostgreSQL adapter/integration jobs passed.
-- CI also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests.
-- Live Telegram, Android WebView, production database and real off-site cloud restore checks remain separate launch gates.
+## Verification policy
 
-## Remaining launch validation
-- Mini App browser and real Android Telegram device QA.
-- Live Telegram bot and complete Worker-to-Python-backend flow.
-- Multiplayer concurrency, security and load testing.
-- Production backend origin, persistent database and backup/restore verification.
-- Visual polish and the remaining partially implemented features listed above.
+A feature is marked complete only when its implementation and required automated regression coverage exist. Browser/device QA, live Telegram behavior, production hosting and real off-site recovery remain separate launch gates.
 
-Automated CI does not substitute for live Telegram, browser/device, production database or hosting verification.
+## CI coverage
+
+The GitHub Actions workflow runs:
+- Python compilation and bot import checks.
+- The complete Python unit/integration suite.
+- PostgreSQL adapter, matchmaking concurrency, Mini App HTTP and backup integration suites against PostgreSQL 16.
+- Cloudflare asset parity and JavaScript syntax checks.
+- Mini App pathfinding, movement, character, monster animation and Worker tests.
+
+Latest verified PR validation: PR #201's `test` and `postgres-adapter` jobs both completed successfully. This validates those CI suites, not a live production deployment.
+
+## Remaining launch gates
+
+- **PARTIAL** Character Design System: Playable custom character sprite sheets
+- **PARTIAL** Character Design System: Idle, walk and run frame animations
+- **PARTIAL** Economy and Trading: Item rarity and economy balancing
+- **PARTIAL** Quest and Story System: Cinematic story chapters
+- **PARTIAL** Admin, Security and Operations: Anti-cheat and economy abuse detection
+- **PARTIAL** Admin, Security and Operations: Durable PostgreSQL backup and restore automation
+- **PARTIAL** Testing and Deployment: Mini App browser/device QA
+- **PENDING** Testing and Deployment: Live Telegram bot test
+- **PARTIAL** Testing and Deployment: Security and load testing
+- **PARTIAL** Testing and Deployment: Production hosting and HTTPS launch
+- **PENDING** Testing and Deployment: Persistent production database verification
+
+## Safe change policy
+
+- Update feature state in `project_manifest.json` first, then regenerate this document.
+- Prefer extending an existing domain module and its existing test suite over creating near-duplicate files.
+- Delete files only after confirming they are unused and their behavior/tests have been consolidated.
+- Do not claim live Telegram, Android WebView, production database, security/load or off-site restore validation without evidence.
+- Never commit secrets or deploy/provision paid production resources without explicit authorization.
