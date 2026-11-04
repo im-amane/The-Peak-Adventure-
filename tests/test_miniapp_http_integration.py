@@ -231,6 +231,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ("/character_profiles.js", "PeakCharacters"),
             ("/character_animation.js", "PeakCharacterAnimation"),
             ("/monster_animation.js", "PeakMonsterAnimation"),
+            ("/world_layout.js", "PeakWorldLayout"),
         ):
             response = await self.client.get(route)
             self.assertEqual(response.status, 200, route)
@@ -243,6 +244,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('src="/character_profiles.js"', html)
         self.assertIn('src="/character_animation.js"', html)
         self.assertIn('src="/monster_animation.js"', html)
+        self.assertIn('src="/world_layout.js"', html)
 
     async def test_miniapp_static_entrypoint_is_served_by_http_application(self):
         response = await self.client.get("/")
