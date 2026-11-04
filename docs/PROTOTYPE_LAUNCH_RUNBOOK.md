@@ -94,4 +94,10 @@ The scheduler can export each completed local SQLite or PostgreSQL backup to an 
 
 The exporter uploads only after the local backup provider has completed its integrity checks. It attaches a SHA-256 checksum as object metadata and never deletes remote objects. Configure object lifecycle/retention and access controls in the storage provider. If upload fails, the local backup remains and the scheduled backup operation reports failure; monitor logs and alert on that failure.
 
-Preflight warns when no bucket is configured. When configured, it still warns that downloading an archived object and rehearsing an actual off-site restore remain operational requirements. CI mocks the S3 client; it does not contact a real cloud account.
+Preflight warns when no bucket is configured. When configured, a restore rehearsal is still required. CI mocks the S3 client; it does not contact a real cloud account.
+
+The `offsite_backup.download_backup(bucket=..., key=..., destination=...)` helper checks the object's SHA-256 metadata and content length, downloads to a temporary file, and atomically publishes it only after verification. A missing checksum or mismatch leaves an existing destination untouched. After download, rehearse restoration only against an isolated disposable target:
+- SQLite: pass the downloaded file to `db_backup.restore_backup(downloaded_path, disposable_database_path)`.
+- PostgreSQL: pass it to `postgres_backup.restore_backup(downloaded_path, disposable_database_url, confirm_database=exact_database_name)`.
+
+Never point a restore rehearsal at the live application database. For PostgreSQL, the downloaded custom-format archive must also have its adjacent `.sha256` sidecar available if using the existing `verify_backup`/restore helper; off-site object metadata verifies the downloaded bytes, but does not replace the archive's local sidecar. CI covers the download checksum path with a mocked S3 client; a real provider download and disposable-database restore remain operational checks.
