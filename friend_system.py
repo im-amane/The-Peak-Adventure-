@@ -97,6 +97,10 @@ async def send_friend_request(db: Any, requester_id: int, target_id: int) -> int
         raise FriendError("Invalid player account.")
     if requester_id == target_id:
         raise FriendError("You cannot send a friend request to yourself.")
+    for player_id in (requester_id, target_id):
+        cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (player_id,))
+        if await cur.fetchone() is None:
+            raise FriendError("Player account not found.")
     if getattr(db, "dialect", "sqlite") == "postgres":
         # Serialize outgoing-request cap checks for this requester across dynos.
         cur = await db.execute(
