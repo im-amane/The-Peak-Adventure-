@@ -641,7 +641,7 @@
     {
       "id": "12",
       "name": "Quest and Story System",
-      "status": "partial",
+      "status": "complete",
       "items": [
         {
           "name": "Persistent story quest progress",
@@ -672,8 +672,8 @@
           "status": "complete"
         },
         {
-          "name": "Cinematic story chapters",
-          "status": "partial"
+          "name": "Branching cinematic story chapters with animated scene presentation",
+          "status": "complete"
         },
         {
           "name": "World and group quest chains",
@@ -715,8 +715,8 @@
           "status": "complete"
         },
         {
-          "name": "Anti-cheat and economy abuse detection",
-          "status": "partial"
+          "name": "Server-authoritative anti-cheat and economy abuse telemetry",
+          "status": "complete"
         },
         {
           "name": "Rate limiting and abuse protection audit",
