@@ -19,6 +19,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - One-time boss clears, player XP/levels, coins, HP and leaderboards
 - Group PvP duels with accept/decline, turn-based attacks, surrender and PvP rankings
 - Guild creation, membership, 20-player capacity, guild XP/levels and guild rankings
+- Automatic group welcome messages for new members, with onboarding steps, group-registration guidance and Amane Fujimiya creator branding
 - Four-player parties with leader-only invitations, accept/decline controls, roster view, leave, disband and automatic leadership handoff
 - Persistent friend requests, friend list, removal, duplicate-request protection and pending-request anti-spam limits
 - Player trading for coins and health potions with dual confirmation
@@ -82,6 +83,12 @@ Before a broader launch, complete versioned schema migrations and full PostgreSQ
 
 Keep `BOT_TOKEN` private. Never deploy production or provision paid resources without explicit authorization.
 
+
+## Creator legacy and attribution
+
+The Peak Adventure is created and developed by **Amane Fujimiya** (creator ID: **@im_amane**). In the Telegram bot, use `/credits` for the permanent creator credit and `/legacy` to read the hidden creator chronicle, **The Forgotten Creator**. The First Architect, Creator's Emblem, Forgotten Creator title and Amane's Legacy are part of the creator-lore identity.
+
+The creator credit is attribution, not a player-grant mechanism. The secret chronicle is currently a narrative tribute; it does not award a gameplay item or bypass progression. Creator-only title/emblem ownership must remain reserved for the project author. See [the creator legacy specification](docs/CREATOR_LEGACY.md).
 
 ## Commands
 - `/start` - Create your hero and open the game menu
