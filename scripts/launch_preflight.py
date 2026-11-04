@@ -97,7 +97,7 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
             if not valid_endpoint:
                 add("offsite_backup_endpoint_invalid", "error", "OFFSITE_BACKUP_ENDPOINT_URL must be an HTTP(S) endpoint without embedded credentials.")
         region = str(env.get("OFFSITE_BACKUP_REGION", env.get("AWS_REGION", "us-east-1"))).strip()
-        if not re.fullmatch(r"[a-z]{2}(?:-gov)?-[a-z]+-\\d", region):
+        if not re.fullmatch(r"[a-z]{2}(?:-gov)?-[a-z]+-\d", region):
             add("offsite_backup_region_invalid", "error", "OFFSITE_BACKUP_REGION must be a valid AWS-style region identifier.")
         add("offsite_restore_rehearsal_required", "warning", "Off-site upload is configured, but periodically download an archived object and rehearse a restore before production use.")
 
