@@ -31,6 +31,7 @@ jobs:
       - run: node --check webapp/game.js
       - run: node --check cloudflare/worker.mjs
       - run: node --test webapp/pathfinding.test.mjs
+      - run: node --test webapp/movement.test.mjs
       - run: node --test cloudflare/worker.test.mjs
 
   postgres-adapter:
