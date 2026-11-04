@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "../webapp/character_animation.js";
 
-const { getPose } = globalThis.PeakCharacterAnimation;
+const { getPose, getAnimationKey, getFrameIndex, directions, states, framesPerClip } = globalThis.PeakCharacterAnimation;
 
 test("selects idle pose below the movement threshold", () => {
   const pose = getPose(3, 4, true, 500);
@@ -69,4 +69,27 @@ test("walk and run expose stable four-frame gait cycles", () => {
 test("only an explicit sprint flag selects the running state", () => {
   assert.equal(getPose(100, 0, "yes", 100).state, "walk");
   assert.equal(getPose(100, 0, true, 100).state, "run");
+});
+
+
+test("sprite sheet layout covers every state, direction and frame exactly once", () => {
+  assert.deepEqual(states, ["idle", "walk", "run"]);
+  assert.equal(directions.length, 8);
+  assert.equal(framesPerClip, 4);
+  const indices = new Set();
+  for (const state of states) {
+    for (const facing of directions) {
+      assert.equal(getAnimationKey(state, facing), "peak-hero-" + state + "-" + facing);
+      for (let frame = 0; frame < framesPerClip; frame += 1) {
+        indices.add(getFrameIndex(state, facing, frame));
+      }
+    }
+  }
+  assert.equal(indices.size, 96);
+  assert.deepEqual([...indices].sort((a, b) => a - b), Array.from({length: 96}, (_, i) => i));
+});
+
+test("sprite sheet clip lookup safely falls back for unknown state and direction", () => {
+  assert.equal(getAnimationKey("fly", "up"), "peak-hero-idle-south");
+  assert.equal(getFrameIndex("fly", "up", 99), getFrameIndex("idle", "south", 3));
 });
