@@ -56,5 +56,48 @@
     return { x: nextX, y: nextY, blockedX, blockedY };
   }
 
-  root.PeakMovement = { moveWithCollisions, isBlocked };
+  function integrateVelocity(vx, vy, inputX, inputY, deltaSeconds, options = {}) {
+    const dt = clamp(finite(deltaSeconds, 0), 0, 0.05);
+    let ix = finite(inputX, 0);
+    let iy = finite(inputY, 0);
+    const inputLength = Math.hypot(ix, iy);
+    if (inputLength > 1) { ix /= inputLength; iy /= inputLength; }
+    let x = finite(vx, 0);
+    let y = finite(vy, 0);
+    const maxSpeed = clamp(finite(options.maxSpeed, 180), 0, 1000);
+    const acceleration = clamp(finite(options.acceleration, 900), 0, 5000);
+    const friction = clamp(finite(options.friction, 1200), 0, 5000);
+
+    if (inputLength > 0) {
+      const targetX = ix * maxSpeed;
+      const targetY = iy * maxSpeed;
+      const changeX = targetX - x;
+      const changeY = targetY - y;
+      const changeLength = Math.hypot(changeX, changeY);
+      const maxChange = acceleration * dt;
+      if (changeLength > maxChange && changeLength > 0) {
+        x += changeX / changeLength * maxChange;
+        y += changeY / changeLength * maxChange;
+      } else {
+        x = targetX;
+        y = targetY;
+      }
+    } else {
+      const speed = Math.hypot(x, y);
+      const nextSpeed = Math.max(0, speed - friction * dt);
+      if (speed > 0) {
+        x *= nextSpeed / speed;
+        y *= nextSpeed / speed;
+      }
+    }
+
+    const speed = Math.hypot(x, y);
+    if (speed > maxSpeed && speed > 0) {
+      x *= maxSpeed / speed;
+      y *= maxSpeed / speed;
+    }
+    return { x, y };
+  }
+
+  root.PeakMovement = { moveWithCollisions, isBlocked, integrateVelocity };
 })(typeof window !== "undefined" ? window : globalThis);
