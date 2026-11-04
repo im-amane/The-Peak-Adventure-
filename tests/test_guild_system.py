@@ -119,6 +119,15 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   await start_guild_raid(self.db,10,1,10,"Root Warden",100)
   result=await attack_guild_raid(self.db,10,2,100)
   self.assertEqual(result["status"],"won")
+  cur=await self.db.execute("SELECT guild_level,guild_xp FROM guilds WHERE guild_id=10")
+  guild=await cur.fetchone()
+  self.assertEqual((guild["guild_level"],guild["guild_xp"]),(1,100))
+
+ async def test_guild_xp_accepts_boosted_battle_rewards(self):
+  level,xp=await award_guild_xp(self.db,10,25000)
+  self.assertEqual((level,xp),(10,2500))
+  with self.assertRaises(GuildFeatureError):
+   await award_guild_xp(self.db,10,50001)
  async def test_nonmember_cannot_attack_raid(self):
   await start_guild_raid(self.db,10,1,10,"Root Warden",100)
   with self.assertRaises(GuildFeatureError): await attack_guild_raid(self.db,10,3,10)
@@ -188,6 +197,9 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
    result=await record_guild_war_duel(self.db,1,4,1)
   self.assertEqual(result["status"],"completed")
   self.assertEqual(result["winner_guild"],10)
+  cur=await self.db.execute("SELECT guild_level,guild_xp FROM guilds WHERE guild_id=10")
+  guild=await cur.fetchone()
+  self.assertEqual((guild["guild_level"],guild["guild_xp"]),(1,150))
  async def test_duplicate_war_is_blocked(self):
   await declare_guild_war(self.db,10,1,20)
   with self.assertRaises(GuildFeatureError): await declare_guild_war(self.db,20,4,10)
