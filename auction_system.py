@@ -440,8 +440,17 @@ async def list_active_auctions(db, now=None, limit=20):
 
 async def get_auction(db, listing_id, now=None):
     _positive_id(listing_id, "auction")
-    rows = await list_active_auctions(db, now, 50)
-    return next((row for row in rows if row["listing_id"] == listing_id), None)
+    now = _timestamp(now)
+    await _settle_due(db, now)
+    cur = await db.execute(
+        """SELECT listing_id,seller_id,slot,item_name,item_stat,start_price,current_bid,
+                  highest_bidder,ends_at
+           FROM auction_listings
+           WHERE listing_id=? AND status='active' AND ends_at>?
+           LIMIT 1""",
+        (listing_id, now),
+    )
+    return await cur.fetchone()
 
 async def list_stash(db, user_id):
     _positive_id(user_id, "player")
