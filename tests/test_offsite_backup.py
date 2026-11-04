@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from offsite_backup import download_backup, upload_backup, upload_backup_from_environment
+from offsite_backup import download_backup, restore_offsite_postgres_backup, upload_backup, upload_backup_from_environment
 
 
 class FakeS3Client:
@@ -134,6 +134,54 @@ class OffsiteBackupTests(unittest.TestCase):
             self.path, bucket="peak-backups", region="ap-south-1",
             prefix="nightly", endpoint_url=None, kms_key_id=None,
         )
+
+    def test_offsite_restore_verifies_archive_and_requires_disposable_target(self):
+        captured = {}
+        def verify(path, database_url):
+            captured["path"] = path
+            captured["database_url"] = database_url
+            return True
+        def restore(path, database_url, *, confirm_database):
+            self.assertTrue(path.is_file())
+            captured["confirmed"] = confirm_database
+        with patch("postgres_backup.verify_backup", side_effect=verify) as verify_mock, patch(
+            "postgres_backup.restore_backup", side_effect=restore
+        ) as restore_mock:
+            result = restore_offsite_postgres_backup(
+                bucket="peak-backups", key="nightly/source.dump",
+                database_url="postgresql://user:pass@localhost/peak_restore_test",
+                confirm_database="peak_restore_test", target_database_is_disposable=True,
+                s3_client=self.client,
+            )
+        verify_mock.assert_called_once()
+        restore_mock.assert_called_once()
+        self.assertEqual(captured["confirmed"], "peak_restore_test")
+        self.assertFalse(captured["path"].exists(), "temporary off-site archive must be removed")
+        self.assertEqual(result["object_key"], "nightly/source.dump")
+        self.assertTrue(result["verified"] and result["restored"])
+
+    def test_offsite_restore_requires_explicit_disposable_target_confirmation(self):
+        with self.assertRaisesRegex(ValueError, "explicit confirmation"):
+            restore_offsite_postgres_backup(
+                bucket="peak-backups", key="nightly/source.dump",
+                database_url="postgresql://user:pass@localhost/peak_restore_test",
+                confirm_database="peak_restore_test", target_database_is_disposable=False,
+                s3_client=self.client,
+            )
+        self.assertEqual(self.client.calls, [])
+
+    def test_offsite_restore_stops_when_archive_is_not_readable(self):
+        with patch("postgres_backup.verify_backup", return_value=False), patch(
+            "postgres_backup.restore_backup"
+        ) as restore_mock:
+            with self.assertRaisesRegex(RuntimeError, "failed local integrity or readability"):
+                restore_offsite_postgres_backup(
+                    bucket="peak-backups", key="nightly/source.dump",
+                    database_url="postgresql://user:pass@localhost/peak_restore_test",
+                    confirm_database="peak_restore_test", target_database_is_disposable=True,
+                    s3_client=self.client,
+                )
+        restore_mock.assert_not_called()
 
 
 if __name__ == "__main__":
