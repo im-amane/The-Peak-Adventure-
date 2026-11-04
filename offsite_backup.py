@@ -149,7 +149,7 @@ def download_backup(
         # Stage every requested artifact before publishing the archive. A local
         # sidecar write failure must not replace a previously good destination.
         if sidecar_temp is not None:
-            sidecar_temp.write_text(f"{expected}  {target.name}\\n", encoding="ascii")
+            sidecar_temp.write_text(f"{expected}  {target.name}\n", encoding="ascii")
         os.replace(temporary, target)
         if sidecar is not None and sidecar_temp is not None:
             os.replace(sidecar_temp, sidecar)
