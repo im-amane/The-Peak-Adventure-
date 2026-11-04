@@ -26,6 +26,7 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
    def random(self):return next(self.values)
   result=await award_material_drop(self.db,1,{"level":1,"boss":False},Fixed())
   self.assertEqual(result["id"],"iron_ore")
+  self.assertEqual(result["rarity"],"common")
   self.assertEqual((await get_materials(self.db,1))["iron_ore"],1)
  async def test_craft_requires_materials(self):
   with self.assertRaises(CraftingError):await craft_item(self.db,1,10,"iron_sword")

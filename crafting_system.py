@@ -8,14 +8,18 @@ MATERIALS={
  "iron_ore":"Iron Ore","ember_shard":"Ember Shard","frost_crystal":"Frost Crystal",
  "void_essence":"Void Essence","star_dust":"Star Dust"
 }
+MATERIAL_RARITY = {
+ "iron_ore":"common","ember_shard":"uncommon","frost_crystal":"uncommon",
+ "void_essence":"rare","star_dust":"epic"
+}
 RECIPES={
- "iron_sword":{"name":"Forged Iron Sword","slot":"weapon","level":5,"attack":12,"defense":0,
+ "iron_sword":{"name":"Forged Iron Sword","slot":"weapon","level":5,"attack":12,"defense":0,"rarity":"common",
    "cost":{"iron_ore":3,"ember_shard":1}},
- "frost_armor":{"name":"Frostguard Armor","slot":"armor","level":15,"attack":0,"defense":14,
+ "frost_armor":{"name":"Frostguard Armor","slot":"armor","level":15,"attack":0,"defense":14,"rarity":"uncommon",
    "cost":{"iron_ore":2,"frost_crystal":3}},
- "rift_blade":{"name":"Riftforged Blade","slot":"weapon","level":50,"attack":38,"defense":0,
+ "rift_blade":{"name":"Riftforged Blade","slot":"weapon","level":50,"attack":38,"defense":0,"rarity":"rare",
    "cost":{"void_essence":3,"star_dust":2,"ember_shard":2}},
- "celestial_mail":{"name":"Celestial Mail","slot":"armor","level":70,"attack":0,"defense":42,
+ "celestial_mail":{"name":"Celestial Mail","slot":"armor","level":70,"attack":0,"defense":42,"rarity":"epic",
    "cost":{"star_dust":4,"frost_crystal":3,"void_essence":2}},
 }
 
@@ -138,7 +142,7 @@ async def award_material_drop(db,user_id,monster,rng=None):
     await db.execute("""INSERT INTO player_materials(user_id,material_id,quantity) VALUES(?,?,?)
       ON CONFLICT(user_id,material_id) DO UPDATE SET quantity=player_materials.quantity+excluded.quantity""",
       (user_id,material,amount))
-    return {"id":material,"name":MATERIALS[material],"quantity":amount}
+    return {"id":material,"name":MATERIALS[material],"rarity":MATERIAL_RARITY[material],"quantity":amount}
 
 async def craft_item(db,user_id,player_level,recipe_id):
     if type(user_id) is not int or user_id <= 0:
