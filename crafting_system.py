@@ -170,17 +170,19 @@ async def craft_item(db,user_id,player_level,recipe_id):
             raise CraftingError("Player account not found.")
         if player_level<recipe["level"]:
             raise CraftingError("This recipe requires player level "+str(recipe["level"])+".")
-        current_stat = current_gear["weapon_attack"] if recipe["slot"] == "weapon" else current_gear["armor_defense"]
-        crafted_stat = recipe["attack"] if recipe["slot"] == "weapon" else recipe["defense"]
-        if crafted_stat <= current_stat:
-            raise CraftingError("Your equipped gear is already as strong or stronger. Crafting only equips real upgrades.")
-
+        # Preserve the one-time recipe error before checking upgrade strength:
+        # a second craft must be reported as a duplicate, not as a weaker item.
         existing=await db.execute(
             "SELECT 1 FROM crafted_items WHERE user_id=? AND recipe_id=?",
             (user_id,recipe_id),
         )
         if await existing.fetchone():
             raise CraftingError("You have already crafted this unique recipe.")
+
+        current_stat = current_gear["weapon_attack"] if recipe["slot"] == "weapon" else current_gear["armor_defense"]
+        crafted_stat = recipe["attack"] if recipe["slot"] == "weapon" else recipe["defense"]
+        if crafted_stat <= current_stat:
+            raise CraftingError("Your equipped gear is already as strong or stronger. Crafting only equips real upgrades.")
 
         for material,quantity in recipe["cost"].items():
             debit=await db.execute(
