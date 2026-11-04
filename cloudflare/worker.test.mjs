@@ -621,5 +621,5 @@ test("hero faces horizontal movement and preserves facing after respawn", () => 
   assert.match(game, /this\.heroFacing=1/);
   assert.match(game, /const nextFacing=dx<0\?-1:1/);
   assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX\*this\.heroFacing,1\)/);
-  assert.match(game, /scaleX:\(this\.heroBaseScaleX\|\|1\)\*\(this\.heroFacing\|\|1\)/);
+  assert.match(game, /scaleX:\(this\.heroBaseScaleX\|\|1\)\*\(this\.hero\.characterAnimations\?1:\(this\.heroFacing\|\|1\)\)/);
 });
