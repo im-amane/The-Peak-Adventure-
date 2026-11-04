@@ -97,8 +97,28 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
             {"risk_level": "high", "recommended_action": "manual_review"},
         )
 
+    def test_short_invalid_action_burst_escalates_without_auto_enforcement(self):
+        self.assertEqual(
+            classify_security_risk(5, 5, 1, 0, 0, 5),
+            {"risk_level": "medium", "recommended_action": "monitor"},
+        )
+        self.assertEqual(
+            classify_security_risk(10, 10, 1, 0, 0, 10),
+            {"risk_level": "high", "recommended_action": "manual_review"},
+        )
+
+    async def test_recent_burst_count_is_reported_separately_from_daily_volume(self):
+        for index in range(6):
+            await record_security_event(self.db, 404, "invalid_battle_action", f"bad action {index}", 1)
+        rows = await get_suspicious_players(self.db)
+        player = next(row for row in rows if row["user_id"] == 404)
+        self.assertEqual(player["event_count"], 6)
+        self.assertEqual(player["burst_event_count"], 6)
+        self.assertEqual(player["risk_level"], "medium")
+        self.assertEqual(player["recommended_action"], "monitor")
+
     def test_risk_triage_rejects_invalid_metrics(self):
-        for metrics in ((-1, 0, 0, 0, 0), (1, True, 0, 0, 0), (1, 0, 6, 0, 0)):
+        for metrics in ((-1, 0, 0, 0, 0), (1, True, 0, 0, 0), (1, 0, 6, 0, 0), (1, 1, 1, 0, 0, 2), (1, 1, 1, 0, 0, True)):
             with self.subTest(metrics=metrics), self.assertRaises(SecurityEventError):
                 classify_security_risk(*metrics)
 
