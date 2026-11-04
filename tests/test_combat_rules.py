@@ -144,6 +144,37 @@ class CombatRuleTests(unittest.IsolatedAsyncioTestCase):
 
 
 
+    async def test_stale_battle_finalizer_does_not_award_duplicate_rewards(self):
+        class FakeCursor:
+            def __init__(self, row=None, rowcount=0):
+                self.row = row
+                self.rowcount = rowcount
+
+            async def fetchone(self):
+                return self.row
+
+        fake_db = SimpleNamespace(
+            execute=AsyncMock(side_effect=[
+                FakeCursor(row={"user_id": 987654324}),
+                FakeCursor(rowcount=0),
+            ]),
+            commit=AsyncMock(),
+            rollback=AsyncMock(),
+        )
+        previous_db = main.db
+        main.db = fake_db
+        try:
+            with patch("main.build_battle_monster", return_value={"name": "Stale Monster"}), \
+                 patch("main.consume_xp_boost", new=AsyncMock()) as consume_boost:
+                result = await main.finish_battle(987654324, True)
+            self.assertIsNone(result)
+            fake_db.rollback.assert_awaited_once()
+            fake_db.commit.assert_not_awaited()
+            consume_boost.assert_not_awaited()
+            self.assertEqual(fake_db.execute.await_count, 2)
+        finally:
+            main.db = previous_db
+
     async def test_battle_victory_rewards_are_applied_only_once(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             previous_path, previous_db = main.DB_PATH, main.db

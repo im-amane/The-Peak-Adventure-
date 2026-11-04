@@ -1052,7 +1052,12 @@ async def finish_battle(user_id: int, won: bool, escaped: bool = False):
     if not b:
         return None
     m = build_battle_monster(b)
-    await db.execute("DELETE FROM battles WHERE user_id=?", (user_id,))
+    deleted = await db.execute("DELETE FROM battles WHERE user_id=?", (user_id,))
+    if deleted.rowcount != 1:
+        # Another worker may have finalized this battle after our initial read.
+        # Roll back this caller's pending turn changes and never pay rewards twice.
+        await db.rollback()
+        return None
     if escaped:
         await db.commit()
         return "🏃 You escaped. The wilderness is still waiting."
