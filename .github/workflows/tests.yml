@@ -61,6 +61,13 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
+      # GitHub-hosted images may include an unrelated Microsoft feed that
+      # intermittently returns 403. It is not needed for PostgreSQL tooling.
+      - name: Disable unavailable preinstalled Microsoft apt feed
+        run: |
+          while IFS= read -r -d '' source; do
+            sudo mv "$source" "$source.disabled"
+          done < <(sudo grep -rlZ 'packages.microsoft.com' /etc/apt/sources.list.d || true)
       - run: sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg
       - run: sudo install -d /usr/share/postgresql-common/pgdg
       - run: curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
