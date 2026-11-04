@@ -92,6 +92,14 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
     except (TypeError, ValueError):
         add("backup_interval_invalid", "error", "BACKUP_INTERVAL_SECONDS must be at least 3600 seconds.")
 
+    # The application writes snapshots to a local directory only. A persistent
+    # disk protects against process restarts, not loss of the host or disk itself.
+    add(
+        "offsite_backup_not_configured",
+        "warning",
+        "Backups are written locally; configure an independent off-site export and rehearse a restore before production use.",
+    )
+
     backup_retention = str(env.get("BACKUP_RETENTION", "7")).strip()
     try:
         if int(backup_retention) < 1:
