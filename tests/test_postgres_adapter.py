@@ -856,7 +856,7 @@ class PostgresTelegramIdWidthTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await consume_mana(self.db, player_id, 10, now=1000))["mana"], 90)
         self.assertEqual((await consume_stamina(self.db, player_id, 10, now=1000))["stamina"], 90)
         await choose_story_path(self.db, player_id, 1, 1, "follow_mira")
-        self.assertEqual((await get_story_flags(self.db, player_id)), {})
+        self.assertEqual((await get_story_flags(self.db, player_id)), {"opening_path": "mira"})
         self.assertEqual((await record_monster_defeat(self.db, player_id, 7))["defeats"], 1)
         self.assertEqual(await travel_to_world(self.db, player_id, 21, 3), {
             "world_id": 3, "name": "Stormglass Highlands", "min_level": 21
