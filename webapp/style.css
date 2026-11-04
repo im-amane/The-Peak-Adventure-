@@ -278,3 +278,34 @@ button:disabled{opacity:.55}
     outline:2px solid Highlight;
   }
 }
+
+/* Cinematic story chapter reader */
+.story-progress{display:grid;gap:7px;margin:2px 0 14px;padding:11px;border:1px solid rgba(214,190,143,.25);border-radius:11px;background:rgba(10,16,26,.55)}
+.story-progress-label{font-size:11px;font-weight:800;letter-spacing:.06em;color:#f0dba9;margin:0}
+.story-progress-track{height:7px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.12)}
+.story-progress-fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#8870b9,#e0bd79);transition:width .35s ease}
+.story-chapter-heading{display:flex;align-items:center;gap:10px}
+.story-emblem{display:grid;place-items:center;flex:0 0 42px;width:42px;height:42px;border:1px solid rgba(220,194,144,.35);border-radius:12px;background:rgba(220,194,144,.08);font-size:22px}
+.story-heading-copy{min-width:0}
+.story-eyebrow{font-size:9px!important;letter-spacing:.12em;color:#c6a96f!important;font-weight:800;margin:0 0 3px!important}
+.story-meta{color:#9eabc0!important}
+.story-scene{margin-top:10px;border:1px solid rgba(170,155,196,.24);border-radius:10px;background:rgba(8,13,22,.55)}
+.story-scene summary{padding:10px 11px;color:#e6d6b5;font-size:11px;font-weight:800;cursor:pointer;min-height:40px}
+.story-scene-body{padding:2px 12px 10px;border-top:1px solid rgba(170,155,196,.16)}
+.story-narrator{font-size:9px!important;letter-spacing:.1em;text-transform:uppercase;color:#a99bc4!important;font-weight:800;margin:10px 0!important}
+.story-line{padding-left:10px;border-left:2px solid rgba(214,190,143,.35);color:#e0dce8!important;font-size:12px!important}
+.story-line:last-child{color:#f2dfb8!important}
+.story-chapter.is-unlocked{border-color:#88734f;box-shadow:inset 3px 0 #d6b66e}
+.story-chapter.is-complete{border-color:#526c60}
+.story-chapter.is-locked{opacity:.72}
+.story-choice-prompt{flex-basis:100%;font-size:9px!important;letter-spacing:.1em;color:#d2b77e!important;font-weight:800}
+.story-selected-choice{padding:8px 10px;border-left:2px solid #b89a66;background:rgba(184,154,102,.08);color:#f0dfbd!important}
+.story-claim{background:#3c503f;border-color:#789477}
+.story-reward-claimed{align-self:center;color:#a9d5b2!important;font-weight:800}
+@media(max-width:520px){.story-choices{display:grid;grid-template-columns:1fr}.story-choice{width:100%}}
+@media(prefers-reduced-motion:reduce){.story-progress-fill{transition:none}}
+
+.story-choice{min-height:44px}
+.story-line{animation:story-line-reveal .45s both;animation-delay:calc(var(--scene-index,0)*.16s)}
+@keyframes story-line-reveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.story-line{animation:none}}

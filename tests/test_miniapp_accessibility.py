@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "webapp" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "webapp" / "style.css").read_text(encoding="utf-8")
+GAME = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
 
 
 class MiniAppAccessibilityAuditTests(unittest.TestCase):
@@ -39,6 +40,22 @@ class MiniAppAccessibilityAuditTests(unittest.TestCase):
         self.assertIn("prefers-reduced-motion:reduce", CSS)
         self.assertIn("forced-colors:active", CSS)
 
+
+    def test_story_reader_exposes_accessible_campaign_progress(self):
+        self.assertIn('setAttribute("role","progressbar")', GAME)
+        self.assertIn('aria-valuenow', GAME)
+        self.assertIn('story-progress-track', CSS)
+
+    def test_story_scenes_use_native_disclosure_and_text_nodes(self):
+        self.assertIn('document.createElement("details")', GAME)
+        self.assertIn('document.createElement("summary")', GAME)
+        self.assertIn('line.textContent=sentence.trim()', GAME)
+        self.assertIn('prefers-reduced-motion:reduce', CSS)
+
+    def test_story_choices_keep_mobile_touch_layout(self):
+        self.assertIn('story-choice-prompt', GAME)
+        self.assertIn('story-choices{display:grid', CSS)
+        self.assertIn('min-height:42px', CSS)
 
 if __name__ == "__main__":
     unittest.main()
