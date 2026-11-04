@@ -29,6 +29,17 @@ class WorldSystemTests(unittest.IsolatedAsyncioTestCase):
  async def test_level_downgrade_clamps_current_world(self):
   await travel_to_world(self.db,101,51,5)
   self.assertEqual(await get_current_world(self.db,101,21),3)
+ async def test_world_state_reads_and_travel_reject_missing_player(self):
+  for operation in (
+   lambda: get_current_world(self.db,999,10),
+   lambda: travel_to_world(self.db,999,10,1),
+   lambda: get_world_choices(self.db,999,10),
+  ):
+   with self.assertRaisesRegex(WorldError,"Player account not found"):
+    await operation()
+  cur=await self.db.execute("SELECT COUNT(*) AS total FROM player_worlds WHERE user_id=999")
+  self.assertEqual((await cur.fetchone())["total"],0)
+
  async def test_invalid_world_rejected(self):
   with self.assertRaises(WorldError): await travel_to_world(self.db,101,10,0)
  async def test_encounters_stay_inside_selected_world(self):
