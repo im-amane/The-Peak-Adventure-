@@ -69,6 +69,12 @@ def _run(command: list[str], environment: dict[str, str], database_url: str) -> 
     return result
 
 
+def _safe_filename_component(value: str) -> str:
+    """Prevent database identifiers from becoming filesystem path components."""
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value).strip("._-")
+    return cleaned or "database"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -129,7 +135,8 @@ def create_backup(
     destination = Path(backup_dir)
     destination.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    final_path = destination / f"{database}-{stamp}.dump"
+    filename_prefix = _safe_filename_component(database)
+    final_path = destination / f"{filename_prefix}-{stamp}.dump"
     fd, temporary_name = tempfile.mkstemp(prefix=".postgres-backup-", suffix=".tmp", dir=destination)
     os.close(fd)
     temporary = Path(temporary_name)
@@ -159,7 +166,7 @@ def create_backup(
         raise
 
     backups = sorted(
-        (item for item in destination.glob(f"{database}-*.dump") if item.is_file()),
+        (item for item in destination.glob(f"{filename_prefix}-*.dump") if item.is_file()),
         key=lambda item: item.stat().st_mtime,
         reverse=True,
     )
