@@ -95,16 +95,28 @@ async def get_evolution_state(db, user_id, monster_level):
 
 def scale_evolved_monster(monster):
     """Create a stronger evolved form without mutating the base monster catalogue."""
-    if not isinstance(monster, dict) or not {"name", "hp", "attack_power", "defense", "speed"}.issubset(monster):
-        raise ValueError("monster must contain name, hp, attack_power, defense and speed")
+    required = {"name", "hp", "attack_power", "defense", "speed"}
+    if not isinstance(monster, dict) or not required.issubset(monster):
+        raise EvolutionError("Monster data is missing required evolution fields.")
+    if not isinstance(monster["name"], str) or not monster["name"].strip():
+        raise EvolutionError("Monster name must be non-empty text.")
+    for field, minimum in (("hp", 1), ("attack_power", 1), ("defense", 0), ("speed", 0)):
+        value = monster[field]
+        if type(value) is not int or value < minimum:
+            raise EvolutionError(f"Monster {field} must be a valid integer stat.")
+    if monster["speed"] > 100:
+        raise EvolutionError("Monster speed must be between 0 and 100.")
+    for field in ("unique_power", "special_move"):
+        if field in monster and not isinstance(monster[field], str):
+            raise EvolutionError(f"Monster {field} must be text.")
     evolved = dict(monster)
-    evolved["name"] = "Ascended " + str(monster["name"])
+    evolved["name"] = "Ascended " + monster["name"].strip()
     evolved["hp"] = max(1, int(monster["hp"] * EVOLVED_HP_MULTIPLIER))
     evolved["attack_power"] = max(1, int(monster["attack_power"] * EVOLVED_ATTACK_MULTIPLIER))
     evolved["defense"] = max(0, int(monster["defense"] * EVOLVED_DEFENSE_MULTIPLIER))
     evolved["speed"] = min(100, monster["speed"] + EVOLVED_SPEED_BONUS)
-    evolved["unique_power"] = str(monster.get("unique_power", "")) + " · Evolved Form"
-    evolved["special_move"] = str(monster.get("special_move", "")) + " · Ascended"
+    evolved["unique_power"] = monster.get("unique_power", "") + " · Evolved Form"
+    evolved["special_move"] = monster.get("special_move", "") + " · Ascended"
     return evolved
 
 
