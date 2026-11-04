@@ -2,7 +2,7 @@
 
 A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is maintained in this dedicated repository, separate from the original music-bot repository.
 
-**Project status:** 163 of 172 tracked implementation items are complete (95%); 7 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) for exact status; [the project structure](PROJECT_STRUCTURE.md) describes repository layout.
+**Project status:** 168 of 172 tracked implementation items are complete (98%); 2 are partial and 2 are pending. This is an implementation checklist, not a production-launch certification. See [the canonical feature manifest](project_manifest.json) for exact status; [the project structure](PROJECT_STRUCTURE.md) describes repository layout.
 
 ## Current features
 - Telegram player profiles with four permanent hero classes: Knight, Mage, Archer and Berserker
