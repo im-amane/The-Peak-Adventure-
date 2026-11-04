@@ -23,15 +23,14 @@ _DYNAMIC_SEGMENT = re.compile(
 def _safe_error(error: str | None, fallback: str) -> str:
     """Redact credentials and bearer tokens before retaining operational errors."""
     value = str(error or fallback)
-    value = re.sub(r"(://[^:/\\s]+:)[^@/\\s]+@", r"\\1[redacted]@", value)
+    value = re.sub(r"(://[^:/\s]+:)[^@/\s]+@", r"\1[redacted]@", value)
     value = re.sub(
-        r"(?i)(\\b(?:password|passwd|token|secret|api[_-]?key)=)[^&\\s]+",
-        r"\\1[redacted]",
+        r"(?i)(\b(?:password|passwd|token|secret|api[_-]?key)=)[^&\s]+",
+        r"\1[redacted]",
         value,
     )
-    value = re.sub(r"(?i)(\\bBearer\\s+)[A-Za-z0-9._~+/-]+=*", r"\\1[redacted]", value)
+    value = re.sub(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[redacted]", value)
     return value[:240]
-
 
 def normalize_route(path: str) -> str:
     """Remove numeric and opaque identifier segments before retaining route metrics."""
