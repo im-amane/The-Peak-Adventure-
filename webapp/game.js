@@ -1202,7 +1202,7 @@
       }else{
         for(let i=0;i<8;i++){const x=i*120+30;scenery.lineStyle(8,0x725c69,0.9);scenery.beginPath();scenery.moveTo(x,h*0.95);scenery.lineTo(x+20,h*0.65);scenery.lineTo(x-12,h*0.45);scenery.lineTo(x+18,h*0.25);scenery.strokePath();scenery.fillStyle(0xe2c17c,0.7);scenery.fillCircle(x+18,h*0.25,5);}
       }
-      // Spread deterministic blockers across the expanded three-zone map.
+      // Spread deterministic blockers across the expanded four-zone map.
       // Keep the hero spawn, Wanderer and world gate clear for reliable first input.
       this.obstacles = layout.obstacles.map(obstacle=>({...obstacle}));
       this.obstacleGraphics = this.add.graphics();
