@@ -101,13 +101,18 @@ class LaunchPreflightTests(unittest.TestCase):
         warning = next(issue for issue in issues if issue["code"] == "offsite_restore_rehearsal_required")
         self.assertEqual(warning["severity"], "warning")
 
-    def test_invalid_offsite_bucket_and_endpoint_are_errors(self):
+    def test_invalid_offsite_bucket_is_an_error(self):
         env = self.valid_environment()
         env["OFFSITE_BACKUP_BUCKET"] = "Bad_Bucket"
-        env["OFFSITE_BACKUP_ENDPOINT_URL"] = "ftp://example.com"
         codes = {issue["code"] for issue in inspect_environment(env)}
         self.assertIn("offsite_backup_bucket_invalid", codes)
-        self.assertNotIn("offsite_backup_endpoint_invalid", codes)
+
+    def test_invalid_offsite_endpoint_is_an_error(self):
+        env = self.valid_environment()
+        env["OFFSITE_BACKUP_BUCKET"] = "peak-backups"
+        env["OFFSITE_BACKUP_ENDPOINT_URL"] = "ftp://example.com"
+        codes = {issue["code"] for issue in inspect_environment(env)}
+        self.assertIn("offsite_backup_endpoint_invalid", codes)
 
     def test_warns_when_telegram_stars_are_enabled(self):
         env = self.valid_environment()
