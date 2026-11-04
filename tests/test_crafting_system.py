@@ -144,6 +144,14 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
   cur=await self.db.execute("SELECT weapon FROM players WHERE user_id=1")
   self.assertEqual((await cur.fetchone())["weapon"],"Rusty Sword")
 
+ async def test_material_drop_requires_boolean_boss_metadata(self):
+  class Fixed:
+   def random(self):return 0.0
+  for value in (1,0,"false","yes",None,[]):
+   with self.subTest(boss=value),self.assertRaises(CraftingError):
+    await award_material_drop(self.db,1,{"level":10,"boss":value},Fixed())
+  self.assertEqual(await get_materials(self.db,1),{})
+
  async def test_material_drop_rejects_invalid_player_and_monster(self):
   for user_id,monster in ((True,{"level":1}),(0,{"level":1}),(1,{}),(1,{"level":101})):
    with self.subTest(user_id=user_id,monster=monster),self.assertRaises(CraftingError):
