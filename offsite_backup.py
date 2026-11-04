@@ -136,25 +136,28 @@ def download_backup(
     )
     os.close(descriptor)
     temporary = Path(temporary_name)
+    sidecar = Path(str(target) + ".sha256") if write_checksum_sidecar else None
+    sidecar_temp = (
+        sidecar.with_name(sidecar.name + ".tmp") if sidecar is not None else None
+    )
     try:
         s3_client.download_file(bucket, key, str(temporary))
         if not temporary.is_file() or temporary.stat().st_size != content_length:
             raise ValueError("Downloaded off-site backup size does not match object metadata.")
         if _sha256(temporary) != expected:
             raise ValueError("Downloaded off-site backup failed SHA-256 verification.")
+        # Stage every requested artifact before publishing the archive. A local
+        # sidecar write failure must not replace a previously good destination.
+        if sidecar_temp is not None:
+            sidecar_temp.write_text(f"{expected}  {target.name}\n", encoding="ascii")
         os.replace(temporary, target)
-        if write_checksum_sidecar:
-            sidecar = Path(str(target) + ".sha256")
-            sidecar_temp = sidecar.with_name(sidecar.name + ".tmp")
-            try:
-                sidecar_temp.write_text(f"{expected}  {target.name}\n", encoding="ascii")
-                os.replace(sidecar_temp, sidecar)
-            except Exception:
-                sidecar_temp.unlink(missing_ok=True)
-                raise
+        if sidecar is not None and sidecar_temp is not None:
+            os.replace(sidecar_temp, sidecar)
         return target
     except Exception:
         temporary.unlink(missing_ok=True)
+        if sidecar_temp is not None:
+            sidecar_temp.unlink(missing_ok=True)
         raise
 
 def restore_offsite_postgres_backup(
