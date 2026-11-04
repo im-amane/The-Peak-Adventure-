@@ -93,6 +93,17 @@ class WeeklyQuestTests(unittest.IsolatedAsyncioTestCase):
         hunter=next(row for row in rows if row["id"]=="weekly_hunter")
         self.assertEqual(hunter["progress"],0)
 
+    async def test_unhashable_progress_type_is_rejected_cleanly(self):
+        with self.assertRaises(WeeklyQuestError):
+            await record_weekly_progress(self.db, 1, [], now=1790000000)
+
+    async def test_invalid_weekly_timestamps_are_rejected_cleanly(self):
+        for value in (True, float("nan"), float("inf"), "next week", 10**100):
+            with self.subTest(value=value), self.assertRaises(WeeklyQuestError):
+                current_week_key(value)
+            with self.subTest(read_value=value), self.assertRaises(WeeklyQuestError):
+                await get_weekly_quests(self.db, 1, now=value)
+
     async def test_unknown_event_rejected(self):
         with self.assertRaises(WeeklyQuestError):
             await record_weekly_progress(self.db,1,"coins",1,now=1790000000)
