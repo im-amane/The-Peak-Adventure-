@@ -179,6 +179,30 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsInstance(battle_result, int)
 
 
+    async def test_party_cannot_start_two_coop_battles_concurrently(self):
+        user_id = 9_100_000_001
+        party_id = await create_party(self.db_one, user_id)
+
+        outcomes = await asyncio.gather(
+            start_party_battle(
+                self.db_one, party_id, user_id, 12, "Twinstart Warden", 800
+            ),
+            start_party_battle(
+                self.db_two, party_id, user_id, 12, "Twinstart Warden", 800
+            ),
+            return_exceptions=True,
+        )
+
+        self.assertEqual(sum(isinstance(item, int) for item in outcomes), 1)
+        self.assertEqual(sum(isinstance(item, PartyError) for item in outcomes), 1)
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM party_battles "
+            "WHERE party_id=? AND status='active'",
+            (party_id,),
+        )
+        self.assertEqual((await cursor.fetchone())["count"], 1)
+
+
 
 if __name__ == "__main__":
     unittest.main()
