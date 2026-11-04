@@ -152,6 +152,14 @@ class CraftingTests(unittest.IsolatedAsyncioTestCase):
     await award_material_drop(self.db,1,{"level":10,"boss":value},Fixed())
   self.assertEqual(await get_materials(self.db,1),{})
 
+ async def test_material_drop_rejects_missing_player_without_creating_inventory(self):
+  class Fixed:
+   def random(self):return 0.0
+  with self.assertRaisesRegex(CraftingError,"Player account not found"):
+   await award_material_drop(self.db,999,{"level":10,"boss":False},Fixed())
+  cur=await self.db.execute("SELECT COUNT(*) AS total FROM player_materials WHERE user_id=999")
+  self.assertEqual((await cur.fetchone())["total"],0)
+
  async def test_material_drop_rejects_invalid_player_and_monster(self):
   for user_id,monster in ((True,{"level":1}),(0,{"level":1}),(1,{}),(1,{"level":101})):
    with self.subTest(user_id=user_id,monster=monster),self.assertRaises(CraftingError):
