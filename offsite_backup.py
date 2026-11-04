@@ -94,6 +94,7 @@ def download_backup(
     destination: str | Path,
     region: str = "us-east-1",
     endpoint_url: str | None = None,
+    write_checksum_sidecar: bool = False,
     s3_client=None,
 ) -> Path:
     """Download one S3 backup only after verifying its stored SHA-256 metadata.
@@ -142,6 +143,15 @@ def download_backup(
         if _sha256(temporary) != expected:
             raise ValueError("Downloaded off-site backup failed SHA-256 verification.")
         os.replace(temporary, target)
+        if write_checksum_sidecar:
+            sidecar = Path(str(target) + ".sha256")
+            sidecar_temp = sidecar.with_name(sidecar.name + ".tmp")
+            try:
+                sidecar_temp.write_text(f"{expected}  {target.name}\\n", encoding="ascii")
+                os.replace(sidecar_temp, sidecar)
+            except Exception:
+                sidecar_temp.unlink(missing_ok=True)
+                raise
         return target
     except Exception:
         temporary.unlink(missing_ok=True)
