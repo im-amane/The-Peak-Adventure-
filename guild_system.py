@@ -1,5 +1,5 @@
 """Advanced guild roles, invitations, missions and shared boss raids."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import wraps
 import asyncio
 import re
@@ -413,7 +413,17 @@ async def get_guild_announcement(db,guild_id):
     return await cur.fetchone()
 
 def _date(value=None):
-    return value or datetime.now(timezone.utc).date().isoformat()
+    if value is None:
+        return datetime.now(timezone.utc).date().isoformat()
+    if not isinstance(value, str):
+        raise GuildFeatureError("Invalid guild mission date.")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise GuildFeatureError("Invalid guild mission date.") from exc
+    if parsed.isoformat() != value:
+        raise GuildFeatureError("Invalid guild mission date.")
+    return value
 
 async def get_guild_missions(db,guild_id,mission_date=None):
     date=_date(mission_date)
