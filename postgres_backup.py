@@ -135,7 +135,12 @@ def create_backup(
     destination = Path(backup_dir)
     destination.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    filename_prefix = _safe_filename_component(database)
+    safe_database = _safe_filename_component(database)
+    # Distinct database names can collapse to the same sanitized filesystem
+    # component (for example, "game/db" and "game?db"). Keep their retention
+    # namespaces separate so one database's rotation cannot delete the other's.
+    database_tag = hashlib.sha256(database.encode("utf-8")).hexdigest()[:10]
+    filename_prefix = f"{safe_database}-{database_tag}"
     final_path = destination / f"{filename_prefix}-{stamp}.dump"
     fd, temporary_name = tempfile.mkstemp(prefix=".postgres-backup-", suffix=".tmp", dir=destination)
     os.close(fd)
