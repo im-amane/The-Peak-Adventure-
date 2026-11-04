@@ -65,11 +65,34 @@ class CloudflareAssetSyncTests(unittest.TestCase):
         payload = {"/game.js": {"body": "current game bundle", "type": "application/javascript"}}
         self.worker.write_text(
             "const STATIC_ASSETS = " + json.dumps(payload)
-            + ";\\n\\nconst STATIC_SECURITY_HEADERS = {};\\n\\nconst STATIC_PATHS = new Set([]);\\n",
+            + ";\n\nconst STATIC_SECURITY_HEADERS = {};\n\nconst STATIC_PATHS = new Set([]);\n",
             encoding="utf-8",
         )
         with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
             sync_cloudflare_assets.main()
+
+    def test_cloudflare_static_headers_cover_all_assets_without_worker_invocation(self):
+        headers_path = sync_cloudflare_assets.ROOT / "webapp" / "_headers"
+        headers = headers_path.read_text(encoding="utf-8")
+        self.assertTrue(headers.startswith("/*\n"))
+        self.assertIn("Content-Security-Policy:", headers)
+        self.assertIn("Referrer-Policy: strict-origin-when-cross-origin", headers)
+        self.assertIn("X-Content-Type-Options: nosniff", headers)
+
+        worker_source = (sync_cloudflare_assets.ROOT / "cloudflare" / "worker.mjs").read_text(encoding="utf-8")
+        for line in headers.splitlines()[1:]:
+            if line.strip():
+                _header_name, value = line.strip().split(": ", 1)
+                self.assertIn(value, worker_source, "Cloudflare _headers and Worker fallback security values must match.")
+
+        config_path = sync_cloudflare_assets.ROOT / "wrangler.jsonc"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        worker_first = set(config["assets"]["run_worker_first"])
+        static_routes = set(sync_cloudflare_assets.ASSETS)
+        self.assertFalse(
+            static_routes & worker_first,
+            "Static assets should remain edge-served rather than invoke the Worker.",
+        )
 
 
 if __name__ == "__main__":
