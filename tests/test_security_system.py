@@ -132,6 +132,20 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(player["risk_level"], "medium")
         self.assertEqual(player["recommended_action"], "monitor")
 
+
+    async def test_repeated_economy_abuse_escalates_to_manual_review(self):
+        for index in range(4):
+            await record_security_event(
+                self.db, 505, "invalid_economy_action",
+                f"rejected trade or auction mutation {index}", 2,
+            )
+        rows = await get_suspicious_players(self.db)
+        player = next(row for row in rows if row["user_id"] == 505)
+        self.assertEqual(player["economy_abuse_count"], 4)
+        self.assertEqual(player["risk_score"], 8)
+        self.assertEqual(player["risk_level"], "high")
+        self.assertEqual(player["recommended_action"], "manual_review")
+
     def test_risk_triage_rejects_invalid_metrics(self):
         for metrics in ((-1, 0, 0, 0, 0), (1, True, 0, 0, 0), (1, 0, 6, 0, 0), (1, 1, 1, 0, 0, 2), (1, 1, 1, 0, 0, True)):
             with self.subTest(metrics=metrics), self.assertRaises(SecurityEventError):
