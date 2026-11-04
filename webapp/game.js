@@ -1204,16 +1204,7 @@
       }
       // Spread deterministic blockers across the expanded three-zone map.
       // Keep the hero spawn, Wanderer and world gate clear for reliable first input.
-      this.obstacles = [
-        {x:w*0.14,y:h*0.61,width:42,height:58},
-        {x:w*0.32,y:h*0.77,width:58,height:34},
-        {x:w*0.43,y:h*0.51,width:46,height:54},
-        {x:w*0.62,y:h*0.84,width:50,height:28},
-        {x:w*0.76,y:h*0.59,width:54,height:42},
-        {x:w*0.86,y:h*0.88,width:46,height:58},
-        {x:w*0.27,y:h*0.53,width:38,height:48},
-        {x:w*0.69,y:h*0.48,width:44,height:36}
-      ];
+      this.obstacles = layout.obstacles.map(obstacle=>({...obstacle}));
       this.obstacleGraphics = this.add.graphics();
       this.obstacles.forEach((obstacle,index)=>{
         const color = index % 2 ? 0x514b48 : 0x3b5140;
