@@ -15,7 +15,7 @@ class LaunchPreflightTests(unittest.TestCase):
             "ENABLE_TELEGRAM_STARS": "false",
         }
 
-    def test_valid_controlled_prototype_configuration_passes(self):
+    def test_valid_controlled_prototype_configuration_warns_without_offsite_storage(self):
         issues = inspect_environment(self.valid_environment())
         self.assertEqual({issue["code"] for issue in issues}, {"offsite_backup_not_configured"})
         self.assertEqual(issues[0]["severity"], "warning")
@@ -57,10 +57,7 @@ class LaunchPreflightTests(unittest.TestCase):
         env.pop("DATABASE_PATH")
         env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
         env["POSTGRES_BACKUP_DIR"] = "/data/postgres_backups"
-        self.assertEqual(
-            {issue["code"] for issue in inspect_environment(env)},
-            {"offsite_backup_not_configured"},
-        )
+        self.assertEqual({issue["code"] for issue in inspect_environment(env)}, {"offsite_backup_not_configured"})
 
     def test_invalid_port_and_backup_settings_are_errors(self):
         env = self.valid_environment()
@@ -77,10 +74,7 @@ class LaunchPreflightTests(unittest.TestCase):
         env.pop("DATABASE_PATH")
         env["DATABASE_URL"] = "postgresql://user:password@db.example.com:5432/peak"
         env["POSTGRES_BACKUP_DIR"] = "/data/postgres_backups"
-        self.assertEqual(
-            {issue["code"] for issue in inspect_environment(env)},
-            {"offsite_backup_not_configured"},
-        )
+        self.assertEqual({issue["code"] for issue in inspect_environment(env)}, {"offsite_backup_not_configured"})
 
     def test_relative_postgres_backup_directory_warns_and_bad_retention_fails(self):
         env = self.valid_environment()
@@ -97,6 +91,28 @@ class LaunchPreflightTests(unittest.TestCase):
         warning = next(issue for issue in issues if issue["code"] == "offsite_backup_not_configured")
         self.assertEqual(warning["severity"], "warning")
         self.assertIn("off-site", warning["message"])
+
+    def test_configured_offsite_storage_requires_restore_rehearsal(self):
+        env = self.valid_environment()
+        env["OFFSITE_BACKUP_BUCKET"] = "peak-backups"
+        env["OFFSITE_BACKUP_REGION"] = "ap-south-1"
+        issues = inspect_environment(env)
+        self.assertNotIn("offsite_backup_not_configured", {issue["code"] for issue in issues})
+        warning = next(issue for issue in issues if issue["code"] == "offsite_restore_rehearsal_required")
+        self.assertEqual(warning["severity"], "warning")
+
+    def test_invalid_offsite_bucket_is_an_error(self):
+        env = self.valid_environment()
+        env["OFFSITE_BACKUP_BUCKET"] = "Bad_Bucket"
+        codes = {issue["code"] for issue in inspect_environment(env)}
+        self.assertIn("offsite_backup_bucket_invalid", codes)
+
+    def test_invalid_offsite_endpoint_is_an_error(self):
+        env = self.valid_environment()
+        env["OFFSITE_BACKUP_BUCKET"] = "peak-backups"
+        env["OFFSITE_BACKUP_ENDPOINT_URL"] = "ftp://example.com"
+        codes = {issue["code"] for issue in inspect_environment(env)}
+        self.assertIn("offsite_backup_endpoint_invalid", codes)
 
     def test_warns_when_telegram_stars_are_enabled(self):
         env = self.valid_environment()
