@@ -1489,6 +1489,8 @@
         this.heroVelocity.x,this.heroVelocity.y,sprinting,this.time.now
       );
       this.heroAnimationState=animationPose.state;
+      this.heroFacingDirection=animationPose.facing;
+      this.heroAnimationFrame=animationPose.frameIndex;
       if(this.hero.limbs){
         this.hero.limbs.leftArm.rotation=animationPose.leftArm;
         this.hero.limbs.rightArm.rotation=animationPose.rightArm;
