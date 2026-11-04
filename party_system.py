@@ -241,9 +241,6 @@ async def respond_to_party_invite(
     )
     if not await cur.fetchone():
         raise PartyError("Party not found.")
-    # Serialize acceptance against matchmaking, crafting, and auction changes
-    # for the invited player before checking cross-mode activity.
-    await _lock_player_mode(db, target_id)
     cur = await db.execute(
         "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
         (invite_id,),
@@ -252,6 +249,9 @@ async def respond_to_party_invite(
     if not invite or invite["status"] != "pending" or invite["target_id"] != target_id:
         raise PartyError("That party invitation is no longer active.")
     if accept:
+        # Serialize acceptance against matchmaking, crafting, and auction
+        # changes for the invited player before checking cross-mode activity.
+        await _lock_player_mode(db, target_id)
         cur = await db.execute(
             "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
             (invite["party_id"],),
