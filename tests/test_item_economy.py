@@ -5,6 +5,7 @@ from item_economy import (
     RARITY_LABELS,
     SHOP_ITEM_RARITY,
     get_item_rarity,
+    validate_rarity_configuration,
     validate_shop_catalog,
 )
 from crafting_system import MATERIAL_RARITY, MATERIALS, RECIPES
@@ -23,6 +24,25 @@ class ItemEconomyTests(unittest.TestCase):
             "celestial_armor": {"cost": 1400, "level": 60, "bonus": 60},
             "health_potion": {"cost": 25, "level": 1, "bonus": 1},
         }
+
+    def test_rarity_configuration_matches_order_and_has_valid_bands(self):
+        self.assertIsNone(validate_rarity_configuration())
+
+    def test_rarity_configuration_rejects_missing_tier_band(self):
+        from unittest.mock import patch
+        broken = dict(RARITY_COIN_BANDS)
+        broken.pop("epic")
+        with patch("item_economy.RARITY_COIN_BANDS", broken):
+            with self.assertRaisesRegex(ValueError, "cover every ordered tier"):
+                validate_rarity_configuration()
+
+    def test_rarity_configuration_rejects_overlapping_bands(self):
+        from unittest.mock import patch
+        broken = dict(RARITY_COIN_BANDS)
+        broken["uncommon"] = (90, 300)
+        with patch("item_economy.RARITY_COIN_BANDS", broken):
+            with self.assertRaisesRegex(ValueError, "ordered and non-overlapping"):
+                validate_rarity_configuration()
 
     def test_shop_catalog_matches_all_rarity_ids_and_price_bands(self):
         self.assertIsNone(validate_shop_catalog(self.shop))
