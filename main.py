@@ -5609,6 +5609,19 @@ async def miniapp_rate_limit(request: web.Request, handler):
     return await handler(request)
 
 
+def miniapp_assets_available() -> bool:
+    """Return whether every runtime file referenced by the Mini App shell exists."""
+    required = (
+        "index.html",
+        "style.css",
+        "game.js",
+        "pathfinding.js",
+        "movement.js",
+        "character_profiles.js",
+    )
+    return all((WEB_DIR / filename).is_file() for filename in required)
+
+
 def create_web_app():
     """Build the authenticated Mini App HTTP application for runtime and integration tests."""
     async def serve_index(request: web.Request):
@@ -5633,6 +5646,12 @@ def create_web_app():
         if not await database_healthcheck():
             return web.json_response(
                 {"ok": False, "database": "unavailable"},
+                status=503,
+                headers={"Cache-Control": "no-store"},
+            )
+        if not miniapp_assets_available():
+            return web.json_response(
+                {"ok": False, "assets": "unavailable"},
                 status=503,
                 headers={"Cache-Control": "no-store"},
             )
