@@ -6,6 +6,7 @@ player content are retained in this module.
 from __future__ import annotations
 
 import math
+import re
 import time
 from collections import Counter, defaultdict, deque
 from typing import Callable
@@ -14,6 +15,22 @@ RECENT_WINDOW_SECONDS = 300
 MIN_RECENT_REQUESTS = 20
 SERVER_ERROR_RATE_THRESHOLD = 0.20
 P95_LATENCY_THRESHOLD_MS = 2_000
+_DYNAMIC_SEGMENT = re.compile(
+    r"^(?:\\d+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}|[0-9a-fA-F]{16,})$"
+)
+
+
+def normalize_route(path: str) -> str:
+    """Remove numeric and opaque identifier segments before retaining route metrics."""
+    if not isinstance(path, str) or not path.startswith("/"):
+        return "/unknown"
+    segments = path.split("/")
+    normalized = [
+        "{id}" if _DYNAMIC_SEGMENT.fullmatch(segment) else segment
+        for segment in segments
+    ]
+    route = "/".join(normalized)
+    return route[:200] or "/"
 
 
 class RuntimeMonitor:
@@ -38,7 +55,7 @@ class RuntimeMonitor:
 
     def record_request(self, path: str, status: int, duration_seconds: float) -> None:
         now = self._clock()
-        route = path if isinstance(path, str) and path.startswith("/") else "/unknown"
+        route = normalize_route(path)
         if route not in self.routes and len(self.routes) >= 99:
             route = "/_other"
         status_key = str(status)
