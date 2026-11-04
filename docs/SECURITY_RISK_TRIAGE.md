@@ -7,10 +7,10 @@ The security event stream records invalid gameplay, economy, payment and repeate
 | Risk | Trigger | Suggested action |
 |---|---|---|
 | Low | Below the medium/high thresholds | Log only |
-| Medium | Maximum severity ≥ 3, economy abuse events ≥ 2, rate-limit events ≥ 3, or risk score ≥ 8 | Monitor |
-| High | Maximum severity = 5, economy abuse events ≥ 4, or risk score ≥ 15 | Manual review |
+| Medium | Maximum severity ≥ 3, economy abuse events ≥ 2, rate-limit events ≥ 3, risk score ≥ 8, or at least 5 invalid events in 5 minutes | Monitor |
+| High | Maximum severity = 5, economy abuse events ≥ 4, risk score ≥ 15, or at least 10 invalid events in 5 minutes | Manual review |
 
-The risk score is the sum of event severities inside the selected time window. The admin security view now displays the risk level and suggested action alongside the underlying counts so an operator can inspect why a player was surfaced.
+The risk score is the sum of event severities inside the selected time window. The separate five-minute burst count highlights rapid invalid-action spikes without conflating them with a full-day total. The admin security view now displays the risk level and suggested action alongside the underlying counts so an operator can inspect why a player was surfaced.
 
 ## Safety and limitations
 
