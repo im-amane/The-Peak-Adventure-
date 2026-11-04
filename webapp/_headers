@@ -1,0 +1,4 @@
+/*
+  Content-Security-Policy: default-src 'self' https://telegram.org https://cdn.jsdelivr.net; script-src 'self' https://telegram.org https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors https://web.telegram.org https://*.telegram.org
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
