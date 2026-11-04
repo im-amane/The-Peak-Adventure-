@@ -431,7 +431,6 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         raise PartyError("Co-op reward already claimed.") from exc
 
 @_serialize_db_write
-@_serialize_db_write
 async def leave_party(db: aiosqlite.Connection, user_id: int) -> int | None:
     if not _valid_id(user_id):
         raise PartyError("Invalid player account.")
