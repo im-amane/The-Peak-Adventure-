@@ -56,6 +56,9 @@ async def init_secret_area_tables(db):
 async def get_secret_area_state(db, user_id, player_level, world_id):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise SecretAreaError("Invalid player account.")
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise SecretAreaError("Player account not found.")
     if not isinstance(player_level, int) or isinstance(player_level, bool) or not 1 <= player_level <= 100:
         raise SecretAreaError("Invalid player level.")
     try:
