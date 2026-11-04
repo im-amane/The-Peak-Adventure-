@@ -1237,18 +1237,18 @@
           divider.lineBetween(zone.startX,h*0.49,zone.startX,h*0.96);
         }
       });
-      this.hero=makeHero(this,w*0.22,h*0.7,gameState.hero_class,gameState.appearance);
+      this.hero=makeHero(this,layout.spawn.x,layout.spawn.y,gameState.hero_class,gameState.appearance);
       this.heroBaseScaleX=this.hero.scaleX||1;
       this.heroFacing=1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
-      this.npc = makeHero(this,w*0.49,h*0.7,"Mage");
+      this.npc = makeHero(this,layout.npc.x,layout.npc.y,"Mage");
       this.npc.setScale(0.9);
       this.obstacles.push({x:this.npc.x,y:this.npc.y,width:34,height:34});
-      this.npcLabel = this.add.text(w*0.49,h*0.7-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
+      this.npcLabel = this.add.text(layout.npc.x,layout.npc.y-44,"WANDERER",{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#17232a",strokeThickness:3}).setOrigin(0.5);
       const nextWorld=gameState.worlds.find(world=>world.id===gameState.world_id+1);
-      this.portalX=this.worldWidth-78;
-      this.portalY=h*0.69;
+      this.portalX=layout.portal.x;
+      this.portalY=layout.portal.y;
       this.portalGraphics=this.add.graphics().setDepth(3);
       this.portalGraphics.fillStyle(0x142a42,0.82);
       this.portalGraphics.fillCircle(this.portalX,this.portalY,31);
