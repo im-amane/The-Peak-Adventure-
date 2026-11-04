@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "../webapp/movement.js";
 
-const { moveWithCollisions, isBlocked } = globalThis.PeakMovement;
+const { moveWithCollisions, isBlocked, integrateVelocity } = globalThis.PeakMovement;
 
 const bounds = { minX: 13, maxX: 287, minY: 113, maxY: 287 };
 
@@ -56,4 +56,31 @@ test("handles zero-size bounds and stationary input", () => {
     moveWithCollisions(10, 10, 0, 0, [], { minX: 10, maxX: 10, minY: 20, maxY: 20 }, 13),
     { x: 10, y: 20, blockedX: false, blockedY: false },
   );
+});
+
+test("accelerates smoothly toward input and caps diagonal speed", () => {
+  const first = integrateVelocity(0, 0, 1, 1, 0.05, { maxSpeed: 180, acceleration: 900 });
+  assert.ok(Math.abs(Math.hypot(first.x, first.y) - 45) < 0.001);
+  const capped = integrateVelocity(0, 0, 1, 1, 0.05, { maxSpeed: 180, acceleration: 900 });
+  assert.ok(Math.hypot(capped.x, capped.y) <= 45.001);
+});
+
+test("friction decelerates smoothly and eventually stops", () => {
+  const slowed = integrateVelocity(100, 0, 0, 0, 0.05, { friction: 1200 });
+  assert.deepEqual(slowed, { x: 40, y: 0 });
+  assert.deepEqual(integrateVelocity(20, 0, 0, 0, 0.05, { friction: 1200 }), { x: 0, y: 0 });
+});
+
+test("acceleration is frame-delta clamped and malformed inputs stay finite", () => {
+  const result = integrateVelocity(NaN, Infinity, NaN, 1, 10, {
+    maxSpeed: 180, acceleration: 900, friction: 1200,
+  });
+  assert.deepEqual(result, { x: 0, y: 45 });
+});
+
+test("direction changes respect acceleration rather than reversing instantly", () => {
+  const result = integrateVelocity(100, 0, -1, 0, 0.05, {
+    maxSpeed: 180, acceleration: 900,
+  });
+  assert.deepEqual(result, { x: 55, y: 0 });
 });
