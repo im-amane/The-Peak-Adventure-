@@ -245,3 +245,36 @@ button:disabled{opacity:.55}
   .social-tabs [role="tab"]{min-height:42px;font-size:11px}
   .social-card-grid{grid-template-columns:1fr}
 }
+
+
+/* Narrow Telegram WebView layouts and accessible touch targets */
+.topbar-actions{min-width:0;flex-wrap:wrap;justify-content:flex-end}
+.coin-pill,.gem-pill{white-space:nowrap}
+.world-choice,.landmark-action,.social-action{min-height:42px}
+@media(max-width:380px){
+  .topbar{align-items:flex-start;flex-wrap:wrap}
+  .topbar-actions{width:100%;justify-content:flex-start;gap:6px}
+  .topbar-actions .online-count{margin-right:auto}
+  .topbar-actions .sound-toggle{min-height:42px}
+  .coin-pill,.gem-pill{padding:7px 9px;font-size:11px}
+  .app-shell{padding-left:8px;padding-right:8px}
+  .hero-line{align-items:flex-start;flex-wrap:wrap}
+  .level-line{gap:8px;flex-wrap:wrap}
+  .world-heading{align-items:flex-start;flex-wrap:wrap}
+  .battle-heading{align-items:flex-start;flex-wrap:wrap}
+  .battle-actions button{min-height:44px}
+  .social-tabs{gap:6px}
+  .social-tabs [role="tab"]{min-height:44px;padding:9px 5px}
+  .dpad button{min-width:44px;width:44px;min-height:44px;height:44px}
+}
+@media(hover:none) and (pointer:coarse){
+  button,.dungeon-action,.landmark-action{min-height:44px}
+}
+@media(forced-colors:active){
+  button,select,input,.world-panel,.hero-hud,.battle-panel,.character-panel{
+    border:1px solid ButtonText;
+  }
+  button:focus-visible,select:focus-visible,input:focus-visible{
+    outline:2px solid Highlight;
+  }
+}
