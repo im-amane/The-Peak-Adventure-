@@ -97,6 +97,94 @@ async def get_story_chapters(db,user_id,player_level):
     if any(chapter.get("requires_party") for chapter in CHAPTERS):
         cur=await db.execute("SELECT 1 FROM party_members WHERE user_id=? LIMIT 1",(user_id,))
         has_party = await cur.fetchone() is not None
+    branch_scenes={
+        2: {
+            "opening_path": {
+                "mira": " Mira's lantern trail leads you toward the old bridge; she walks close enough that your shoulders almost touch.",
+                "wanderer": " The Wanderer has left a second set of footprints beside yours, as if someone else is following the compass."
+            }
+        },
+        3: {
+            "trust_path": {
+                "mira": " Mira stands beside you. She has chosen not to run this time.",
+                "wanderer": " The Wanderer walks ahead, carrying the compass with both hands."
+            }
+        },
+        4: {
+            "memory_path": {
+                "truth": " The name you spoke returns as a warm echo, and the roots loosen around the bell's buried chain.",
+                "silence": " The sealed name remains beneath the roots; the bell answers with one more silent pulse."
+            }
+        },
+        5: {
+            "echo_path": {
+                "freed": " Echo's freed voices gather around the Ashen King's throne, each remembering a child he helped protect.",
+                "questioned": " Echo's unanswered question follows you to the throne: who gave the king the order to burn the village?"
+            }
+        },
+        6: {
+            "crown_path": {
+                "mercy": " The Ashen King gives Mira the key he kept from the fire, trusting her to decide when you are ready.",
+                "revenge": " The Ashen King's final warning follows Mira into the snow: the fire was never meant to kill you."
+            }
+        },
+        7: {
+            "forgiveness_path": {
+                "forgiven": " Mira carries the lantern openly now; the light no longer flickers when your eyes meet.",
+                "time": " Mira keeps pace without asking for forgiveness, protecting the silence you still need."
+            }
+        },
+        8: {
+            "bargain_path": {
+                "refused": " The Herald's imitation of your sibling fades, leaving a real voice somewhere beyond the rift.",
+                "deception": " The Herald believes your bargain; a thin silver crack appears across the rift's seal."
+            }
+        },
+        9: {
+            "lantern_path": {
+                "together": " The lantern's shared light reveals several safe paths through the frozen hour.",
+                "alone": " The lantern burns in your hands alone, and every shadow turns toward the one carrying it."
+            }
+        },
+        10: {
+            "opening_path": {
+                "mira": " The lantern Mira first carried still burns at your side.",
+                "wanderer": " The masked Wanderer stands at the summit, the compass finally pointing home."
+            },
+            "trust_path": {
+                "mira": " Mira keeps the compass close, honoring the trust you placed in her.",
+                "wanderer": " The Wanderer lays the compass at your feet, its needle steady at last."
+            },
+            "memory_path": {
+                "truth": " The names you spoke are carved into the summit stone, no longer hidden.",
+                "silence": " The sealed name remains yours to reveal when you are ready."
+            },
+            "echo_path": {
+                "freed": " The freed voices rise together beneath the dawn.",
+                "questioned": " Echo's question remains unanswered, waiting beyond the final light."
+            },
+            "crown_path": {
+                "mercy": " The Ashen King's key rests in Mira's hand, a promise that mercy can outlive fire.",
+                "revenge": " The Ashen King's warning follows you: the fire was never meant to kill you."
+            },
+            "forgiveness_path": {
+                "forgiven": " Mira stands beside you without fear, the old wound finally allowed to close.",
+                "time": " Mira stands beside you without demanding an answer; trust has room to grow."
+            },
+            "bargain_path": {
+                "refused": " The Herald's false promise is gone, but a true voice answers from beyond the rift.",
+                "deception": " The silver crack in the rift remains, proof that the bargain may yet demand its price."
+            },
+            "lantern_path": {
+                "together": " The lantern answers every companion's light, brighter than it has ever been.",
+                "alone": " The lantern remembers the weight you carried alone, even as your companions gather."
+            },
+            "burden_path": {
+                "shared": " Your companions stand at the summit beside you; the final hour belongs to all of you.",
+                "solo": " Your companions refuse to leave you alone at the summit; the cost will not be yours alone."
+            }
+        }
+    }
     result=[]
     for chapter in CHAPTERS:
         requires_party=chapter.get("requires_party",False)
@@ -106,8 +194,8 @@ async def get_story_chapters(db,user_id,player_level):
             and (not requires_party or has_party)
         )
         scene=chapter["scene"]
-        if chapter["id"]==3 and flags.get("trust_path")=="mira": scene += " Mira stands beside you. She has chosen not to run this time."
-        elif chapter["id"]==3 and flags.get("trust_path")=="wanderer": scene += " The Wanderer walks ahead, carrying the compass with both hands."
+        for flag,variants in branch_scenes.get(chapter["id"],{}).items():
+            scene += variants.get(flags.get(flag,""),"")
         result.append({"id":chapter["id"],"title":chapter["title"],"world":chapter["world"],"level":chapter["level"],
           "npc":chapter["npc"],"unlocked":unlocked,"completed":chapter["id"] in done,"reward_claimed":chapter["id"] in claimed,
           "choice":done.get(chapter["id"]),"requires_party":chapter.get("requires_party",False),
@@ -138,9 +226,20 @@ async def choose_story_path(db,user_id,player_level,chapter_id,choice_id):
         cur=await db.execute("SELECT COUNT(*) n FROM party_members WHERE user_id=?",(user_id,))
         if (await cur.fetchone())["n"]==0:raise StoryError("This chapter requires you to join a party first.")
     await db.execute("INSERT INTO player_story(user_id,chapter_id,choice_id) VALUES(?,?,?)",(user_id,chapter_id,choice_id))
-    if chapter_id==2:
-        flag="trust_path"
-        value="mira" if choice_id=="trust_mira" else "wanderer"
+    choice_flags={
+        1: ("opening_path", {"follow_mira":"mira","follow_wanderer":"wanderer"}),
+        2: ("trust_path", {"trust_mira":"mira","trust_wanderer":"wanderer"}),
+        3: ("memory_path", {"speak_truth":"truth","keep_silent":"silence"}),
+        4: ("echo_path", {"free_echo":"freed","question_echo":"questioned"}),
+        5: ("crown_path", {"show_mercy":"mercy","seek_revenge":"revenge"}),
+        6: ("forgiveness_path", {"forgive_mira":"forgiven","ask_for_time":"time"}),
+        7: ("bargain_path", {"reject_bargain":"refused","pretend_accept":"deception"}),
+        8: ("lantern_path", {"light_together":"together","carry_alone":"alone"}),
+        9: ("burden_path", {"share_the_burden":"shared","take_the_burden":"solo"})
+    }
+    if chapter_id in choice_flags:
+        flag,values=choice_flags[chapter_id]
+        value=values[choice_id]
         await db.execute("INSERT INTO story_flags(user_id,flag,value) VALUES(?,?,?) ON CONFLICT(user_id,flag) DO UPDATE SET value=excluded.value",(user_id,flag,value))
     return {"chapter":chapter,"choice":chapter["choices"][choice_id],"reward":chapter["reward"]}
 
