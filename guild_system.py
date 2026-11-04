@@ -560,7 +560,7 @@ async def attack_guild_raid(db,guild_id,user_id,damage):
     await db.execute(f"""INSERT INTO guild_raid_contributions(raid_id,user_id,damage) VALUES(?,?,?)
       ON CONFLICT(raid_id,user_id) DO UPDATE SET damage={damage_expression}""",(raid["raid_id"],user_id,dealt))
     if status=="won":
-        await award_guild_xp(db, guild_id, 100)
+        await _award_guild_xp_unlocked(db, guild_id, 100)
     return {"boss_name":raid["boss_name"],"hp":hp,"max_hp":raid["max_hp"],"damage":dealt,"status":status}
 
 
