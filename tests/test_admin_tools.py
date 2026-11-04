@@ -45,6 +45,14 @@ class AdminToolsTests(unittest.IsolatedAsyncioTestCase):
    with self.assertRaises(AdminError): await adjust_player_coins(self.db,101,value)
  async def test_unknown_player_is_rejected(self):
   with self.assertRaises(AdminError): await adjust_player_coins(self.db,202,10)
+ async def test_coin_adjustment_cannot_overflow_database_integer_balance(self):
+  await self.db.execute("UPDATE players SET coins=? WHERE user_id=101",((1<<63)-1,))
+  await self.db.commit()
+  with self.assertRaisesRegex(AdminError,"maximum supported coin balance"):
+   await adjust_player_coins(self.db,101,1)
+  cur=await self.db.execute("SELECT coins FROM players WHERE user_id=101")
+  self.assertEqual((await cur.fetchone())["coins"],(1<<63)-1)
+
  async def test_coin_adjustment_is_audited(self):
   await adjust_player_coins(self.db,101,10,999)
   logs=await recent_admin_actions(self.db)
