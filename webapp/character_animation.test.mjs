@@ -45,3 +45,28 @@ test("returns an immutable pose snapshot", () => {
   const pose = getPose(20, 0, false, 80);
   assert.equal(Object.isFrozen(pose), true);
 });
+
+test("maps movement vectors to all eight facing directions", () => {
+  const directions = [
+    [100, 0, "east"], [100, 100, "southeast"],
+    [0, 100, "south"], [-100, 100, "southwest"],
+    [-100, 0, "west"], [-100, -100, "northwest"],
+    [0, -100, "north"], [100, -100, "northeast"],
+  ];
+  for (const [vx, vy, expected] of directions) {
+    assert.equal(getPose(vx, vy, false, 0).facing, expected);
+  }
+});
+
+test("walk and run expose stable four-frame gait cycles", () => {
+  const walkFrames = [0, 1, 2, 3].map(frame => getPose(90, 0, false, frame * 76 * Math.PI / 2).frameIndex);
+  const runFrames = [0, 1, 2, 3].map(frame => getPose(120, 0, true, frame * 46 * Math.PI / 2).frameIndex);
+  assert.deepEqual(walkFrames, [0, 1, 2, 3]);
+  assert.deepEqual(runFrames, [0, 1, 2, 3]);
+  assert.equal(getPose(0, 0, false, 500).frameIndex, 0);
+});
+
+test("only an explicit sprint flag selects the running state", () => {
+  assert.equal(getPose(100, 0, "yes", 100).state, "walk");
+  assert.equal(getPose(100, 0, true, 100).state, "run");
+});
