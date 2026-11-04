@@ -50,6 +50,20 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(evolved["defense"], 12)
         self.assertEqual(evolved["speed"], 8)
 
+    async def test_evolved_form_rejects_malformed_base_monster_stats(self):
+        base = {"name": "Mire Stalker", "hp": 100, "attack_power": 20, "defense": 10, "speed": 5}
+        invalid_variants = (
+            {**base, "name": []},
+            {**base, "hp": True},
+            {**base, "attack_power": 2.5},
+            {**base, "defense": -1},
+            {**base, "speed": 101},
+            {**base, "unique_power": {"effect": "freeze"}},
+        )
+        for monster in invalid_variants:
+            with self.subTest(monster=monster), self.assertRaises(EvolutionError):
+                scale_evolved_monster(monster)
+
     async def test_evolved_spawn_probability_requires_mastery(self):
         self.assertTrue(is_evolved_spawn(True, 1))
         self.assertTrue(is_evolved_spawn(True, 25))
