@@ -40,6 +40,20 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
         self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
         self.assertIsNotNone(await get_auction(self.db,listing,1001))
+    async def test_get_auction_finds_listings_beyond_public_page_limit(self):
+        await self.db.executemany(
+            """INSERT INTO auction_listings
+               (seller_id,slot,item_name,item_stat,start_price,ends_at,created_at)
+               VALUES(?,'weapon','Test Blade',5,10,2000,900)""",
+            [(seller_id,) for seller_id in range(1000, 1051)],
+        )
+        cur = await self.db.execute("SELECT MAX(listing_id) AS listing_id FROM auction_listings")
+        listing_id = (await cur.fetchone())["listing_id"]
+        self.assertGreater(listing_id, 50)
+        result = await get_auction(self.db, listing_id, now=1000)
+        self.assertIsNotNone(result)
+        self.assertEqual(result["listing_id"], listing_id)
+
     async def test_bid_and_outbid_refund(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
