@@ -25,6 +25,16 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(GroupError):
    await claim_group_mission(self.db,-1001,[], "battles")
 
+ async def test_group_registration_admin_and_roster_require_existing_players(self):
+  with self.assertRaisesRegex(GroupError,"owner account not found"):
+   await register_group(self.db,-1003,"Ghost Group",999)
+  with self.assertRaisesRegex(GroupError,"administrator account not found"):
+   await set_group_admin(self.db,-1001,999,"admin")
+  with self.assertRaisesRegex(GroupError,"player account not found"):
+   await record_group_player(self.db,-1001,999,"Ghost",10)
+  cur=await self.db.execute("SELECT COUNT(*) FROM group_profiles WHERE chat_id=-1003")
+  self.assertEqual((await cur.fetchone())[0],0)
+
  async def test_register_and_verify_admin(self):
   p=await get_group_profile(self.db,-1001); self.assertEqual(p["admin_count"],2); self.assertTrue(await is_group_admin(self.db,-1001,202))
  async def test_private_chat_rejected(self):
@@ -118,6 +128,8 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual(rows[0]["progress"],0)
 
  async def test_group_ranking(self):
+  await self.db.execute("INSERT INTO players(user_id,coins) VALUES(303,0)")
+  await self.db.commit()
   await register_group(self.db,-1002,"Summit",303); await award_group_xp(self.db,-1002,500)
   self.assertEqual((await top_groups(self.db))[0]["chat_id"],-1002)
 
