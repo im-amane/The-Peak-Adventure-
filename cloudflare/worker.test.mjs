@@ -601,13 +601,18 @@ test("Mini App requests abort after a bounded timeout and always clear the timer
 });
 
 
-test("world maps expose three traversable zones with a clear gate approach", () => {
+test("world maps expose four named traversable zones with a clear gate approach", () => {
   const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
-  assert.match(game, /const w=this\.scale\.width\*2\.6,h=this\.scale\.height\*1\.5/);
-  assert.match(game, /const zoneLabels=\["THE OUTER REACH","THE WILD HEART","THE INNER FRONTIER"\]/);
-  assert.match(game, /x:w\*0\.86,y:h\*0\.88,width:46,height:58/);
-  assert.doesNotMatch(game, /x:w\*0\.91,y:h\*0\.76/);
+  const layout = readFileSync(new URL("../webapp/world_layout.js", import.meta.url), "utf8");
+  assert.match(game, /PeakWorldLayout\.createLayout\(this\.scale\.width,this\.scale\.height,idx\+1\)/);
+  assert.match(game, /layout\.zones\.forEach/);
+  assert.match(game, /layout\.monsterPositions/);
+  assert.match(game, /this\.portalX=layout\.portal\.x/);
   assert.match(game, /this\.cameras\.main\.setBounds\(0,0,this\.worldWidth,this\.worldHeight\)/);
+  assert.match(layout, /viewportWidth \* 3\.8/);
+  assert.match(layout, /viewportHeight \* 1\.8/);
+  assert.match(layout, /const ZONE_NAMES = \[/);
+  assert.match(layout, /zoneCount: zones\.length/);
 });
 
 
