@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from security_system import (
     SecurityEventError, get_security_events, get_suspicious_players,
-    init_security_tables, record_security_event,
+    init_security_tables, record_security_event, classify_security_risk,
 )
 
 
@@ -32,6 +32,8 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[0]["event_type_count"], 4)
         self.assertEqual(rows[0]["rate_limit_count"], 1)
         self.assertEqual(rows[0]["economy_abuse_count"], 1)
+        self.assertEqual(rows[0]["risk_level"], "medium")
+        self.assertEqual(rows[0]["recommended_action"], "monitor")
 
     async def test_event_details_are_bounded(self):
         await record_security_event(self.db, 101, "invalid_battle_action", "x" * 400)
@@ -80,6 +82,25 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
             await get_suspicious_players(self.db, window_minutes=0)
         with self.assertRaises(SecurityEventError):
             await get_security_events(self.db, 101, limit=0)
+
+    def test_risk_triage_thresholds_are_explainable_and_non_punitive(self):
+        self.assertEqual(
+            classify_security_risk(1, 1, 1, 0, 0),
+            {"risk_level": "low", "recommended_action": "log_only"},
+        )
+        self.assertEqual(
+            classify_security_risk(4, 8, 3, 2, 0),
+            {"risk_level": "medium", "recommended_action": "monitor"},
+        )
+        self.assertEqual(
+            classify_security_risk(5, 15, 5, 4, 3),
+            {"risk_level": "high", "recommended_action": "manual_review"},
+        )
+
+    def test_risk_triage_rejects_invalid_metrics(self):
+        for metrics in ((-1, 0, 0, 0, 0), (1, True, 0, 0, 0), (1, 0, 6, 0, 0)):
+            with self.subTest(metrics=metrics), self.assertRaises(SecurityEventError):
+                classify_security_risk(*metrics)
 
 
 if __name__ == "__main__":

@@ -3129,7 +3129,7 @@ async def admin_command(message: Message):
             rows=await get_suspicious_players(db,1440,20)
             lines=["🛡️ <b>Suspicious Activity · Last 24 Hours</b>"]
             for row in rows:
-                lines.append(f"Player <code>{row['user_id']}</code> · {row['event_count']} events · risk {row['risk_score']} · high severity {row['high_severity_count']} · event types {row['event_type_count']} · economy abuse {row['economy_abuse_count']} · rate limits {row['rate_limit_count']} · max severity {row['max_severity']} · last {row['last_seen']}")
+                lines.append(f"Player <code>{row['user_id']}</code> · {row['risk_level'].upper()} / {row['recommended_action']} · {row['event_count']} events · score {row['risk_score']} · high severity {row['high_severity_count']} · event types {row['event_type_count']} · economy abuse {row['economy_abuse_count']} · rate limits {row['rate_limit_count']} · max severity {row['max_severity']} · last {row['last_seen']}")
             await message.answer("\n".join(lines) if len(lines)>1 else "No suspicious activity recorded.")
         return
     if action=="logs":
@@ -5527,10 +5527,20 @@ async def operations_alert_loop(bot: Bot):
                     "🚨 The Peak Adventure database is unavailable."
                     if active else "✅ The Peak Adventure database connection recovered."
                 )
-            else:
+            elif alert_name == "backup_unhealthy":
                 message = (
                     "🚨 The Peak Adventure database backup is failing or stale."
                     if active else "✅ The Peak Adventure database backup recovered."
+                )
+            elif alert_name == "http_error_rate":
+                message = (
+                    "🚨 The Peak Adventure API has an elevated server-error rate."
+                    if active else "✅ The Peak Adventure API server-error rate recovered."
+                )
+            else:
+                message = (
+                    "🚨 The Peak Adventure API response latency is unusually high."
+                    if active else "✅ The Peak Adventure API response latency recovered."
                 )
             if not ADMIN_IDS:
                 log.error("Operations alert could not be delivered: ADMIN_IDS is empty (%s)", alert_name)
@@ -5656,6 +5666,7 @@ def miniapp_assets_available() -> bool:
         "character_profiles.js",
         "character_animation.js",
         "monster_animation.js",
+        "world_layout.js",
     )
     return all((WEB_DIR / filename).is_file() for filename in required)
 
@@ -5685,6 +5696,9 @@ def create_web_app():
 
     async def serve_monster_animation(request: web.Request):
         return web.FileResponse(WEB_DIR / "monster_animation.js")
+
+    async def serve_world_layout(request: web.Request):
+        return web.FileResponse(WEB_DIR / "world_layout.js")
 
     async def healthz(request: web.Request):
         if not await database_healthcheck():
@@ -5716,6 +5730,7 @@ def create_web_app():
     app.router.add_get("/character_profiles.js", serve_character_profiles)
     app.router.add_get("/character_animation.js", serve_character_animation)
     app.router.add_get("/monster_animation.js", serve_monster_animation)
+    app.router.add_get("/world_layout.js", serve_world_layout)
     app.router.add_get("/api/state", api_state)
     app.router.add_post("/api/dungeon", api_dungeon)
     app.router.add_post("/api/explore", api_explore)

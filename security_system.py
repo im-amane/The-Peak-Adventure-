@@ -21,6 +21,27 @@ EVENT_TYPES = {
 class SecurityEventError(ValueError):
     pass
 
+def classify_security_risk(event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count):
+    """Classify telemetry for human triage; this function never applies penalties."""
+    values = (event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count)
+    if any(type(value) is not int or value < 0 for value in values):
+        raise SecurityEventError("Security risk metrics must be non-negative integers.")
+    if (
+        max_severity > 5
+        or economy_abuse_count > event_count
+        or rate_limit_count > event_count
+        or risk_score > event_count * 5
+        or (event_count == 0 and any(values[1:]))
+        or (event_count > 0 and (max_severity < 1 or risk_score < event_count))
+        or risk_score < max_severity
+    ):
+        raise SecurityEventError("Security risk metrics are inconsistent.")
+    if max_severity >= 5 or economy_abuse_count >= 4 or risk_score >= 15:
+        return {"risk_level": "high", "recommended_action": "manual_review"}
+    if max_severity >= 3 or economy_abuse_count >= 2 or rate_limit_count >= 3 or risk_score >= 8:
+        return {"risk_level": "medium", "recommended_action": "monitor"}
+    return {"risk_level": "low", "recommended_action": "log_only"}
+
 
 def _is_postgres(db):
     return getattr(db, "dialect", "sqlite") == "postgres"
@@ -153,7 +174,16 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
            LIMIT ?""",
         (*window, limit),
     )
-    return await cur.fetchall()
+    rows = await cur.fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item.update(classify_security_risk(
+            int(item["event_count"]), int(item["risk_score"]), int(item["max_severity"]),
+            int(item["economy_abuse_count"]), int(item["rate_limit_count"]),
+        ))
+        result.append(item)
+    return result
 
 
 async def get_security_events(db, user_id, limit=20):

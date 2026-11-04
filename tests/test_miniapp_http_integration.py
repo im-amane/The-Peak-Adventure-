@@ -231,6 +231,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ("/character_profiles.js", "PeakCharacters"),
             ("/character_animation.js", "PeakCharacterAnimation"),
             ("/monster_animation.js", "PeakMonsterAnimation"),
+            ("/world_layout.js", "PeakWorldLayout"),
         ):
             response = await self.client.get(route)
             self.assertEqual(response.status, 200, route)
@@ -243,6 +244,7 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('src="/character_profiles.js"', html)
         self.assertIn('src="/character_animation.js"', html)
         self.assertIn('src="/monster_animation.js"', html)
+        self.assertIn('src="/world_layout.js"', html)
 
     async def test_miniapp_static_entrypoint_is_served_by_http_application(self):
         response = await self.client.get("/")
@@ -253,6 +255,20 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pathfinding.status, 200)
         self.assertIn("javascript", pathfinding.headers.get("Content-Type", ""))
         self.assertIn("PeakPathfinding", await pathfinding.text())
+
+    async def test_operations_alert_loop_notifies_admin_about_http_error_spike(self):
+        main.ADMIN_IDS = {self.user_id}
+        for index in range(20):
+            main.runtime_monitor.record_request("/api/action", 500 if index < 5 else 200, 0.02)
+        bot = type("FakeBot", (), {})()
+        bot.send_message = AsyncMock()
+        with patch("main.database_healthcheck", new=AsyncMock(return_value=True)), patch(
+            "main.asyncio.sleep", new=AsyncMock(side_effect=asyncio.CancelledError())
+        ):
+            with self.assertRaises(asyncio.CancelledError):
+                await main.operations_alert_loop(bot)
+        bot.send_message.assert_awaited_once()
+        self.assertIn("server-error rate", bot.send_message.await_args.args[1])
 
 
 if __name__ == "__main__":
