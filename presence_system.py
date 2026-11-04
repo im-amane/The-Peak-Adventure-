@@ -52,8 +52,13 @@ async def touch_presence(db, user_id: int):
         return
     nested = await _begin_atomic(db, "touch_presence")
     try:
-        await db.execute("""INSERT INTO player_presence(user_id,last_seen) VALUES(?,CURRENT_TIMESTAMP)
-          ON CONFLICT(user_id) DO UPDATE SET last_seen=CURRENT_TIMESTAMP""", (user_id,))
+        await db.execute(
+            """INSERT INTO player_presence(user_id,last_seen)
+               SELECT ?,CURRENT_TIMESTAMP
+               WHERE EXISTS (SELECT 1 FROM players WHERE user_id=?)
+               ON CONFLICT(user_id) DO UPDATE SET last_seen=CURRENT_TIMESTAMP""",
+            (user_id, user_id),
+        )
         await _commit_atomic(db, nested, "touch_presence")
     except Exception:
         await _rollback_atomic(db, nested, "touch_presence")
