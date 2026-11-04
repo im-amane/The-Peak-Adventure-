@@ -1472,13 +1472,15 @@
       if(movement.blockedX)this.heroVelocity.x=0;
       if(movement.blockedY)this.heroVelocity.y=0;
       this.hero.setPosition(movement.x,movement.y);
-      const walking=Math.hypot(this.heroVelocity.x,this.heroVelocity.y)>8;
-      const gait=walking?Math.sin(this.time.now/(sprinting?46:76))*(sprinting?0.82:0.52):Math.sin(this.time.now/430)*0.065;
+      const animationPose=window.PeakCharacterAnimation.getPose(
+        this.heroVelocity.x,this.heroVelocity.y,sprinting,this.time.now
+      );
+      this.heroAnimationState=animationPose.state;
       if(this.hero.limbs){
-        this.hero.limbs.leftArm.rotation=-gait*0.92;
-        this.hero.limbs.rightArm.rotation=gait*0.92;
-        this.hero.limbs.leftLeg.rotation=gait*0.78;
-        this.hero.limbs.rightLeg.rotation=-gait*0.78;
+        this.hero.limbs.leftArm.rotation=animationPose.leftArm;
+        this.hero.limbs.rightArm.rotation=animationPose.rightArm;
+        this.hero.limbs.leftLeg.rotation=animationPose.leftLeg;
+        this.hero.limbs.rightLeg.rotation=animationPose.rightLeg;
       }
       if(sprinting&&this.time.now-(this.lastSprintDustAt||0)>160){
         this.lastSprintDustAt=this.time.now;
