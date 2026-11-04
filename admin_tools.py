@@ -6,6 +6,9 @@ class AdminError(ValueError):
     pass
 
 
+MAX_COIN_BALANCE = (1 << 63) - 1
+
+
 async def _begin_atomic(db,savepoint):
     nested=db.in_transaction
     if nested:
@@ -133,8 +136,10 @@ async def adjust_player_coins(db, user_id: int, delta: int, actor_id: int | None
     if not player:
         raise AdminError("Player account not found.")
     new_balance=player["coins"]+delta
-    if new_balance<0:
+    if new_balance < 0:
         raise AdminError("Adjustment would make the player's coin balance negative.")
+    if new_balance > MAX_COIN_BALANCE:
+        raise AdminError("Adjustment would exceed the maximum supported coin balance.")
     cur=await db.execute(
         "UPDATE players SET coins=? WHERE user_id=? AND coins=?",
         (new_balance,user_id,player["coins"]),
