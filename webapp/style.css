@@ -304,3 +304,8 @@ button:disabled{opacity:.55}
 .story-reward-claimed{align-self:center;color:#a9d5b2!important;font-weight:800}
 @media(max-width:520px){.story-choices{display:grid;grid-template-columns:1fr}.story-choice{width:100%}}
 @media(prefers-reduced-motion:reduce){.story-progress-fill{transition:none}}
+
+.story-choice{min-height:44px}
+.story-line{animation:story-line-reveal .45s both;animation-delay:calc(var(--scene-index,0)*.16s)}
+@keyframes story-line-reveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.story-line{animation:none}}
