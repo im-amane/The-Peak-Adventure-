@@ -13,6 +13,18 @@ class GroupTests(unittest.IsolatedAsyncioTestCase):
   await record_group_player(self.db,-1001,101,"Ash",10)
   await record_group_player(self.db,-1001,202,"Mira",20)
  async def asyncTearDown(self): await self.db.close()
+ async def test_group_actions_reject_malformed_types_with_domain_errors(self):
+  with self.assertRaisesRegex(GroupError,"title must be text"):
+   await register_group(self.db,-1003,["Peak"],101)
+  with self.assertRaises(GroupError):
+   await set_group_admin(self.db,-1001,202,[])
+  with self.assertRaises(GroupError):
+   await record_group_activity(self.db,-1001,[])
+  with self.assertRaises(GroupError):
+   await claim_group_mission(self.db,-1001,202,[])
+  with self.assertRaises(GroupError):
+   await claim_group_mission(self.db,-1001,[], "battles")
+
  async def test_register_and_verify_admin(self):
   p=await get_group_profile(self.db,-1001); self.assertEqual(p["admin_count"],2); self.assertTrue(await is_group_admin(self.db,-1001,202))
  async def test_private_chat_rejected(self):
