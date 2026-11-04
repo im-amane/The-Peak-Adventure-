@@ -71,6 +71,16 @@ class CloudflareAssetSyncTests(unittest.TestCase):
         with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
             sync_cloudflare_assets.main()
 
+    def test_all_static_assets_run_through_worker_security_headers(self):
+        config_path = sync_cloudflare_assets.ROOT / "wrangler.jsonc"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        worker_first = set(config["assets"]["run_worker_first"])
+        missing = set(sync_cloudflare_assets.ASSETS) - worker_first
+        self.assertFalse(
+            missing,
+            "Static assets bypass Worker security headers: " + ", ".join(sorted(missing)),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
