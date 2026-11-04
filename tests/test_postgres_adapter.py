@@ -729,6 +729,23 @@ class PostgresDungeonServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(tuple((await cursor.fetchone()).values()), (150, 2))
         self.assertIsNone(await get_dungeon_state(self.db, 901))
 
+    async def test_concurrent_dungeon_entries_for_one_player_are_serialized(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            results = await asyncio.gather(
+                enter_dungeon(self.db, 901, 1, 1),
+                enter_dungeon(second, 901, 1, 1),
+                return_exceptions=True,
+            )
+            self.assertEqual(sum(isinstance(value, dict) for value in results), 1)
+            self.assertEqual(sum(isinstance(value, DungeonError) for value in results), 1)
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM dungeon_runs WHERE user_id=901 AND status='active'"
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 1)
+        finally:
+            await second.close()
+
     async def test_completed_dungeon_reward_cannot_be_claimed_twice(self):
         await self.complete_first_dungeon()
         await claim_dungeon_reward(self.db, 901)
