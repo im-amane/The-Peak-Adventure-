@@ -1616,6 +1616,21 @@ class PostgresRoamingEventServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["damage"], 5)
         self.assertEqual(result["participants"], 1)
 
+    async def test_concurrent_event_creation_returns_one_active_world_event(self):
+        second = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        try:
+            first_event, second_event = await asyncio.gather(
+                get_or_create_roaming_event(self.db, 2, 3, "Mire Colossus", 100, now=2000),
+                get_or_create_roaming_event(second, 2, 4, "Ash Sentinel", 120, now=2000),
+            )
+            self.assertEqual(first_event["event_id"], second_event["event_id"])
+            cursor = await self.db.execute(
+                "SELECT COUNT(*) AS total FROM roaming_events WHERE world_id=2 AND status='active'"
+            )
+            self.assertEqual((await cursor.fetchone())["total"], 1)
+        finally:
+            await second.close()
+
     async def test_contributor_reward_is_atomic_and_one_time(self):
         event = await get_or_create_roaming_event(
             self.db, 1, 3, "Mire Colossus", 1, now=1000
