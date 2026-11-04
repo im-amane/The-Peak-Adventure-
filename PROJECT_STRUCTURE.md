@@ -245,14 +245,11 @@ Coverage is implementation-checklist progress, not proof of live production read
 6. Mark a feature fully complete only after the required verification has passed.
 
 ## Latest automated verification
-- GitHub Actions PR run: **#1521 — SUCCESS** on PR #124 at commit `01a33b738ab94078f22406691989624a456e150f`.
-- Python suite: **794 tests passed**.
-- PostgreSQL integration: **158 adapter, 5 matchmaking and 1 Mini App HTTP tests passed**.
-- Mini App pathfinding Node tests: **15 passed**.
-- Cloudflare Worker Node tests: **36 passed**.
-- Python compile and `import main`: passed.
-- Cloudflare embedded asset parity and JavaScript syntax checks: passed.
-- HTTP-level Mini App checks: Telegram initData HMAC auth, unauthenticated rejection, health endpoint, static entrypoint, rate limiting, exploration and persisted active-battle state.
+- Main branch commit after PR #145: `57aa4d2d32e11761905b6cfc9537a8862e8fc82d`.
+- Latest main-branch GitHub Actions run completed successfully.
+- Full Python test suite and PostgreSQL adapter/integration jobs passed.
+- CI also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests.
+- Live Telegram, Android WebView, production database and real off-site cloud restore checks remain separate launch gates.
 
 ## Remaining launch validation
 - Mini App browser and real Android Telegram device QA.
