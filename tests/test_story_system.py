@@ -107,23 +107,23 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
  async def test_invalid_story_user_is_rejected(self):
   with self.assertRaises(StoryError):
    await choose_story_path(self.db,0,1,1,"follow_mira")
-    async def test_choices_change_the_next_chapter_across_the_campaign(self):
-        path=[
-            (1,"follow_mira",2,"Mira's lantern trail"),
-            (2,"trust_wanderer",3,"The Wanderer walks ahead"),
-            (3,"keep_silent",4,"The sealed name remains"),
-            (4,"question_echo",5,"Echo's unanswered question"),
-            (5,"seek_revenge",6,"The Ashen King's final warning"),
-            (6,"ask_for_time",7,"Mira keeps pace without asking"),
-            (7,"pretend_accept",8,"The Herald believes your bargain"),
-            (8,"carry_alone",9,"The lantern burns in your hands alone"),
-            (9,"take_the_burden",10,"Your companions refuse to leave you alone")
-        ]
-        for chapter_id,choice_id,next_id,expected in path:
-            if chapter_id==8:
-                await self.db.execute("INSERT INTO party_members VALUES(1,10)")
-            await choose_story_path(self.db,1,100,chapter_id,choice_id)
-            chapters=await get_story_chapters(self.db,1,100)
-            self.assertIn(expected,chapters[next_id-1]["scene"])
+ async def test_choices_change_the_next_chapter_across_the_campaign(self):
+  path=[
+   (1,"follow_mira",2,"Mira's lantern trail"),
+   (2,"trust_wanderer",3,"The Wanderer walks ahead"),
+   (3,"keep_silent",4,"The sealed name remains"),
+   (4,"question_echo",5,"Echo's unanswered question"),
+   (5,"seek_revenge",6,"The Ashen King's final warning"),
+   (6,"ask_for_time",7,"Mira keeps pace without asking"),
+   (7,"pretend_accept",8,"The Herald believes your bargain"),
+   (8,"carry_alone",9,"The lantern burns in your hands alone"),
+   (9,"take_the_burden",10,"Your companions refuse to leave you alone")
+  ]
+  for chapter_id,choice_id,next_id,expected in path:
+   if chapter_id==8:
+    await self.db.execute("INSERT INTO party_members VALUES(1,10)")
+   await choose_story_path(self.db,1,100,chapter_id,choice_id)
+   chapters=await get_story_chapters(self.db,1,100)
+   self.assertIn(expected,chapters[next_id-1]["scene"])
 
 if __name__=="__main__":unittest.main()
