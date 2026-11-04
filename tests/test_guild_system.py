@@ -70,6 +70,14 @@ class GuildFeatureTests(unittest.IsolatedAsyncioTestCase):
   self.assertEqual([row["invite_id"] for row in rows],[invite_id])
   self.assertEqual(rows[0]["guild_name"],"Peak")
   self.assertEqual(await list_pending_guild_invites(self.db,2),[])
+ async def test_guild_invite_response_requires_boolean_accept_flag(self):
+  invite=await create_guild_invite(self.db,10,1,3)
+  for value in ("false",1,None,[]):
+   with self.assertRaises(GuildFeatureError):
+    await respond_guild_invite(self.db,invite,3,value)
+  cur=await self.db.execute("SELECT status FROM guild_invites WHERE invite_id=?",(invite,))
+  self.assertEqual((await cur.fetchone())["status"],"pending")
+
  async def test_leader_can_invite_and_target_accepts(self):
   invite=await create_guild_invite(self.db,10,1,3)
   self.assertEqual(await respond_guild_invite(self.db,invite,3,True),10)
