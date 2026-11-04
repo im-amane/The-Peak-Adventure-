@@ -74,7 +74,7 @@ class CloudflareAssetSyncTests(unittest.TestCase):
     def test_cloudflare_static_headers_cover_all_assets_without_worker_invocation(self):
         headers_path = sync_cloudflare_assets.ROOT / "webapp" / "_headers"
         headers = headers_path.read_text(encoding="utf-8")
-        self.assertTrue(headers.startswith("/*\\n"))
+        self.assertTrue(headers.startswith("/*\n"))
         self.assertIn("Content-Security-Policy:", headers)
         self.assertIn("Referrer-Policy: strict-origin-when-cross-origin", headers)
         self.assertIn("X-Content-Type-Options: nosniff", headers)
