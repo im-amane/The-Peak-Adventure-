@@ -21,6 +21,13 @@ class RoamingEventTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.db.close()
 
+    async def test_event_creation_rejects_non_string_monster_names(self):
+        for name in (None, True, 123, ["Mire Colossus"], {"name": "Mire Colossus"}):
+            with self.subTest(name=name), self.assertRaisesRegex(RoamingEventError, "name must be text"):
+                await get_or_create_roaming_event(self.db, 1, 3, name, 100, now=1000)
+        cur = await self.db.execute("SELECT COUNT(*) AS total FROM roaming_events")
+        self.assertEqual((await cur.fetchone())["total"], 0)
+
     async def test_world_shares_one_active_event(self):
         first = await get_or_create_roaming_event(self.db, 1, 3, "Mire Colossus", 100, now=1000)
         second = await get_or_create_roaming_event(self.db, 1, 4, "Different Monster", 120, now=1001)
