@@ -28,6 +28,28 @@ RARITY_COIN_BANDS = {
 }
 
 
+def validate_rarity_configuration() -> None:
+    """Reject incomplete or overlapping rarity definitions before shop validation."""
+    if not RARITY_ORDER or len(set(RARITY_ORDER)) != len(RARITY_ORDER):
+        raise ValueError("Rarity order must contain unique tiers.")
+    expected = set(RARITY_ORDER)
+    if set(RARITY_LABELS) != expected or set(RARITY_COIN_BANDS) != expected:
+        raise ValueError("Rarity labels and coin bands must cover every ordered tier.")
+    previous_high = 0
+    for rarity in RARITY_ORDER:
+        label = RARITY_LABELS[rarity]
+        band = RARITY_COIN_BANDS[rarity]
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"Rarity {rarity} has no display label.")
+        if (not isinstance(band, tuple) or len(band) != 2
+                or any(type(value) is not int for value in band)):
+            raise ValueError(f"Rarity {rarity} has an invalid coin band.")
+        low, high = band
+        if low <= previous_high or high < low:
+            raise ValueError("Rarity coin bands must be positive, ordered and non-overlapping.")
+        previous_high = high
+
+
 def get_item_rarity(item_id: str) -> str:
     """Return the display marker for a known shop item."""
     rarity = SHOP_ITEM_RARITY.get(item_id)
@@ -38,6 +60,7 @@ def get_item_rarity(item_id: str) -> str:
 
 def validate_shop_catalog(items: dict) -> None:
     """Fail fast when shop IDs, prices, levels or rarity tiers drift apart."""
+    validate_rarity_configuration()
     if not isinstance(items, dict) or set(items) != set(SHOP_ITEM_RARITY):
         raise ValueError("Shop item IDs and rarity catalogue must match exactly.")
     for item_id, item in items.items():
