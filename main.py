@@ -5527,10 +5527,20 @@ async def operations_alert_loop(bot: Bot):
                     "🚨 The Peak Adventure database is unavailable."
                     if active else "✅ The Peak Adventure database connection recovered."
                 )
-            else:
+            elif alert_name == "backup_unhealthy":
                 message = (
                     "🚨 The Peak Adventure database backup is failing or stale."
                     if active else "✅ The Peak Adventure database backup recovered."
+                )
+            elif alert_name == "http_error_rate":
+                message = (
+                    "🚨 The Peak Adventure API has an elevated server-error rate."
+                    if active else "✅ The Peak Adventure API server-error rate recovered."
+                )
+            else:
+                message = (
+                    "🚨 The Peak Adventure API response latency is unusually high."
+                    if active else "✅ The Peak Adventure API response latency recovered."
                 )
             if not ADMIN_IDS:
                 log.error("Operations alert could not be delivered: ADMIN_IDS is empty (%s)", alert_name)
