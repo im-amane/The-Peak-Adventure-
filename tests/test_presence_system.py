@@ -40,6 +40,11 @@ class PresenceTests(unittest.IsolatedAsyncioTestCase):
   await touch_presence(self.db,2)
   rows=await list_online_friends(self.db,1)
   self.assertEqual([row["user_id"] for row in rows],[2])
+ async def test_online_friend_query_rejects_invalid_player_ids(self):
+  for user_id in (True,False,0,-1,"1",None):
+   with self.subTest(user_id=user_id),self.assertRaisesRegex(ValueError,"Invalid player account"):
+    await list_online_friends(self.db,user_id)
+
  async def test_invalid_presence_window_rejected(self):
   with self.assertRaises(ValueError):await count_online_players(self.db,61)
  async def test_invalid_user_does_not_create_presence(self):
