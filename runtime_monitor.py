@@ -16,7 +16,7 @@ MIN_RECENT_REQUESTS = 20
 SERVER_ERROR_RATE_THRESHOLD = 0.20
 P95_LATENCY_THRESHOLD_MS = 2_000
 _DYNAMIC_SEGMENT = re.compile(
-    r"^(?:\\d+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}|[0-9a-fA-F]{16,})$"
+    r"^(?:\d+|[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}|[0-9a-fA-F]{16,})$"
 )
 
 
