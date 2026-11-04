@@ -1,91 +1,93 @@
 # PostgreSQL Compatibility Audit
 
-**Status updated:** 2026-11-02  
-**Scope:** 30 top-level Python source files, service schema initialization, main Mini App gameplay reads, and SQLite-to-PostgreSQL migration tooling.
+**Status updated:** 2026-11-04  
+**Scope:** PostgreSQL runtime adapter, schema initialization/parity, service integration tests, SQLite migration tooling, and backup/restore implementation.
 
-This is an engineering status report. PostgreSQL compatibility tests do not mean the production runtime has switched databases.
+This is an engineering status report. Passing PostgreSQL tests does not mean the live prototype has switched databases or that production recovery has been proven.
 
 ## Executive finding
 
-The project has a PostgreSQL 16 adapter, dialect-aware full-game schema initialization, SQLite/PostgreSQL schema-parity tests, broad service-level PostgreSQL integration coverage, selected main gameplay smoke tests, and a guarded SQLite-to-PostgreSQL data migration utility. PR #93 has now wired explicit runtime selection through `DATABASE_URL`; SQLite remains the default when that variable is unset, and PostgreSQL connection/schema failures stop startup rather than falling back silently.
+The repository has a PostgreSQL 16 adapter, dialect-aware game schema initialization, SQLite/PostgreSQL schema-parity checks, service-level PostgreSQL integration tests, a guarded SQLite-to-PostgreSQL migration utility, and database-aware scheduled backups. `DATABASE_URL` explicitly selects PostgreSQL; SQLite remains the default when it is unset. PostgreSQL connection or schema initialization failures stop startup rather than silently falling back.
 
-**PostgreSQL runtime support is implemented but is not production-approved or production-verified.** The active deployment remains unchanged; no live data migration, Heroku provisioning, or deployment has occurred.
+**PostgreSQL support is implemented and CI-tested, but is not production-approved or production-verified.** The documented prototype target remains a single Render service using SQLite on a persistent disk. No live database migration, runtime database switch, or deployment has occurred.
 
 ## Verified progress
 
 | Area | Verified status |
 |---|---|
 | PostgreSQL adapter | Supports qmark conversion, dict rows, transaction state, nested savepoints, `BEGIN IMMEDIATE` normalization, `INSERT OR IGNORE` normalization, and explicit generated IDs |
-| Core schema | `init_core_schema(connection)` creates/upgrades core tables for SQLite and PostgreSQL; Telegram user/chat identifiers use PostgreSQL `BIGINT` |
-| Full schema bootstrap | `init_game_schema(connection)` initializes the ordered set of game service schemas on either backend |
-| Schema parity | CI initializes a full in-memory SQLite schema and an isolated PostgreSQL schema, then compares table and column names |
-| Main gameplay smoke tests | PostgreSQL tests exercise `miniapp_state()`, large Telegram IDs, quest/achievement upserts, and idempotent daily rewards |
-| Combat and guild SQL | PostgreSQL tests cover portable HP/cooldown updates and capped guild mission progress |
-| Data migration utility | Dry-run, bounded batch copy, FK dependency ordering, identity sequence reset, rollback and non-empty target refusal are tested against PostgreSQL 16 |
-| Runtime database | `DATABASE_URL` explicitly selects PostgreSQL; otherwise SQLite is selected. The deployed/current environment has not been switched |
-| Backup/restore | Existing `db_backup.py` is SQLite-specific; a PostgreSQL backup/restore and recovery procedure is still required |
-| Deployment | No Heroku deployment or live Telegram/device QA has been performed |
+| Core and game schemas | Dialect-aware schema initialization for SQLite and PostgreSQL; Telegram user/chat identifiers use PostgreSQL `BIGINT` |
+| Schema parity | CI initializes SQLite and PostgreSQL schemas and compares table/column structure; migration audit additionally checks selected keys, foreign keys, indexes, nullability, defaults, and type affinity |
+| Service integration | PostgreSQL 16 CI covers adapter behavior, matchmaking, Mini App HTTP flows, and selected gameplay/service mutations |
+| Migration utility | Read-only by default; guarded apply to an empty target, bounded batches, FK dependency ordering, sequence reset, and transaction rollback |
+| SQLite backups | Online SQLite backup API with integrity checking and retention |
+| PostgreSQL backups | `backup_scheduler.py` dispatches to logical `pg_dump` custom-format archives; checksums, archive readability verification, and local retention are implemented |
+| PostgreSQL restore | Guarded `pg_restore` command verifies checksum/archive and requires exact target database-name confirmation; a real restore rehearsal is still outstanding |
+| Runtime selection | `DATABASE_URL` selects PostgreSQL; otherwise SQLite is selected. No live environment has been switched |
+| Hosting | `render.yaml` describes a single-instance Render prototype with persistent disk; no live deployment or Telegram/device acceptance test has been performed |
 
 ## Remaining compatibility and release blockers
 
-### 1. Runtime connection and lifecycle
+### 1. Runtime connection, lifecycle and concurrency
 
-- `main.init_db()` selects Psycopg when `DATABASE_URL` is explicitly set and otherwise retains SQLite. PostgreSQL startup errors fail closed and close a partially initialized connection.
-- Backend-selection and failure-cleanup tests cover the runtime selection path; CI also runs the PostgreSQL adapter and service integration suites against PostgreSQL 16.
-- The app still owns one gameplay connection per process. Player-scoped actions now take PostgreSQL session advisory locks on a dedicated lock connection, so those locks survive gameplay transaction commits/rollbacks and coordinate across processes. Group/guild/party/multi-account workflows and any remaining unguarded mutation paths still need a broader cross-process locking audit before separate web/worker processes or horizontal scaling.
-- The runtime deliberately disables the SQLite snapshot loop when PostgreSQL is selected. The operations monitor reports that no durable PostgreSQL backup provider is configured.
+- `main.init_db()` selects Psycopg only when `DATABASE_URL` is explicitly configured. PostgreSQL startup failures fail closed.
+- CI exercises PostgreSQL 16 adapter and selected service integration paths. This is not full production workload certification.
+- The application currently combines Telegram polling and the HTTP API in one process. Keep the prototype to one instance; multiple instances could create competing Telegram polling loops.
+- Player-scoped PostgreSQL actions use session advisory locks on dedicated lock connections. Group, guild, party, multi-account and other cross-entity workflows still need a complete cross-process locking and concurrency review before splitting processes or horizontal scaling.
+- PostgreSQL is not the documented default for the initial Render prototype. Do not switch the runtime merely because CI is green.
 
-### 2. Backup, restore and recovery
+### 2. Backup, restore and disaster recovery
 
-- `db_backup.py` uses SQLite's online backup API and `PRAGMA integrity_check`; it is never run against a PostgreSQL connection.
-- PostgreSQL backup/restore is not implemented. The runtime reports this gap rather than writing a misleading SQLite file.
-- The current migration utility does not create a source backup, migrate triggers/views, or prove a restore.
-- A PostgreSQL backup strategy, durable backup destination, restore rehearsal, retention policy, and rollback runbook are still required.
-- Do not migrate a production database until a recoverable backup has been verified.
+- The scheduled backup loop dispatches according to the active database dialect: SQLite snapshots use `db_backup.py`; PostgreSQL uses `postgres_backup.py`.
+- PostgreSQL backups are custom-format logical archives. The backup utility writes SHA-256 sidecars, verifies archive readability with `pg_restore --list` before publication, and rotates local archives according to `POSTGRES_BACKUP_RETENTION`.
+- The restore utility checks the archive and checksum, requires an exact database-name confirmation, and uses a single transaction. Restore replaces objects in the target database; it must only be rehearsed against a separate disposable database.
+- The current Render prototype configuration stores backups on the same persistent disk as the service. **This is local backup protection, not off-site disaster recovery.** Disk loss or account-level failure could affect both the database and its backups.
+- Still required: choose an off-site storage provider, define encryption/key handling and access controls, export backups off the service disk, alert on failed/missed backups, and complete a documented restore rehearsal with measured recovery time.
+- Do not migrate or accept production data until an independently stored backup has been restored successfully.
 
 ### 3. Migration tooling limits
 
 The script `scripts/migrate_sqlite_to_postgres.py`:
 
-- Defaults to read-only audit mode.
-- Requires the PostgreSQL target schema to be initialized separately with `main.init_game_schema(connection)`.
-- Checks table/column compatibility and row counts.
-- Requires an empty PostgreSQL target before applying.
-- Copies rows in bounded batches and orders tables by foreign-key dependencies.
-- Resets identity/serial sequences after copying explicit IDs.
-- Rolls back the data-copy transaction on failure.
-- Requires `--apply --confirm MIGRATE` in CLI mode.
+- Defaults to read-only audit mode and requires an already initialized PostgreSQL target schema.
+- Compares schema compatibility, including type affinity, nullability, default availability, generated-key behavior, primary keys, foreign-key mappings/actions, CHECK constraint counts, and selected index signatures.
+- Reports source/target row counts and refuses apply when the target is not empty or required schema checks fail.
+- Copies rows in bounded batches ordered by foreign-key dependencies, resets identity/serial sequences, and rolls back the copy transaction on failure.
+- Requires explicit `--apply --confirm MIGRATE` flags.
 
-It is a one-way data-copy tool, not a live replication or zero-downtime migration system. It does not provision PostgreSQL, alter app runtime configuration, or execute itself against production. Its schema audit compares names and required-column availability; data-type conversion edge cases still need a real-source dry run.
+It is a one-way data-copy tool, not live replication or zero-downtime migration. It does not provision PostgreSQL, switch application configuration, or execute itself during startup. The audit does not prove exact CHECK expressions, default expressions, partial-index predicates, expression indexes, triggers, views, or every stored-value conversion. A representative dry-run and disposable copy using a backed-up source are required.
 
 ### 4. SQL and service behavior
 
-- The adapter intentionally supports a defined subset of SQLite's async connection/cursor surface.
-- SQLite-specific conflict, date, schema-introspection and scalar SQL behavior must continue to be reviewed explicitly.
-- Current PostgreSQL integration tests cover many service transactions and concurrency paths, but they are not a substitute for real Telegram and browser acceptance testing.
-- Schema-parity coverage compares table and column names; it does not prove identical indexes, constraints, defaults, triggers or runtime semantics.
+- The adapter intentionally supports a defined subset of the aiosqlite connection/cursor API.
+- SQLite-specific conflict handling, date expressions, schema introspection and scalar SQL must continue to be reviewed as new gameplay code is added.
+- PostgreSQL integration tests cover meaningful service and concurrency paths, but not every Telegram command, Mini App mutation, or production-scale workload.
+- Schema parity is not a proof of identical database semantics. Review constraints, defaults, indexes, query plans, transaction boundaries and race behavior for critical workflows.
+- Continue adding regression tests for idempotent rewards, multi-player operations and failure/retry behavior.
 
-### 5. Heroku release gates
+### 5. Prototype and production release gates
 
-- Keep the current SQLite runtime until the PostgreSQL runtime path and recovery plan are approved.
-- Separate Telegram polling from the web process only after shared persistent storage is ready.
-- Configure Heroku secrets and database URL only after the runtime switch is explicitly authorized.
-- Verify HTTPS/Cloudflare routing, worker/web health checks, restart behavior, Telegram bot polling, Android WebView, multiplayer concurrency, security and load.
-- No Heroku add-on, paid resource, deployment or Telegram Stars purchase has been enabled.
+- The current prototype runbook targets one Render Docker web service, one persistent disk, SQLite, and the Cloudflare Worker as the public Mini App edge.
+- Keep one instance while Telegram polling and HTTP serving share a process.
+- Complete real Telegram bot and Android Telegram WebView smoke tests, including registration, Mini App authentication, movement, battle rewards, persistence after restart, and health checks.
+- Before production: complete off-site backup/restore, PostgreSQL migration rehearsal, full cross-process concurrency/security review, monitoring/alerting, load tests, and a separate bot-worker/web-process architecture.
+- No live Render deployment, PostgreSQL cutover, Telegram Stars payment enablement, or public production launch is authorized by this document.
 
 ## Recommended next sequence
 
-1. Complete a dry-run against a representative, backed-up SQLite database and review all schema/count/type warnings.
-2. Select and implement a durable PostgreSQL backup destination plus verified restore rehearsal; the storage provider must be chosen before this can be completed safely.
-3. Expand PostgreSQL smoke coverage to the remaining main-command and Mini App mutation paths, and finish the SQLite-specific SQL/transaction audit.
-4. Extend database-level locking and idempotency to group/guild/party and multi-account operations; the new player advisory lock is only one layer of the cross-process concurrency design.
-5. Run browser/device, Telegram, multiplayer concurrency, security and load acceptance tests.
-6. Only after explicit approval, schedule a controlled data migration and Heroku release.
+1. Select an off-site backup destination and implement secure export, access controls, failure alerting and retention.
+2. Rehearse PostgreSQL restore to a disposable database and document measured recovery steps.
+3. Run a representative SQLite-to-PostgreSQL dry-run and disposable migration; investigate all schema and data-conversion warnings.
+4. Expand PostgreSQL smoke coverage for remaining Telegram and Mini App mutation paths; continue the SQL/transaction audit.
+5. Complete cross-process locking and idempotency review for group, guild, party, trade, auction and multi-account workflows.
+6. Run real Telegram/Android device acceptance, monitoring, security and load tests.
+7. Only after explicit approval, schedule a controlled migration and production release.
 
 ## Safety boundary
 
-- SQLite remains the default and active prototype backend unless `DATABASE_URL` is explicitly configured for a process.
+- SQLite remains the default unless `DATABASE_URL` is explicitly configured for a process.
 - No live SQLite data has been migrated.
-- No production environment has been switched to PostgreSQL.
-- No Heroku resource has been provisioned and no deployment has occurred.
+- No production runtime has been switched to PostgreSQL.
+- Local scheduled backups exist, but off-site recovery and a real restore drill are not complete.
+- The Render prototype has not been deployed or live-tested.
 - Telegram Stars purchases remain disabled.
