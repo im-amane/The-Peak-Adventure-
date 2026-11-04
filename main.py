@@ -56,7 +56,7 @@ from evolution_system import EvolutionError, get_evolution_state, init_evolution
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 from runtime_monitor import RuntimeMonitor
 from item_economy import get_item_rarity, validate_shop_catalog
-from economy_balance import calculate_battle_coin_reward
+from economy_balance import calculate_battle_coin_reward, validate_shop_affordability
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -98,6 +98,7 @@ SHOP_ITEMS = {
     "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1},
 }
 validate_shop_catalog(SHOP_ITEMS)
+validate_shop_affordability(SHOP_ITEMS, max_wins=5)
 QUESTS = [
     {"id": "first_steps", "title": "A Tiny Spark", "kind": "level", "target": 2, "coins": 40, "potions": 1, "description": "Reach hero level 2."},
     {"id": "first_hunt", "title": "First Blood", "kind": "wins", "target": 3, "coins": 60, "potions": 1, "description": "Win 3 monster battles."},
