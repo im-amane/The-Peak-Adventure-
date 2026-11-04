@@ -9,7 +9,7 @@
     const facing = Number.isFinite(direction) && direction < 0 ? -1 : 1;
     const duration = DURATIONS[current];
     const progress = current === "idle" ? 0 : Math.min(1, elapsed / duration);
-    const envelope = current === "idle" ? 0 : Math.sin(Math.PI * progress);
+    const envelope = current === "idle" || progress >= 1 ? 0 : Math.sin(Math.PI * progress);
     let offsetX = 0, offsetY = 0, scaleX = 1, scaleY = 1, rotation = 0, alpha = 1;
 
     if (current === "idle") {
