@@ -25,6 +25,13 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
    with self.assertRaisesRegex(ValueError, "unique and sequential"):
     validate_story_campaign()
 
+ def test_campaign_validator_rejects_underwritten_cinematic_scene(self):
+  broken = [dict(chapter) for chapter in CHAPTERS]
+  broken[0]["scene"] = "A short scene."
+  with patch("story_system.CHAPTERS", broken):
+   with self.assertRaisesRegex(ValueError, "too short for cinematic presentation"):
+    validate_story_campaign()
+
  def test_campaign_validator_rejects_missing_choice_content(self):
   broken = [dict(chapter) for chapter in CHAPTERS]
   broken[0]["choices"] = {"follow_mira": "", "follow_wanderer": "Find the Wanderer"}
