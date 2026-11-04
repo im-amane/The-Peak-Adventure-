@@ -308,6 +308,17 @@ test("hero, NPC, gate and monster encounters span the map safely", () => {
   assert.ok(monsters[2].x > layout.zones[3].startX);
 });
 
+test("terrain blockers leave hero, NPC, gate and monster spawn points clear", () => {
+  const layout = globalThis.PeakWorldLayout.createLayout(900, 500, 7);
+  const protectedPoints = [layout.spawn, layout.npc, layout.portal, ...layout.monsterPositions(3)];
+  for (const point of protectedPoints) {
+    for (const obstacle of layout.obstacles) {
+      const overlapsX = Math.abs(point.x - obstacle.x) < obstacle.width / 2 + 20;
+      const overlapsY = Math.abs(point.y - obstacle.y) < obstacle.height / 2 + 20;
+      assert.equal(overlapsX && overlapsY, false, "important spawn points must not overlap blockers");
+    }
+  }
+});
 test("world layouts reject invalid inputs and keep obstacles in bounds", () => {
   const layout = globalThis.PeakWorldLayout.createLayout(1024, 640, 3);
   assert.ok(layout.obstacles.length >= 8);
