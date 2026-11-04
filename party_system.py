@@ -215,8 +215,10 @@ async def respond_to_party_invite(
 ) -> None:
     if not _valid_id(invite_id) or not _valid_id(target_id) or type(accept) is not bool:
         raise PartyError("Invalid party invitation.")
+    # Read without locking to identify the parent. All lifecycle paths lock
+    # party -> invite, preventing lock inversion with leave/disband.
     cur = await db.execute(
-        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
+        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?",
         (invite_id,),
     )
     invite = await cur.fetchone()
@@ -224,15 +226,20 @@ async def respond_to_party_invite(
         raise PartyError("That party invitation is no longer active.")
     if invite["target_id"] != target_id:
         raise PartyError("Only the invited player can respond.")
+    cur = await db.execute(
+        "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (invite["party_id"],),
+    )
+    if not await cur.fetchone():
+        raise PartyError("Party not found.")
+    cur = await db.execute(
+        "SELECT party_id,target_id,status FROM party_invites WHERE invite_id=?" + _lock_party_sql(db),
+        (invite_id,),
+    )
+    invite = await cur.fetchone()
+    if not invite or invite["status"] != "pending" or invite["target_id"] != target_id:
+        raise PartyError("That party invitation is no longer active.")
     if accept:
-        # Lock the parent party before checking capacity. Concurrent accepts on
-        # separate PostgreSQL connections must observe each other serially.
-        cur = await db.execute(
-            "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
-            (invite["party_id"],),
-        )
-        if not await cur.fetchone():
-            raise PartyError("Party not found.")
         cur = await db.execute(
             "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
             (invite["party_id"],),
@@ -245,9 +252,9 @@ async def respond_to_party_invite(
             ("trades", "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1", (target_id,target_id)),
             ("dungeon_runs", "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1", (target_id,)),
         )
-        for table, sql, params in activity_checks:
+        for table, query, params in activity_checks:
             if await _table_exists(db, table):
-                activity = await db.execute(sql, params)
+                activity = await db.execute(query, params)
                 if await activity.fetchone():
                     raise PartyError("Finish your active battle, duel, trade, or dungeon before joining a party.")
         if await _table_exists(db, "matchmaking_queue"):
@@ -319,6 +326,13 @@ async def attack_party_battle(db, party_id, user_id, damage):
         raise PartyError("Invalid party or player account.")
     if not isinstance(damage, int) or isinstance(damage, bool) or not 1 <= damage <= 10000:
         raise PartyError("Invalid co-op attack damage.")
+    # Serialize attacks with membership changes and party teardown across processes.
+    cur = await db.execute(
+        "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+        (party_id,),
+    )
+    if not await cur.fetchone():
+        raise PartyError("Party not found.")
     cur = await db.execute(
         "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
         (party_id, user_id),
@@ -399,6 +413,13 @@ async def reward_party_battle(db, battle_id, user_id, coins, xp):
         battle = await cur.fetchone()
         if not battle or battle["status"] != "won":
             raise PartyError("This co-op battle has not been won.")
+        # Keep reward settlement ordered with member departures and disband.
+        cur = await db.execute(
+            "SELECT party_id FROM parties WHERE party_id=?" + _lock_party_sql(db),
+            (battle["party_id"],),
+        )
+        if not await cur.fetchone():
+            raise PartyError("This party no longer exists.")
         cur = await db.execute(
             "SELECT 1 FROM party_members WHERE party_id=? AND user_id=?",
             (battle["party_id"], user_id),

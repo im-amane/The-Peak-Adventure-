@@ -8,6 +8,7 @@ from postgres_adapter import PostgresConnection
 import main
 from matchmaking_system import MatchmakingError, join_matchmaking
 from matchmaking_battle_system import MatchmakingBattleError, get_matchmaking_battle, perform_matchmaking_battle_action
+from party_system import PartyError, create_party, leave_party, start_party_battle
 
 
 @unittest.skipUnless(os.getenv("TEST_POSTGRES_URL"), "TEST_POSTGRES_URL is not configured")
@@ -136,6 +137,47 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(statuses, {"queued", "matched"})
         cursor = await self.db_one.execute("SELECT COUNT(*) AS count FROM matchmaking_matches")
         self.assertEqual((await cursor.fetchone())["count"], 1)
+
+
+    async def test_last_member_leave_serializes_with_party_battle_creation(self):
+        user_id = 9_100_000_001
+        party_id = await create_party(self.db_one, user_id)
+
+        async def start_battle():
+            try:
+                return await start_party_battle(
+                    self.db_two, party_id, user_id, 10, "Concurrency Warden", 500
+                )
+            except PartyError as exc:
+                return exc
+
+        leave_result, battle_result = await asyncio.gather(
+            leave_party(self.db_one, user_id),
+            start_battle(),
+            return_exceptions=True,
+        )
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM parties WHERE party_id=?", (party_id,)
+        )
+        party_count = (await cursor.fetchone())["count"]
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS count FROM party_battles WHERE party_id=?", (party_id,)
+        )
+        battle_count = (await cursor.fetchone())["count"]
+
+        # Either leave wins and removes the empty party, or battle creation wins
+        # and the leave is rejected. A party without its battle or an orphaned
+        # battle is never an acceptable outcome.
+        if party_count == 0:
+            self.assertIsNone(leave_result)
+            self.assertEqual(battle_count, 0)
+            self.assertIsInstance(battle_result, PartyError)
+        else:
+            self.assertEqual(party_count, 1)
+            self.assertEqual(battle_count, 1)
+            self.assertIsInstance(leave_result, PartyError)
+            self.assertIsInstance(battle_result, int)
+
 
 
 if __name__ == "__main__":
