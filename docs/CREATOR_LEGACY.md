@@ -12,6 +12,14 @@
 - `/credits`: concise official creator credit.
 - `/legacy`: opens the creator-lore tribute, **The Forgotten Creator**.
 
+## Creator brand voice and group onboarding
+
+Use the consistent signature **Amane Fujimiya · @im_amane** in official credits, creator-lore copy, and the group welcome message. The public-facing brand line is:
+
+> Forge your story. Leave your mark.
+
+The bot now welcomes new human members in groups with a short adventure-themed introduction, tells them to open a private chat and run `/start`, and explains that group quests and raids become available after a Telegram group owner/admin runs `/group register`. When the bot itself is added, it introduces its group features and gives admins the registration steps. The welcome is event-driven and does not require a separate database setting.
+
 ## Secret chronicle
 
 **Mission name:** The Forgotten Creator  
