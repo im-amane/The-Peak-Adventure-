@@ -488,11 +488,13 @@ test("A-star rejects blocked goals and invalid world bounds", () => {
 test("hero workshop persists face and body customization controls", () => {
   const html = readFileSync(new URL("../webapp/index.html", import.meta.url), "utf8");
   const game = readFileSync(new URL("../webapp/game.js", import.meta.url), "utf8");
+  const profiles = readFileSync(new URL("../webapp/character_profiles.js", import.meta.url), "utf8");
   assert.match(html, /id="appearance-face"/);
   assert.match(html, /id="appearance-body"/);
-  assert.match(game, /appearance\.face==="angular"/);
-  assert.match(game, /appearance\.face==="scarred"/);
-  assert.match(game, /bodyScale/);
+  assert.match(html, /src="\/character_profiles\.js"/);
+  assert.match(game, /window\.PeakCharacters\.resolveCharacterProfile/);
+  assert.match(profiles, /face/);
+  assert.match(profiles, /bodyScale/);
   assert.match(game, /this\.heroBaseScaleX=this\.hero\.scaleX/);
   assert.match(game, /this\.hero\.setScale\(this\.heroBaseScaleX\*this\.heroFacing,1\)/);
   assert.match(game, /\["race","skin","hair","face","body","outfit"\]/);

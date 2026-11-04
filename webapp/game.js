@@ -1011,69 +1011,136 @@
   }
 
   function makeHero(scene, x, y, heroClass, appearance = {}) {
-    const c = scene.add.container(x,y);
-    const makeLimb=(px,py,color,width,height)=>{
-      const limb=scene.add.container(px,py);
-      const shape=scene.add.graphics();
-      shape.fillStyle(color,1); shape.fillRoundedRect(-width/2,0,width,height,Math.min(5,width/2));
-      shape.lineStyle(2,0x172334,0.9); shape.strokeRoundedRect(-width/2,0,width,height,Math.min(5,width/2));
-      limb.add(shape); c.add(limb); return limb;
+    const profile = window.PeakCharacters.resolveCharacterProfile(heroClass, appearance);
+    const c = scene.add.container(x, y);
+    const makeLimb = (px, py, color, width, height) => {
+      const limb = scene.add.container(px, py);
+      const shape = scene.add.graphics();
+      shape.fillStyle(color, 1);
+      shape.fillRoundedRect(-width / 2, 0, width, height, Math.min(5, width / 2));
+      shape.lineStyle(2, 0x172334, 0.9);
+      shape.strokeRoundedRect(-width / 2, 0, width, height, Math.min(5, width / 2));
+      limb.add(shape);
+      c.add(limb);
+      return limb;
     };
-    const limbColor={Knight:0x4d5b72,Mage:0x49375f,Archer:0x36563f,Berserker:0x6e332d}[heroClass]||0x344d68;
-    const limbs={
-      leftArm:makeLimb(-13,1,limbColor,8,19),
-      rightArm:makeLimb(13,1,limbColor,8,19),
-      leftLeg:makeLimb(-7,19,0x29313c,8,13),
-      rightLeg:makeLimb(7,19,0x29313c,8,13)
+    const limbs = {
+      leftArm: makeLimb(-13, 1, profile.limbColor, 8, 19),
+      rightArm: makeLimb(13, 1, profile.limbColor, 8, 19),
+      leftLeg: makeLimb(-7, 19, 0x29313c, 8, 13),
+      rightLeg: makeLimb(7, 19, 0x29313c, 8, 13),
     };
-    c.limbs=limbs;
+    c.limbs = limbs;
+
     const g = scene.add.graphics();
-    const cloak = {traveler:0x344d68,knight:0x596a86,mage:0x654b88,ranger:0x41684f}[appearance.outfit] || ({Knight:0x344d68,Mage:0x654b88,Archer:0x41684f,Berserker:0x8a4138}[heroClass] || 0x25374a);
-    const skin = {fair:0xf1d2b5,warm:0xe2b98d,tan:0xb97850,deep:0x70442f}[appearance.skin] || 0xe2b98d;
-    const bodyScale = {slim:0.9,balanced:1,broad:1.12}[appearance.body] || 1;
-    g.fillStyle(cloak,1); g.fillRoundedRect(-15,-5,30,29,8);
-    g.lineStyle(3,0x172334,1); g.strokeRoundedRect(-15,-5,30,29,8);
-    g.fillStyle(skin,1);
-    if(appearance.face==="angular"){
-      g.fillEllipse(0,-16,20,22);g.fillTriangle(-7,-8,7,-8,0,-1);
-    }else{
-      g.fillCircle(0,-15,11);
+    // Layered tunic, armor plates, trim and belt keep the class silhouette
+    // readable at the Mini App's small viewport size.
+    g.fillStyle(profile.cloakColor, 1);
+    g.fillRoundedRect(-15, -5, 30, 29, 8);
+    g.lineStyle(3, 0x172334, 1);
+    g.strokeRoundedRect(-15, -5, 30, 29, 8);
+    g.fillStyle(profile.armorColor, 1);
+    g.fillRoundedRect(-12, 0, 24, 18, 5);
+    g.fillStyle(profile.trimColor, 0.95);
+    g.fillRoundedRect(-15, -4, 6, 10, 2);
+    g.fillRoundedRect(9, -4, 6, 10, 2);
+    g.fillRect(-11, 14, 22, 2);
+    g.fillStyle(0x332a2a, 1);
+    g.fillRoundedRect(-13, 17, 26, 4, 2);
+    g.fillStyle(profile.accentColor, 1);
+    g.fillRoundedRect(-3, 15, 6, 6, 2);
+    g.lineStyle(1, 0x172334, 0.9);
+    g.strokeRoundedRect(-3, 15, 6, 6, 2);
+
+    // Face and race details are driven by the persisted appearance profile.
+    g.fillStyle(profile.skinColor, 1);
+    if (profile.face === "angular") {
+      g.fillEllipse(0, -16, 20, 22);
+      g.fillTriangle(-7, -8, 7, -8, 0, -1);
+    } else {
+      g.fillCircle(0, -15, 11);
     }
-    if (appearance.race === "Elf") {
-      g.fillStyle(skin,1); g.fillTriangle(-8,-17,-22,-27,-12,-10); g.fillTriangle(8,-17,22,-27,12,-10);
-    } else if (appearance.race === "Orc") {
-      g.fillStyle(0xf0e4c8,1); g.fillTriangle(-6,-8,-3,-1,-1,-9); g.fillTriangle(6,-8,3,-1,1,-9);
-    } else if (appearance.race === "Dwarf") {
-      g.fillStyle(0x68452f,1); g.fillTriangle(-9,-9,0,4,9,-9);
+    if (profile.race === "Elf") {
+      g.fillStyle(profile.skinColor, 1);
+      g.fillTriangle(-8, -17, -22, -27, -12, -10);
+      g.fillTriangle(8, -17, 22, -27, 12, -10);
+    } else if (profile.race === "Orc") {
+      g.fillStyle(0xf0e4c8, 1);
+      g.fillTriangle(-6, -8, -3, -1, -1, -9);
+      g.fillTriangle(6, -8, 3, -1, 1, -9);
+    } else if (profile.race === "Dwarf") {
+      g.fillStyle(0x68452f, 1);
+      g.fillTriangle(-9, -9, 0, 4, 9, -9);
+      g.fillCircle(0, -5, 5);
     }
-    g.fillStyle(0x382b2b,1);
-    if (appearance.hair === "shaved") g.fillEllipse(0,-23,18,5);
-    else if (appearance.hair === "long") { g.fillEllipse(0,-23,22,12); g.fillRoundedRect(-11,-20,5,17,3); g.fillRoundedRect(6,-20,5,17,3); }
-    else if (appearance.hair === "braided") { g.fillEllipse(0,-23,22,12); g.fillCircle(-12,-15,4); g.fillCircle(12,-15,4); }
-    else g.fillEllipse(0,-23,22,12);
-    const armor={traveler:0x273a52,knight:0x71849c,mage:0x4c3d70,ranger:0x31543f}[appearance.outfit]||0x273a52;
-    g.fillStyle(armor,1); g.fillRoundedRect(-12,0,24,18,5);
-    g.lineStyle(3,0xc9d4dc,1);
-    if(heroClass==="Mage"){
-      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(17,8);g.lineTo(21,-29);g.strokePath();
-      g.fillStyle(0x8edbff,1);g.fillCircle(21,-32,5);g.lineStyle(2,0xdaf6ff,0.9);g.strokeCircle(21,-32,7);
-    }else if(heroClass==="Archer"){
-      g.lineStyle(3,0x9b7044,1);g.beginPath();g.arc(20,-15,13,-Math.PI/2,Math.PI/2,false);g.strokePath();
-      g.lineStyle(1,0xe8dfc8,1);g.beginPath();g.moveTo(20,-28);g.lineTo(20,-2);g.strokePath();
-      g.lineStyle(2,0xc9d4dc,1);g.beginPath();g.moveTo(15,-15);g.lineTo(30,-15);g.strokePath();
-    }else if(heroClass==="Berserker"){
-      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(17,7);g.lineTo(23,-21);g.strokePath();
-      g.fillStyle(0xb7c2cc,1);g.fillTriangle(20,-22,34,-29,31,-11);g.lineStyle(2,0x52606c,1);g.strokeTriangle(20,-22,34,-29,31,-11);
-    }else{
-      g.lineStyle(3,0xc9d4dc,1);g.beginPath();g.moveTo(13,-3);g.lineTo(26,-25);g.strokePath();
-      g.lineStyle(4,0x9b7044,1);g.beginPath();g.moveTo(10,1);g.lineTo(18,-10);g.strokePath();
-      g.fillStyle(0xdce6ef,1);g.fillTriangle(26,-25,30,-34,23,-28);
+
+    g.fillStyle(profile.hairColor, 1);
+    if (profile.hair === "shaved") {
+      g.fillEllipse(0, -23, 18, 5);
+    } else if (profile.hair === "long") {
+      g.fillEllipse(0, -23, 22, 12);
+      g.fillRoundedRect(-11, -20, 5, 17, 3);
+      g.fillRoundedRect(6, -20, 5, 17, 3);
+    } else if (profile.hair === "braided") {
+      g.fillEllipse(0, -23, 22, 12);
+      g.fillCircle(-12, -15, 4);
+      g.fillCircle(12, -15, 4);
+    } else {
+      g.fillEllipse(0, -23, 22, 12);
     }
-    g.fillStyle(0x171b25,1); g.fillCircle(-4,-16,1.5); g.fillCircle(4,-16,1.5);
-    if(appearance.face==="scarred"){
-      g.lineStyle(1.8,0x8b3d42,0.95);g.lineBetween(-7,-11,-1,-5);
+
+    g.fillStyle(0x171b25, 1);
+    g.fillCircle(-4, -16, 1.5);
+    g.fillCircle(4, -16, 1.5);
+    if (profile.face === "scarred") {
+      g.lineStyle(1.8, 0x8b3d42, 0.95);
+      g.lineBetween(-7, -11, -1, -5);
     }
-    c.add(g);c.setScale(bodyScale,1);c.setDepth(10);return c;
+
+    // Class signature equipment: sword + shield, arcane staff, bow, or axe.
+    if (profile.weapon === "staff") {
+      g.lineStyle(4, profile.weaponColor, 1);
+      g.beginPath(); g.moveTo(17, 8); g.lineTo(21, -29); g.strokePath();
+      g.fillStyle(profile.accentColor, 1);
+      g.fillCircle(21, -32, 5);
+      g.lineStyle(2, 0xdaf6ff, 0.9);
+      g.strokeCircle(21, -32, 7);
+      g.fillStyle(profile.accentColor, 0.2);
+      g.fillCircle(21, -32, 11);
+    } else if (profile.weapon === "bow") {
+      g.lineStyle(3, profile.weaponColor, 1);
+      g.beginPath(); g.arc(20, -15, 13, -Math.PI / 2, Math.PI / 2, false); g.strokePath();
+      g.lineStyle(1, 0xe8dfc8, 1);
+      g.beginPath(); g.moveTo(20, -28); g.lineTo(20, -2); g.strokePath();
+      g.lineStyle(2, profile.accentColor, 1);
+      g.beginPath(); g.moveTo(15, -15); g.lineTo(30, -15); g.strokePath();
+    } else if (profile.weapon === "axe") {
+      g.lineStyle(4, profile.weaponColor, 1);
+      g.beginPath(); g.moveTo(17, 8); g.lineTo(23, -21); g.strokePath();
+      g.fillStyle(0xb7c2cc, 1);
+      g.fillTriangle(20, -22, 34, -29, 31, -11);
+      g.lineStyle(2, 0x52606c, 1);
+      g.strokeTriangle(20, -22, 34, -29, 31, -11);
+      g.fillStyle(profile.accentColor, 1);
+      g.fillCircle(23, -21, 2.5);
+    } else {
+      g.lineStyle(4, profile.weaponColor, 1);
+      g.beginPath(); g.moveTo(17, 8); g.lineTo(27, -25); g.strokePath();
+      g.lineStyle(3, profile.trimColor, 1);
+      g.beginPath(); g.moveTo(18, -5); g.lineTo(29, -2); g.strokePath();
+      g.fillStyle(0xdce6ef, 1);
+      g.fillTriangle(27, -25, 31, -36, 23, -28);
+      g.fillStyle(profile.accentColor, 1);
+      g.fillRoundedRect(-22, 1, 8, 15, 3);
+      g.lineStyle(2, profile.trimColor, 1);
+      g.strokeRoundedRect(-22, 1, 8, 15, 3);
+    }
+
+    c.add(g);
+    c.setScale(profile.bodyScale, 1);
+    c.setDepth(10);
+    c.characterProfile = profile;
+    return c;
   }
 
   function makeMonster(scene,x,y,level,color) {

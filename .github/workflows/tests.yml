@@ -32,6 +32,7 @@ jobs:
       - run: node --check cloudflare/worker.mjs
       - run: node --test webapp/pathfinding.test.mjs
       - run: node --test webapp/movement.test.mjs
+      - run: node --test webapp/character_profiles.test.mjs
       - run: node --test cloudflare/worker.test.mjs
 
   postgres-adapter:
