@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import "../webapp/pathfinding.js";
+import "../webapp/world_layout.js";
 
 const { findPath } = globalThis.PeakPathfinding;
 
@@ -280,4 +281,38 @@ test("uses local obstacle candidates without missing edge or long-segment collis
       );
     }
   }
+});
+
+test("builds four named world zones on a map larger than the viewport", () => {
+  const layout = globalThis.PeakWorldLayout.createLayout(900, 500, 1);
+  assert.equal(layout.zoneCount, 4);
+  assert.equal(layout.width, 3420);
+  assert.equal(layout.height, 900);
+  assert.equal(layout.zones.length, 4);
+});
+
+test("all ten worlds expose four unique sub-zone names", () => {
+  for (let worldId = 1; worldId <= 10; worldId++) {
+    const layout = globalThis.PeakWorldLayout.createLayout(900, 500, worldId);
+    assert.equal(new Set(layout.zones.map(zone => zone.name)).size, 4);
+    assert.ok(layout.zones.every(zone => zone.endX > zone.startX));
+  }
+});
+
+test("hero, NPC, gate and monster encounters span the map safely", () => {
+  const layout = globalThis.PeakWorldLayout.createLayout(900, 500, 10);
+  assert.ok(layout.spawn.x < layout.npc.x && layout.npc.x < layout.portal.x);
+  const monsters = layout.monsterPositions(3);
+  assert.ok(monsters[0].x < monsters[1].x && monsters[1].x < monsters[2].x);
+  assert.ok(monsters[0].x < layout.zones[1].endX);
+  assert.ok(monsters[2].x > layout.zones[3].startX);
+});
+
+test("world layouts reject invalid inputs and keep obstacles in bounds", () => {
+  const layout = globalThis.PeakWorldLayout.createLayout(1024, 640, 3);
+  assert.ok(layout.obstacles.length >= 8);
+  assert.ok(layout.obstacles.every(item => item.width > 0 && item.height > 0 && item.x > 0 && item.x < layout.width));
+  assert.throws(() => globalThis.PeakWorldLayout.createLayout(0, 500, 1), RangeError);
+  assert.throws(() => globalThis.PeakWorldLayout.createLayout(900, 500, 11), RangeError);
+  assert.throws(() => layout.monsterPositions(4), RangeError);
 });
