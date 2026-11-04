@@ -61,6 +61,12 @@ def unlocked_world_count(player_level):
     return min(10,(player_level-1)//10+1)
 
 
+async def _require_player(db, user_id):
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise WorldError("Player account not found.")
+
+
 async def init_world_tables(db):
     """Initialize world storage without committing a caller-owned transaction."""
     nested = await _begin_transaction(db, "init_world_tables")
@@ -85,6 +91,7 @@ async def get_current_world(db,user_id,player_level):
     maximum=unlocked_world_count(player_level)
     nested=await _begin_transaction(db,"get_current_world")
     try:
+        await _require_player(db, user_id)
         cur=await db.execute("SELECT current_world FROM player_worlds WHERE user_id=?",(user_id,))
         row=await cur.fetchone()
         current=min(maximum,row["current_world"]) if row else 1
@@ -108,6 +115,7 @@ async def travel_to_world(db,user_id,player_level,world_id):
         raise WorldError(f"{WORLD_NAMES[world_id-1]} unlocks at player level {required}.")
     nested=await _begin_transaction(db,"travel_to_world")
     try:
+        await _require_player(db, user_id)
         await db.execute("""INSERT INTO player_worlds(user_id,current_world) VALUES(?,?)
           ON CONFLICT(user_id) DO UPDATE SET current_world=excluded.current_world,updated_at=CURRENT_TIMESTAMP""",
           (user_id,world_id))
