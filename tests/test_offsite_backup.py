@@ -90,6 +90,20 @@ class OffsiteBackupTests(unittest.TestCase):
             )
         self.assertEqual(destination.read_bytes(), b"known good local file")
 
+    def test_download_can_recreate_postgres_checksum_sidecar_from_verified_metadata(self):
+        destination = Path(self.temp.name) / "database.dump"
+        result = download_backup(
+            bucket="peak-backups", key="database.dump", destination=destination,
+            write_checksum_sidecar=True, s3_client=self.client,
+        )
+        sidecar = Path(str(result) + ".sha256")
+        self.assertTrue(sidecar.is_file())
+        self.assertEqual(
+            sidecar.read_text(encoding="ascii"),
+            __import__("hashlib").sha256(destination.read_bytes()).hexdigest()
+            + "  database.dump\\n",
+        )
+
     def test_download_rejects_missing_checksum_metadata(self):
         client = FakeS3Client()
         client.head_object = lambda **kwargs: {
