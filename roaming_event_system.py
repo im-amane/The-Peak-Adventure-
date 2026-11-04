@@ -102,7 +102,9 @@ async def get_or_create_roaming_event(
         raise RoamingEventError("Invalid event monster level.")
     if not isinstance(monster_hp, int) or isinstance(monster_hp, bool) or not 1 <= monster_hp <= 1_000_000:
         raise RoamingEventError("Invalid event monster health.")
-    name = " ".join(str(monster_name or "").split())[:80]
+    if not isinstance(monster_name, str):
+        raise RoamingEventError("Event monster name must be text.")
+    name = " ".join(monster_name.split())[:80]
     if not name:
         raise RoamingEventError("Event monster name is required.")
     if not isinstance(duration_seconds, int) or isinstance(duration_seconds, bool) or not 60 <= duration_seconds <= 86400:
