@@ -34,6 +34,7 @@ jobs:
       - run: node --test webapp/movement.test.mjs
       - run: node --test webapp/character_profiles.test.mjs
       - run: node --test webapp/character_animation.test.mjs
+      - run: node --test webapp/monster_animation.test.mjs
       - run: node --test cloudflare/worker.test.mjs
 
   postgres-adapter:
