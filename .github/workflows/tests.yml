@@ -61,7 +61,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg
       - run: sudo install -d /usr/share/postgresql-common/pgdg
-      - run: curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+      - run: curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --batch --yes --dearmor -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
       - run: echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo ${VERSION_CODENAME})-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
       - run: sudo apt-get update && sudo apt-get install -y postgresql-client-16
       - run: echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
