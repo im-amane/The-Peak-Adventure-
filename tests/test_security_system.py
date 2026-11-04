@@ -40,6 +40,21 @@ class SecuritySystemTests(unittest.IsolatedAsyncioTestCase):
         rows = await get_security_events(self.db, 101)
         self.assertEqual(len(rows[0]["details"]), 240)
 
+    async def test_security_event_details_redact_credentials_and_tokens(self):
+        details = (
+            "request failed https://admin:top-secret@example.test/path "
+            "password=hunter2 token=abc123 Bearer eyJhbGciOiJIUzI1NiJ9"
+        )
+        await record_security_event(self.db, 101, "invalid_social_action", details)
+        rows = await get_security_events(self.db, 101)
+        stored = rows[0]["details"]
+        self.assertIn("admin:[redacted]@example.test", stored)
+        self.assertIn("password=[redacted]", stored)
+        self.assertIn("token=[redacted]", stored)
+        self.assertIn("Bearer [redacted]", stored)
+        for secret in ("top-secret", "hunter2", "abc123", "eyJhbGciOiJIUzI1NiJ9"):
+            self.assertNotIn(secret, stored)
+
     async def test_event_storage_respects_configured_cap(self):
         with patch("security_system.MAX_SECURITY_EVENTS", 2), patch("security_system.CLEANUP_INTERVAL", 1):
             for index in range(5):
