@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HTML = (ROOT / "webapp" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "webapp" / "style.css").read_text(encoding="utf-8")
+GAME = (ROOT / "webapp" / "game.js").read_text(encoding="utf-8")
 
 
 class MiniAppAccessibilityAuditTests(unittest.TestCase):
