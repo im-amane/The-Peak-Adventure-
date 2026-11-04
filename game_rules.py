@@ -237,7 +237,7 @@ def resolve_enemy_turn(
         raise ValueError("invalid combat health state")
     if type(is_boss) is not bool or not isinstance(boss_name, str) or not isinstance(hero_class, str):
         raise ValueError("invalid combat identity")
-    if action not in {"attack", "skill", "potion"} or player_damage < 0:
+    if not isinstance(action, str) or action not in {"attack", "skill", "potion"} or player_damage < 0:
         raise ValueError("invalid player action")
     previous_phase = get_boss_phase(is_boss, monster_hp_before, monster_max_hp)
     current_phase = get_boss_phase(is_boss, monster_hp_after_action, monster_max_hp)
@@ -311,7 +311,7 @@ def resolve_player_attack(
         raise ValueError("player attack values must be integers")
     if player_level < 1 or weapon_attack < 0 or monster_defense < 0 or next_turn < 1:
         raise ValueError("invalid player attack state")
-    if action not in {"attack", "skill", "potion"}:
+    if not isinstance(action, str) or action not in {"attack", "skill", "potion"}:
         raise ValueError("unknown player combat action")
     if not all(isinstance(value, str) and value for value in (
         class_element, monster_element, monster_weakness, trait_effect,
