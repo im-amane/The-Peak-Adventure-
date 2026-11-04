@@ -20,6 +20,19 @@ _DYNAMIC_SEGMENT = re.compile(
 )
 
 
+def _safe_error(error: str | None, fallback: str) -> str:
+    """Redact credentials and bearer tokens before retaining operational errors."""
+    value = str(error or fallback)
+    value = re.sub(r"(://[^:/\\s]+:)[^@/\\s]+@", r"\\1[redacted]@", value)
+    value = re.sub(
+        r"(?i)(\\b(?:password|passwd|token|secret|api[_-]?key)=)[^&\\s]+",
+        r"\\1[redacted]",
+        value,
+    )
+    value = re.sub(r"(?i)(\\bBearer\\s+)[A-Za-z0-9._~+/-]+=*", r"\\1[redacted]", value)
+    return value[:240]
+
+
 def normalize_route(path: str) -> str:
     """Remove numeric and opaque identifier segments before retaining route metrics."""
     if not isinstance(path, str) or not path.startswith("/"):
@@ -101,7 +114,7 @@ class RuntimeMonitor:
             self.database_last_success_at = self._clock()
             self.database_last_error = None
         else:
-            self.database_last_error = (str(error or "Database probe failed"))[:240]
+            self.database_last_error = _safe_error(error, "Database probe failed")
 
     def record_backup_success(self, path: str) -> None:
         now = self._clock()
@@ -112,7 +125,7 @@ class RuntimeMonitor:
 
     def record_backup_failure(self, error: str) -> None:
         self.backup_last_attempt_at = self._clock()
-        self.backup_last_error = str(error or "Backup failed")[:240]
+        self.backup_last_error = _safe_error(error, "Backup failed")
 
     def alert_conditions(self, backup_interval_seconds: int, now: float | None = None) -> dict[str, bool]:
         current = self._clock() if now is None else now
