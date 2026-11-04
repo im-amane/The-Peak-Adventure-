@@ -268,3 +268,23 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Telegram charge IDs are unique, so duplicate successful-payment updates cannot credit gems twice.
 - Payment handling validates invoice owner, package, currency and Stars amount before crediting.
 - Purchases are disabled by default. The owner must set `ENABLE_TELEGRAM_STARS=true` and confirm package prices in `.env` before exposing invoices.
+
+
+## PostgreSQL logical backups
+
+The optional PostgreSQL runtime can be backed up with the guarded logical backup utility. Install PostgreSQL client tools (`pg_dump` and `pg_restore`) on the backup host, then provide the same `DATABASE_URL` used by the application:
+
+```bash
+python postgres_backup.py backup --directory postgres_backups --keep 7
+python postgres_backup.py verify postgres_backups/<database>-<timestamp>.dump
+```
+
+Each custom-format archive is checked with `pg_restore --list`, SHA-256 checksummed, published atomically, and rotated together with its checksum. Store backups on durable storage with access controls and encryption appropriate for player data. Schedule the backup command with the host scheduler (for example, cron or a managed scheduled job) and alert on non-zero exit status. This repository does not silently configure a production schedule or upload backups to a third party.
+
+Restore is destructive to objects in the target database. Stop the application, take a fresh backup first, and require the exact target database name as an additional guard:
+
+```bash
+python postgres_backup.py restore <backup.dump> --confirm-database <database-name>
+```
+
+The restore uses one transaction and fails rather than leaving a partial restore. Test restores against a separate staging database regularly. CI does not connect to or modify production databases.
