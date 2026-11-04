@@ -69,6 +69,13 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([row["request_id"] for row in incoming], [request_id])
         self.assertEqual(await list_pending_friend_requests(self.db, 101), [])
 
+    async def test_friend_request_requires_existing_requester_and_target(self):
+        with self.assertRaisesRegex(FriendError, "Player account not found"):
+            await send_friend_request(self.db, 999, 202)
+        with self.assertRaisesRegex(FriendError, "Player account not found"):
+            await send_friend_request(self.db, 101, 999)
+        self.assertEqual(await list_pending_friend_requests(self.db, 202), [])
+
     async def test_self_request_is_rejected(self):
         with self.assertRaisesRegex(FriendError, "yourself"):
             await send_friend_request(self.db, 101, 101)
@@ -105,6 +112,10 @@ class FriendSystemTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(new_request, request_id)
 
     async def test_outgoing_pending_requests_have_a_spam_limit(self):
+        await self.db.executemany(
+            "INSERT INTO players(user_id,username,level) VALUES(?,?,1)",
+            [(target_id, f"Target{target_id}") for target_id in list(range(1000, 1010)) + [2000]],
+        )
         for target_id in range(1000, 1010):
             await send_friend_request(self.db, 101, target_id)
         with self.assertRaisesRegex(FriendError, "at most 10"):
