@@ -55,6 +55,7 @@ from premium_system import PREMIUM_SHOP_ITEMS, PremiumError, buy_premium_item, c
 from evolution_system import EvolutionError, get_evolution_state, init_evolution_tables, is_evolved_spawn, record_monster_defeat, scale_evolved_monster
 from secret_area_system import SecretAreaError, discover_secret_area, get_secret_area_state, init_secret_area_tables
 from runtime_monitor import RuntimeMonitor
+from item_economy import get_item_rarity, validate_shop_catalog
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
@@ -95,6 +96,7 @@ SHOP_ITEMS = {
     "celestial_armor": {"name": "Celestial Armor", "type": "armor", "cost": 1400, "bonus": 60, "level": 60},
     "health_potion": {"name": "Health Potion", "type": "potion", "cost": 25, "bonus": 1, "level": 1},
 }
+validate_shop_catalog(SHOP_ITEMS)
 QUESTS = [
     {"id": "first_steps", "title": "A Tiny Spark", "kind": "level", "target": 2, "coins": 40, "potions": 1, "description": "Reach hero level 2."},
     {"id": "first_hunt", "title": "First Blood", "kind": "wins", "target": 3, "coins": 60, "potions": 1, "description": "Win 3 monster battles."},
@@ -519,7 +521,7 @@ def shop_keyboard():
     rows = []
     for item_id, item in SHOP_ITEMS.items():
         rows.append([InlineKeyboardButton(
-            text=f"{item['name']} · {item['cost']} coins · Lv.{item['level']}",
+            text=f"{get_item_rarity(item_id)} {item['name']} · {item['cost']} coins · Lv.{item['level']}",
             callback_data=f"buy:{item_id}",
         )])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -4000,7 +4002,7 @@ async def cb_buy_item(call: CallbackQuery):
     except ShopError as exc:
         await call.message.answer(str(exc))
         return
-    await call.message.answer(f"✅ Purchased <b>{item['name']}</b> for {item['cost']} coins.")
+    await call.message.answer(f"✅ Purchased <b>{item['name']}</b> ({get_item_rarity(item_id)}) for {item['cost']} coins.")
 
 @dp.callback_query(F.data == "profile")
 async def cb_profile(call: CallbackQuery):
