@@ -16,6 +16,7 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.db_one = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
         self.db_two = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        self.extra_connections = []
         self.schema = "peak_matchmaking_" + uuid.uuid4().hex[:12]
         await self.db_one.execute(f'CREATE SCHEMA "{self.schema}"')
         await self.db_one.commit()
@@ -30,13 +31,15 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         await self.db_one.commit()
 
     async def asyncTearDown(self):
-        for db in (self.db_one, self.db_two):
+        for db in (self.db_one, self.db_two, *self.extra_connections):
             if db.in_transaction:
                 await db.rollback()
         await self.db_one.execute(f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE')
         await self.db_one.commit()
         await self.db_one.close()
         await self.db_two.close()
+        for db in self.extra_connections:
+            await db.close()
 
     async def test_same_account_cannot_join_two_modes_concurrently(self):
         outcomes = await asyncio.gather(
@@ -177,6 +180,46 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(battle_count, 1)
             self.assertIsInstance(leave_result, PartyError)
             self.assertIsInstance(battle_result, int)
+
+    async def test_eight_concurrent_players_form_four_unique_matches(self):
+        user_ids = list(range(9_100_000_003, 9_100_000_011))
+        await self.db_one.executemany(
+            "INSERT INTO players(user_id,username) VALUES(?,?)",
+            ((user_id, "QueueStress" + str(index)) for index, user_id in enumerate(user_ids)),
+        )
+        await self.db_one.commit()
+        connections = [self.db_one, self.db_two]
+        for _ in range(6):
+            connection = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+            await connection.execute(f'SET search_path TO "{self.schema}"')
+            await connection.commit()
+            self.extra_connections.append(connection)
+            connections.append(connection)
+
+        outcomes = await asyncio.gather(*(
+            join_matchmaking(connection, user_id, "casual", now=2_000_000_600)
+            for connection, user_id in zip(connections, user_ids)
+        ), return_exceptions=True)
+        self.assertTrue(all(isinstance(item, dict) for item in outcomes), outcomes)
+
+        cursor = await self.db_one.execute("SELECT COUNT(*) AS total FROM matchmaking_matches")
+        self.assertEqual((await cursor.fetchone())["total"], 4)
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS total,COUNT(DISTINCT user_id) AS players "
+            "FROM matchmaking_queue WHERE status='matched'"
+        )
+        queue = await cursor.fetchone()
+        self.assertEqual(queue["total"], 8)
+        self.assertEqual(queue["players"], 8)
+        cursor = await self.db_one.execute(
+            "SELECT COUNT(*) AS total,COUNT(DISTINCT player_one_id) + "
+            "COUNT(DISTINCT player_two_id) AS participant_slots FROM matchmaking_matches"
+        )
+        matches = await cursor.fetchone()
+        self.assertEqual(matches["total"], 4)
+        self.assertEqual(matches["participant_slots"], 8)
+        cursor = await self.db_one.execute("SELECT COUNT(*) AS total FROM matchmaking_battles")
+        self.assertEqual((await cursor.fetchone())["total"], 4)
 
 
 
