@@ -133,7 +133,9 @@ async def resolve_player_report(db, report_id, admin_id, status, note=""):
         raise ReportError("Invalid report ID.")
     if not isinstance(status,str) or status not in {"reviewed", "dismissed"}:
         raise ReportError("Report status must be reviewed or dismissed.")
-    clean_note = " ".join(str(note or "").split())[:300]
+    if not isinstance(note, str):
+        raise ReportError("Review note must be text.")
+    clean_note = " ".join(note.split())[:300]
     cur = await db.execute(
         """UPDATE player_reports SET status=?,reviewed_by=?,review_note=?,reviewed_at=?
            WHERE report_id=? AND status='open'""",
