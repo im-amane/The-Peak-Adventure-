@@ -34,7 +34,7 @@
       offsetY = progress * 20;
       scaleY = 1 - progress * 0.62;
       rotation = progress * 1.25 * facing;
-      alpha = 1 - progress * 0.82;
+      alpha = 1 - progress;
     }
 
     return Object.freeze({
