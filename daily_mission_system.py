@@ -69,6 +69,12 @@ async def init_daily_mission_tables(db):
         raise
 
 
+async def _require_player(db, user_id):
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise DailyMissionError("Player account not found.")
+
+
 async def _ensure_day(db, user_id, day_key):
     await db.executemany(
         "INSERT INTO player_daily_missions(user_id,day_key,mission_id) VALUES(?,?,?) ON CONFLICT(user_id,day_key,mission_id) DO NOTHING",
@@ -87,6 +93,7 @@ async def record_daily_progress(db, user_id, kind, amount=1, now=None):
     savepoint = "daily_mission_progress"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_day(db, user_id, day_key)
         for mission in DAILY_MISSIONS:
             if mission["kind"] == kind:
@@ -106,6 +113,7 @@ async def get_daily_missions(db, user_id, now=None):
     savepoint = "daily_mission_read"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_day(db, user_id, day_key)
         cur = await db.execute(
             "SELECT mission_id,progress,claimed FROM player_daily_missions WHERE user_id=? AND day_key=?",
@@ -137,6 +145,7 @@ async def claim_daily_mission(db, user_id, mission_id, now=None):
     savepoint = "daily_mission_claim"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await _ensure_day(db, user_id, day_key)
         cur = await db.execute(
             "SELECT progress,claimed FROM player_daily_missions WHERE user_id=? AND day_key=? AND mission_id=?",
@@ -147,9 +156,6 @@ async def claim_daily_mission(db, user_id, mission_id, now=None):
             raise DailyMissionError("Complete this daily mission before claiming its reward.")
         if row["claimed"]:
             raise DailyMissionError("This daily mission reward has already been claimed.")
-        cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
-        if not await cur.fetchone():
-            raise DailyMissionError("Player account not found.")
         cur = await db.execute(
             "UPDATE player_daily_missions SET claimed=1 WHERE user_id=? AND day_key=? AND mission_id=? AND claimed=0",
             (user_id, day_key, mission_id),
