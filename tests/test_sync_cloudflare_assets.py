@@ -79,6 +79,12 @@ class CloudflareAssetSyncTests(unittest.TestCase):
         self.assertIn("Referrer-Policy: strict-origin-when-cross-origin", headers)
         self.assertIn("X-Content-Type-Options: nosniff", headers)
 
+        worker_source = (sync_cloudflare_assets.ROOT / "cloudflare" / "worker.mjs").read_text(encoding="utf-8")
+        for line in headers.splitlines()[1:]:
+            if line.strip():
+                _header_name, value = line.strip().split(": ", 1)
+                self.assertIn(value, worker_source, "Cloudflare _headers and Worker fallback security values must match.")
+
         config_path = sync_cloudflare_assets.ROOT / "wrangler.jsonc"
         config = json.loads(config_path.read_text(encoding="utf-8"))
         worker_first = set(config["assets"]["run_worker_first"])
