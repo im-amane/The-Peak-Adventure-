@@ -2,6 +2,7 @@ import unittest
 import sqlite3
 import aiosqlite
 from story_system import *
+from unittest.mock import patch
 
 class StoryTests(unittest.IsolatedAsyncioTestCase):
  async def asyncSetUp(self):
@@ -14,6 +15,23 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
   """)
   await init_story_tables(self.db)
  async def asyncTearDown(self):await self.db.close()
+ def test_campaign_validator_accepts_all_ten_chapters(self):
+  self.assertIsNone(validate_story_campaign())
+
+ def test_campaign_validator_rejects_non_sequential_chapter_ids(self):
+  broken = [dict(chapter) for chapter in CHAPTERS]
+  broken[3]["id"] = 3
+  with patch("story_system.CHAPTERS", broken):
+   with self.assertRaisesRegex(ValueError, "unique and sequential"):
+    validate_story_campaign()
+
+ def test_campaign_validator_rejects_missing_choice_content(self):
+  broken = [dict(chapter) for chapter in CHAPTERS]
+  broken[0]["choices"] = {"follow_mira": "", "follow_wanderer": "Find the Wanderer"}
+  with patch("story_system.CHAPTERS", broken):
+   with self.assertRaisesRegex(ValueError, "at least two valid choices"):
+    validate_story_campaign()
+
  async def test_first_chapter_unlocked(self):
   rows=await get_story_chapters(self.db,1,1)
   self.assertTrue(rows[0]["unlocked"]);self.assertFalse(rows[1]["unlocked"])

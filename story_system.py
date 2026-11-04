@@ -12,6 +12,37 @@ CHAPTERS=[
  {"id":10,"title":"The Peak","world":10,"level":91,"npc":"The Alpha God","scene":"At the summit, the Alpha God wears the face of everyone you failed to save. It calls love a weakness because love is the one force it cannot command. The lantern is burning again.","choices":{"stand_with_all":"Stand with every ally you have gathered.","stand_alone":"Face the Alpha God alone."},"reward":1000}
 ]
 
+def validate_story_campaign() -> None:
+    """Fail fast when chapter content can break campaign progression or UI rendering."""
+    if not isinstance(CHAPTERS, list) or len(CHAPTERS) != 10:
+        raise ValueError("The story campaign must define exactly ten chapters.")
+    previous_level = 0
+    for expected_id, chapter in enumerate(CHAPTERS, start=1):
+        if not isinstance(chapter, dict) or chapter.get("id") != expected_id:
+            raise ValueError("Story chapter IDs must be unique and sequential from 1 to 10.")
+        level = chapter.get("level")
+        reward = chapter.get("reward")
+        world = chapter.get("world")
+        if type(level) is not int or not previous_level < level <= 100:
+            raise ValueError(f"Story chapter {expected_id} has an invalid progression level.")
+        if type(world) is not int or not 1 <= world <= 10:
+            raise ValueError(f"Story chapter {expected_id} has an invalid world.")
+        if type(reward) is not int or reward <= 0:
+            raise ValueError(f"Story chapter {expected_id} has an invalid reward.")
+        for field in ("title", "npc", "scene"):
+            if not isinstance(chapter.get(field), str) or not chapter[field].strip():
+                raise ValueError(f"Story chapter {expected_id} is missing {field} content.")
+        choices = chapter.get("choices")
+        if (not isinstance(choices, dict) or len(choices) < 2
+                or any(not isinstance(key, str) or not key.strip()
+                       or not isinstance(label, str) or not label.strip()
+                       for key, label in choices.items())):
+            raise ValueError(f"Story chapter {expected_id} must have at least two valid choices.")
+        if "requires_party" in chapter and type(chapter["requires_party"]) is not bool:
+            raise ValueError(f"Story chapter {expected_id} has an invalid party gate.")
+        previous_level = level
+
+
 class StoryError(ValueError):
     pass
 
@@ -64,6 +95,7 @@ def _transactional(function):
 @_transactional
 async def init_story_tables(db):
     """Create story tables without committing a caller-owned transaction."""
+    validate_story_campaign()
     statements=(
         """CREATE TABLE IF NOT EXISTS player_story(
           user_id BIGINT NOT NULL,chapter_id INTEGER NOT NULL,choice_id TEXT NOT NULL,
