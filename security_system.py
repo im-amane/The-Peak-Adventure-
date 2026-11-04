@@ -21,24 +21,25 @@ EVENT_TYPES = {
 class SecurityEventError(ValueError):
     pass
 
-def classify_security_risk(event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count):
+def classify_security_risk(event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count, burst_event_count=0):
     """Classify telemetry for human triage; this function never applies penalties."""
-    values = (event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count)
+    values = (event_count, risk_score, max_severity, economy_abuse_count, rate_limit_count, burst_event_count)
     if any(type(value) is not int or value < 0 for value in values):
         raise SecurityEventError("Security risk metrics must be non-negative integers.")
     if (
         max_severity > 5
         or economy_abuse_count > event_count
         or rate_limit_count > event_count
+        or burst_event_count > event_count
         or risk_score > event_count * 5
         or (event_count == 0 and any(values[1:]))
         or (event_count > 0 and (max_severity < 1 or risk_score < event_count))
         or risk_score < max_severity
     ):
         raise SecurityEventError("Security risk metrics are inconsistent.")
-    if max_severity >= 5 or economy_abuse_count >= 4 or risk_score >= 15:
+    if max_severity >= 5 or economy_abuse_count >= 4 or risk_score >= 15 or burst_event_count >= 10:
         return {"risk_level": "high", "recommended_action": "manual_review"}
-    if max_severity >= 3 or economy_abuse_count >= 2 or rate_limit_count >= 3 or risk_score >= 8:
+    if max_severity >= 3 or economy_abuse_count >= 2 or rate_limit_count >= 3 or risk_score >= 8 or burst_event_count >= 5:
         return {"risk_level": "medium", "recommended_action": "monitor"}
     return {"risk_level": "low", "recommended_action": "log_only"}
 
@@ -159,6 +160,7 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
         else "datetime('now', ?)"
     )
     window = (window_minutes,) if _is_postgres(db) else (f"-{window_minutes} minutes",)
+    burst_cutoff = "CURRENT_TIMESTAMP - INTERVAL '5 minutes'" if _is_postgres(db) else "datetime('now', '-5 minutes')"
     cur = await db.execute(
         f"""SELECT user_id,COUNT(*) AS event_count,MAX(severity) AS max_severity,
                   SUM(severity) AS risk_score,
@@ -166,6 +168,7 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
                   COUNT(DISTINCT event_type) AS event_type_count,
                   SUM(CASE WHEN event_type='invalid_economy_action' THEN 1 ELSE 0 END) AS economy_abuse_count,
                   SUM(CASE WHEN event_type='repeated_rate_limit' THEN 1 ELSE 0 END) AS rate_limit_count,
+                  SUM(CASE WHEN created_at >= {burst_cutoff} THEN 1 ELSE 0 END) AS burst_event_count,
                   MAX(created_at) AS last_seen
            FROM security_events
            WHERE created_at >= {cutoff}
@@ -181,6 +184,7 @@ async def get_suspicious_players(db, window_minutes=1440, limit=20):
         item.update(classify_security_risk(
             int(item["event_count"]), int(item["risk_score"]), int(item["max_severity"]),
             int(item["economy_abuse_count"]), int(item["rate_limit_count"]),
+            int(item["burst_event_count"]),
         ))
         result.append(item)
     return result
