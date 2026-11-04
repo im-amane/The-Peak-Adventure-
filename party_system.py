@@ -75,6 +75,15 @@ def _lock_player_sql(db):
     return " FOR UPDATE" if _is_postgres(db) else ""
 
 
+async def _lock_player_mode(db, user_id):
+    """Share the cross-mode advisory lock used by matchmaking and equipment flows."""
+    if _is_postgres(db):
+        await db.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (f"peak-adventure-matchmaking-player:{user_id}",),
+        )
+
+
 def _is_integrity_error(exc):
     sqlstate = getattr(exc, "sqlstate", None)
     return isinstance(exc, aiosqlite.IntegrityError) or (
@@ -240,6 +249,9 @@ async def respond_to_party_invite(
     if not invite or invite["status"] != "pending" or invite["target_id"] != target_id:
         raise PartyError("That party invitation is no longer active.")
     if accept:
+        # Serialize acceptance against matchmaking, crafting, and auction
+        # changes for the invited player before checking cross-mode activity.
+        await _lock_player_mode(db, target_id)
         cur = await db.execute(
             "SELECT 1 FROM party_battles WHERE party_id=? AND status='active' LIMIT 1",
             (invite["party_id"],),
