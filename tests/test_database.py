@@ -448,21 +448,26 @@ class DatabaseBackendSelectionTests(unittest.IsolatedAsyncioTestCase):
         finally:
             main.db = previous_db
 
-    async def test_postgres_backup_loop_never_runs_sqlite_file_backup(self):
+    async def test_postgres_backup_loop_uses_scheduler_and_reports_failure(self):
         class FakePostgresConnection:
             dialect = "postgres"
 
         previous_db = main.db
         try:
             main.db = FakePostgresConnection()
-            with patch.object(main, "create_backup") as create_backup, \
+            with patch.object(
+                main, "create_database_backup",
+                side_effect=RuntimeError("PostgreSQL backup provider failed"),
+            ) as create_backup, \
                  patch.object(main.runtime_monitor, "record_backup_failure") as record_failure, \
                  patch.object(main.asyncio, "sleep", side_effect=asyncio.CancelledError):
                 with self.assertRaises(asyncio.CancelledError):
                     await main.database_backup_loop()
-            create_backup.assert_not_called()
+            create_backup.assert_called_once()
+            self.assertEqual(create_backup.call_args.args[0], main.db)
+            self.assertEqual(create_backup.call_args.kwargs["postgres_url"], main.DATABASE_URL)
             record_failure.assert_called_once()
-            self.assertIn("PostgreSQL", record_failure.call_args.args[0])
+            self.assertIn("PostgreSQL backup provider failed", record_failure.call_args.args[0])
         finally:
             main.db = previous_db
 

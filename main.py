@@ -41,7 +41,7 @@ from presence_system import count_online_players, init_presence_tables, list_onl
 from story_system import CHAPTERS, StoryError, choose_story_path, claim_story_reward, get_story_chapters, init_story_tables
 from auction_system import AuctionError, cancel_listing, create_listing, equip_stashed_item, init_auction_tables, list_active_auctions, list_stash, place_bid
 from rate_limit import DatabaseSlidingWindowRateLimiter, SlidingWindowRateLimiter
-from db_backup import create_backup
+from backup_scheduler import create_database_backup
 from stamina_system import EXPLORE_COST, StaminaError, get_stamina, init_stamina_tables, consume_stamina
 from report_system import ReportError, init_report_tables, list_open_reports, resolve_player_report, submit_player_report
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
@@ -66,6 +66,10 @@ DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
 BACKUP_DIR = os.getenv("BACKUP_DIR", str(Path(DB_PATH).parent / "backups"))
 BACKUP_INTERVAL_SECONDS = max(3600, int(os.getenv("BACKUP_INTERVAL_SECONDS", "21600")))
 BACKUP_RETENTION = max(1, int(os.getenv("BACKUP_RETENTION", "7")))
+POSTGRES_BACKUP_DIR = os.getenv(
+    "POSTGRES_BACKUP_DIR", str(Path(DB_PATH).parent / "postgres_backups")
+)
+POSTGRES_BACKUP_RETENTION = max(1, int(os.getenv("POSTGRES_BACKUP_RETENTION", str(BACKUP_RETENTION))))
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 WEB_HOST = os.getenv("WEB_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("PORT", os.getenv("WEB_PORT", "8080")))
@@ -5424,28 +5428,25 @@ async def api_action(request: web.Request):
         raise
 
 async def database_backup_loop():
-    """Back up SQLite locally; never misrepresent a local file as a PostgreSQL backup."""
+    """Create verified backups for the configured database engine."""
     while True:
-        if getattr(db, "dialect", "sqlite") == "postgres":
-            message = (
-                "PostgreSQL is active, but no durable PostgreSQL backup provider is "
-                "configured; local SQLite snapshots are intentionally disabled."
+        try:
+            backup_path = await asyncio.to_thread(
+                create_database_backup,
+                db,
+                sqlite_path=DB_PATH,
+                sqlite_directory=BACKUP_DIR,
+                sqlite_keep=BACKUP_RETENTION,
+                postgres_url=DATABASE_URL,
+                postgres_directory=POSTGRES_BACKUP_DIR,
+                postgres_keep=POSTGRES_BACKUP_RETENTION,
             )
-            runtime_monitor.record_backup_failure(message)
-            log.error(message)
-        else:
-            try:
-                backup_path = await asyncio.to_thread(
-                    create_backup, DB_PATH, BACKUP_DIR, BACKUP_RETENTION
-                )
-                runtime_monitor.record_backup_success(str(backup_path))
-                log.info("Verified database backup created: %s", backup_path)
-            except Exception as exc:
-                runtime_monitor.record_backup_failure(f"{type(exc).__name__}: {exc}")
-                log.exception("Database backup failed; live game database remains untouched")
+            runtime_monitor.record_backup_success(str(backup_path))
+            log.info("Verified database backup created: %s", backup_path)
+        except Exception as exc:
+            runtime_monitor.record_backup_failure(f"{type(exc).__name__}: {exc}")
+            log.exception("Database backup failed; live game database remains untouched")
         await asyncio.sleep(BACKUP_INTERVAL_SECONDS)
-
-
 async def database_healthcheck() -> bool:
     if db is None:
         runtime_monitor.record_database_probe(False, "Database connection is not initialized")

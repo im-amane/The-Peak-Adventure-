@@ -28,7 +28,8 @@ Defer:
 The repository's `render.yaml` defines a single Docker web service in Singapore with:
 - Render Starter web service plan and a 1 GB persistent disk mounted at `/data`.
 - SQLite database at `/data/peak_adventure.db`.
-- Local prototype snapshots at `/data/backups`.
+- Local SQLite snapshots at `/data/backups` when SQLite is selected.
+- PostgreSQL logical backups at `/data/postgres_backups` when `DATABASE_URL` is selected; the container includes `pg_dump` and `pg_restore`.
 - `/healthz` health check.
 - Telegram Stars explicitly disabled.
 
@@ -74,7 +75,7 @@ Do not call the prototype live-tested until these steps have actually passed on 
 
 - Keep exactly one Render instance. The bot polling loop and HTTP API share one process; multiple instances would create competing Telegram polling loops.
 - SQLite is acceptable only for this controlled, single-instance prototype on the mounted persistent disk. Do not use it as the multi-instance or production database.
-- The local backup loop writes snapshots to the same persistent disk. This is not an off-site backup. Export and securely retain any test data you need; do not treat local snapshots as production disaster recovery.
+- The scheduled backup loop writes verified SQLite or PostgreSQL backups to the configured local persistent disk. PostgreSQL archives include SHA-256 sidecars and are checked with `pg_restore --list` before publication; retention is controlled by `POSTGRES_BACKUP_RETENTION`. This is still not an off-site backup. Export and securely retain any data you need; do not treat local snapshots as production disaster recovery.
 - Do not collect payments. Telegram Stars are disabled.
 - Do not use real customer/player data or announce a public launch until production persistence, external backups, security, concurrency, restart, and load checks are complete.
 - The Worker forwards only routes in its explicit allowlist. The Mini App matchmaking route is included in the current prototype patch and covered by a regression test.

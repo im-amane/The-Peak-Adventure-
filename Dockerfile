@@ -1,5 +1,10 @@
 FROM python:3.11-slim
 
+# PostgreSQL client tools power scheduled logical backups and guarded restores.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 

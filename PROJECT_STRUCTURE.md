@@ -209,7 +209,7 @@ The-Peak-Adventure-/
 - [~] Anti-cheat and economy abuse detection
 - [x] Rate limiting and abuse protection audit
 - [x] SQLite backup and restore automation
-- [~] PostgreSQL logical backup and guarded restore utility (scheduling and durable off-host retention remain)
+- [~] PostgreSQL logical backup, scheduled runtime integration, checksum verification and guarded restore (durable off-host retention remains)
 - [x] Privacy controls and data deletion workflow
 - [~] Production monitoring and alerting
 
