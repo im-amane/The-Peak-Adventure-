@@ -288,7 +288,7 @@
         },
         {
           "name": "Large multi-zone maps",
-          "status": "partial"
+          "status": "complete"
         },
         {
           "name": "Portals and landmarks",
@@ -798,15 +798,15 @@
   ],
   "progress_summary": {
     "total_items": 172,
-    "complete_items": 158,
-    "partial_items": 12,
+    "complete_items": 159,
+    "partial_items": 11,
     "pending_items": 2,
     "fully_implemented_percent": 92,
     "calculation": "complete_items / total_items; partial and pending items are excluded"
   },
   "progress": {
-    "complete": 158,
-    "partial": 12,
+    "complete": 159,
+    "partial": 11,
     "pending": 2,
     "total": 172,
     "percentage": 92
