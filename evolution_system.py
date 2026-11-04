@@ -34,6 +34,12 @@ async def _rollback_transaction(db, nested, savepoint):
         await db.rollback()
 
 
+async def _require_player(db, user_id):
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise EvolutionError("Player account not found.")
+
+
 async def init_evolution_tables(db):
     await db.execute("""CREATE TABLE IF NOT EXISTS player_monster_mastery(
       user_id BIGINT NOT NULL,
@@ -53,6 +59,7 @@ async def record_monster_defeat(db, user_id, monster_level):
     savepoint = "record_monster_defeat"
     nested = await _begin_transaction(db, savepoint)
     try:
+        await _require_player(db, user_id)
         await db.execute(
             """INSERT INTO player_monster_mastery(user_id,monster_level,defeats)
                VALUES(?,?,1)
@@ -83,6 +90,7 @@ async def get_evolution_state(db, user_id, monster_level):
         raise EvolutionError("Invalid player account.")
     if not isinstance(monster_level, int) or isinstance(monster_level, bool) or not 1 <= monster_level <= 100:
         raise EvolutionError("Invalid monster level.")
+    await _require_player(db, user_id)
     cur = await db.execute(
         "SELECT defeats,evolved_at FROM player_monster_mastery WHERE user_id=? AND monster_level=?",
         (user_id, monster_level),
