@@ -32,7 +32,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - aiohttp
 - aiosqlite / SQLite for local development and current prototype persistence
 
-**Heroku deployment is not ready yet:** SQLite remains the default local-development database. The runtime can opt into the Psycopg 3 PostgreSQL adapter by setting `DATABASE_URL`; an invalid PostgreSQL connection or schema initialization fails startup rather than silently falling back to SQLite. This is not yet a production-ready migration: remaining SQLite-specific SQL, versioned migrations, external durable backups, process separation and full PostgreSQL verification must be completed before Heroku deployment.
+**Database and launch status:** SQLite is used by the controlled Render prototype. PostgreSQL support, scheduled logical backups, optional S3-compatible off-site export, and CI restore tests are implemented. Production certification still requires full migration coverage, a real off-site restore drill, process separation, and live Telegram/device/load testing. Setting `DATABASE_URL` explicitly selects PostgreSQL; failures do not silently fall back to SQLite.
 - python-dotenv
 - Phaser 3 (loaded by the Mini App)
 
@@ -62,9 +62,9 @@ When changing `webapp/index.html`, `webapp/style.css`, or `webapp/game.js`, run 
 
 1. Install Wrangler: `npm install --save-dev wrangler`.
 2. Authenticate: `npx wrangler login`.
-3. After the Heroku backend is approved and deployed, set its HTTPS origin as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (origin only, without a path). Do not configure this against an unverified or temporary backend.
+3. After the Render backend is approved and deployed, set its HTTPS origin as the Worker secret: `npx wrangler secret put BACKEND_ORIGIN` (origin only, without a path). Do not configure this against an unverified or temporary backend.
 4. Deploy from the repository root: `npx wrangler deploy`.
-5. Set Heroku's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
+5. Set the Render service's `WEBAPP_URL` to the Worker `workers.dev` URL, and register that hostname with BotFather as the Mini App domain.
 
 Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secret environment. The Cloudflare account now has the `thepeakadventure.workers.dev` subdomain and the `peak-adventure-edge` Worker is deployed. Public Mini App URL: `https://peak-adventure-edge.thepeakadventure.workers.dev`. Set `BACKEND_ORIGIN` to the deployed Python/Aiohttp HTTPS origin before gameplay API calls can work.
 
@@ -72,21 +72,11 @@ Do not put `BOT_TOKEN` in the Worker. It remains only in the Python host's secre
 
 The first playable prototype can use the single-instance Render configuration and SQLite persistent disk documented in [docs/PROTOTYPE_LAUNCH_RUNBOOK.md](docs/PROTOTYPE_LAUNCH_RUNBOOK.md). This is a temporary, controlled test deployment only; it does not change the production hosting decision or remove the PostgreSQL, external-backup, and process-separation blockers below. Telegram Stars remain disabled.
 
-## Heroku deployment readiness
+## Controlled Render deployment
 
-**Target platform: Heroku. Deployment has not been performed.** The repository's `Procfile` already declares `web: python main.py`, and the HTTP server reads Heroku's `PORT` environment variable. However, the current game database is SQLite and the backup loop writes local snapshot files.
+`render.yaml` defines the current single-instance Docker prototype: one web service, a persistent `/data` disk, SQLite storage, and `/healthz` health checks. Follow [docs/PROTOTYPE_LAUNCH_RUNBOOK.md](docs/PROTOTYPE_LAUNCH_RUNBOOK.md) for configuration and release checks. This is a controlled prototype, not a public-production certification.
 
-Heroku dynos have ephemeral, isolated filesystems. A SQLite database or backup written to a dyno's local disk is not durable across restarts/deploys and is not shared between dynos. Do not deploy a live player database in this configuration.
-
-Before a safe Heroku deployment:
-1. Implement and test a PostgreSQL-backed persistence layer and schema migrations. Setting `DATABASE_URL` alone does not convert the current SQLite-specific SQL and transaction handling.
-2. Move verified backups to durable external storage or use a verified database backup/restore workflow.
-3. Keep the combined bot-polling + HTTP process to a single dyno until polling is separated into a dedicated worker and cross-process concurrency is validated.
-4. Configure `BOT_TOKEN`, `ADMIN_IDS`, and `WEBAPP_URL` as Heroku config vars. Keep Telegram Stars disabled.
-5. After the backend is deployed and verified, set the Cloudflare Worker secret `BACKEND_ORIGIN` to the Heroku HTTPS origin and set `WEBAPP_URL` to the Worker URL.
-6. Complete restart/persistence, real Telegram Mini App, backup/restore, concurrency and load checks before public launch.
-
-The existing `render.yaml` is retained as a legacy deployment artifact; Heroku is the selected target. No Heroku app, database, dyno or paid resource has been provisioned. See [docs/HEROKU_DEPLOYMENT_READINESS.md](docs/HEROKU_DEPLOYMENT_READINESS.md) for the detailed blockers and release checklist.
+Before a broader launch, complete versioned schema migrations and full PostgreSQL compatibility validation, separate Telegram polling from the HTTP process, perform a real off-site backup download/restore drill, and finish live Telegram, Android WebView, concurrency, security and load testing. Do not provision paid resources or deploy without explicit authorization.
 
 Keep `BOT_TOKEN` private. Never deploy production or provision paid resources without explicit authorization.
 
@@ -183,10 +173,9 @@ Work still needed before calling the game production-ready:
 
 Telegram Stars purchases are disabled by default. Enable them only after setting package prices and completing live payment testing with ENABLE_TELEGRAM_STARS=true. The in-game gem shop can still spend gems already in a player wallet.
 
-The latest verified GitHub Actions run (#1122) passed all 510 Python unit tests, 10 pathfinding tests and 35 Cloudflare Worker tests. CI also passed Python compile/import checks, JavaScript syntax checks and Cloudflare embedded-asset parity. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
-The project manifest currently tracks 152 items complete, 17 in progress, and 2 blocked on live bot credentials and production database hosting.
+The latest main-branch CI run after PR #145 completed successfully, including the full Python suite and PostgreSQL adapter/integration jobs. CI also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests and Worker tests. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
 
-The Cloudflare Worker and a legacy Render deployment configuration are present, but Heroku deployment is blocked until PostgreSQL persistence and durable backups are implemented. No live Python backend or full production end-to-end launch has been verified. Do not provision paid hosting or deploy until the owner explicitly authorizes it.
+The current hosting configuration is the single-instance Render prototype in `render.yaml`. No production launch or live end-to-end Telegram verification has been certified. Do not provision paid resources or deploy until the owner explicitly authorizes it.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
@@ -270,21 +259,20 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Purchases are disabled by default. The owner must set `ENABLE_TELEGRAM_STARS=true` and confirm package prices in `.env` before exposing invoices.
 
 
-## PostgreSQL logical backups
+## Database backup and recovery
 
-The optional PostgreSQL runtime can be backed up with the guarded logical backup utility. Install PostgreSQL client tools (`pg_dump` and `pg_restore`) on the backup host, then provide the same `DATABASE_URL` used by the application:
+The runtime backup scheduler selects the active database engine:
+- SQLite uses the online snapshot utility and configured retention.
+- PostgreSQL uses custom-format `pg_dump` archives, `pg_restore --list` verification, SHA-256 sidecars and configured retention.
+- When `OFFSITE_BACKUP_BUCKET` is configured, each verified local backup is exported to the configured S3-compatible object store. Uploads include SHA-256 metadata and server-side encryption (AES256 by default, or KMS when configured).
+
+Configure off-site export with `OFFSITE_BACKUP_BUCKET`, `OFFSITE_BACKUP_REGION`, `OFFSITE_BACKUP_PREFIX`, and optionally `OFFSITE_BACKUP_ENDPOINT_URL` / `OFFSITE_BACKUP_KMS_KEY_ID`. Supply credentials through the host's standard AWS/boto3 credential provider. Without a bucket, backups remain local and are not disaster recovery. Configure object-store access controls and lifecycle retention separately.
+
+The guarded PostgreSQL utility also supports manual verification and restore:
 
 ```bash
-python postgres_backup.py backup --directory postgres_backups --keep 7
 python postgres_backup.py verify postgres_backups/<database>-<timestamp>.dump
-```
-
-Each custom-format archive is checked with `pg_restore --list`, SHA-256 checksummed, published atomically, and rotated together with its checksum. Store backups on durable storage with access controls and encryption appropriate for player data. Schedule the backup command with the host scheduler (for example, cron or a managed scheduled job) and alert on non-zero exit status. This repository does not silently configure a production schedule or upload backups to a third party.
-
-Restore is destructive to objects in the target database. Stop the application, take a fresh backup first, and require the exact target database name as an additional guard:
-
-```bash
 python postgres_backup.py restore <backup.dump> --confirm-database <database-name>
 ```
 
-The restore uses one transaction and fails rather than leaving a partial restore. Test restores against a separate staging database regularly. CI does not connect to or modify production databases.
+Restore is destructive to the target database. Stop the application, take a fresh backup, and rehearse recovery against a disposable database before any production restore. CI tests dump and restore against temporary PostgreSQL databases; it does not connect to production or prove that a real cloud bucket can be recovered.
