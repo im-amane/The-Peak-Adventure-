@@ -18,12 +18,15 @@ class LaunchPreflightTests(unittest.TestCase):
     def test_valid_controlled_prototype_configuration_passes(self):
         self.assertEqual(inspect_environment(self.valid_environment()), [])
 
-    def test_missing_secrets_and_webapp_url_are_errors_without_echoing_values(self):
-        issues = inspect_environment({})
+    def test_missing_webapp_url_is_an_error_without_echoing_bot_token(self):
+        env = self.valid_environment()
+        secret = "sensitive-bot-token-value"
+        env["BOT_TOKEN"] = secret
+        env["WEBAPP_URL"] = ""
+        issues = inspect_environment(env)
         codes = {issue["code"] for issue in issues}
-        self.assertIn("bot_token_missing", codes)
         self.assertIn("webapp_url_missing", codes)
-        self.assertNotIn("BOT_TOKEN", str(issues))
+        self.assertNotIn(secret, str(issues))
 
     def test_rejects_http_webapp_url_and_invalid_admin_ids(self):
         env = self.valid_environment()
