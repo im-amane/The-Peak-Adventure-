@@ -126,6 +126,9 @@ async def award_material_drop(db,user_id,monster,rng=None):
         raise CraftingError("Invalid player account.")
     if not isinstance(monster, dict) or type(monster.get("level")) is not int or not 1 <= monster["level"] <= 100:
         raise CraftingError("Invalid monster drop source.")
+    cur = await db.execute("SELECT 1 FROM players WHERE user_id=?", (user_id,))
+    if await cur.fetchone() is None:
+        raise CraftingError("Player account not found.")
     boss = monster.get("boss", False)
     if type(boss) is not bool:
         raise CraftingError("Invalid monster drop source.")
