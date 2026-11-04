@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 
 _ALLOWED_QUERY = {"sslmode", "application_name", "connect_timeout", "target_session_attrs"}
@@ -35,13 +35,19 @@ def _connection_options(database_url: str) -> tuple[list[str], dict[str, str], s
         raise ValueError("Unsupported DATABASE_URL option(s): " + ", ".join(sorted(unsupported)))
     database = unquote(parsed.path.lstrip("/"))
     username = unquote(parsed.username)
-    options = ["--host", parsed.hostname, "--username", username, "--dbname", database]
-    if parsed.port:
-        options.extend(["--port", str(parsed.port)])
-    for key in sorted(query):
+    for key in query:
         if len(query[key]) != 1:
             raise ValueError(f"DATABASE_URL option {key!r} must appear once")
-        options.extend(["--" + key.replace("_", "-"), query[key][0]])
+    host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+    authority = quote(username, safe="") + "@" + host
+    if parsed.port:
+        authority += f":{parsed.port}"
+    safe_url = f"postgresql://{authority}/{quote(database, safe='')}"
+    if parsed.query:
+        safe_url += "?" + parsed.query
+    # Keep credentials out of argv/process listings. libpq reads the password
+    # from PGPASSWORD while the password-free URI carries TLS and other options.
+    options = ["--dbname", safe_url]
     environment = os.environ.copy()
     password = unquote(parsed.password or "")
     if password:
