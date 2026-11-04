@@ -41,13 +41,24 @@ class RuntimeMonitorTests(unittest.TestCase):
         self.assertIsNone(snapshot["backup"]["last_error"])
         self.assertEqual(snapshot["backup"]["last_path"], "/safe/backups/snapshot.db")
 
-    def test_route_metrics_are_bounded_against_high_cardinality_paths(self):
+    def test_route_metrics_normalize_dynamic_ids_before_aggregation(self):
         monitor = RuntimeMonitor(clock=lambda: 1000.0)
-        for index in range(250):
-            monitor.record_request(f"/random/{index}", 200, 0.001)
+        for user_id in range(250):
+            monitor.record_request(f"/api/player/{user_id}/profile", 200, 0.001)
         snapshot = monitor.snapshot(3600)
-        self.assertLessEqual(len(snapshot["routes"]), 100)
-        self.assertEqual(snapshot["routes"]["/_other"]["requests"], 151)
+        self.assertEqual(len(snapshot["routes"]), 1)
+        self.assertEqual(snapshot["routes"]["/api/player/{id}/profile"]["requests"], 250)
+        self.assertNotIn("249", str(snapshot["routes"]))
+
+    def test_route_metrics_hide_telegram_ids_and_opaque_identifiers(self):
+        monitor = RuntimeMonitor(clock=lambda: 1000.0)
+        monitor.record_request("/api/player/987654321012345678/profile", 200, 0.01)
+        monitor.record_request("/api/session/0123456789abcdef0123456789abcdef", 200, 0.01)
+        routes = monitor.snapshot(3600)["routes"]
+        self.assertIn("/api/player/{id}/profile", routes)
+        self.assertIn("/api/session/{id}", routes)
+        self.assertNotIn("987654321012345678", str(routes))
+        self.assertNotIn("0123456789abcdef", str(routes))
 
     def test_missing_or_stale_backup_is_reported(self):
         now = [1000.0]
