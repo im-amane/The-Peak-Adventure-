@@ -66,6 +66,20 @@ class PostgreSQLBackupTests(unittest.TestCase):
 
     @patch("postgres_backup.shutil.which", return_value="/usr/bin/fake")
     @patch("postgres_backup.subprocess.run")
+    def test_rotation_namespaces_do_not_collide_after_filename_sanitization(self, run, _which):
+        run.side_effect = self._fake_run
+        first_url = "postgresql://backup-user:secret@db.example.test/game%2Fdb"
+        second_url = "postgresql://backup-user:secret@db.example.test/game%3Fdb"
+        first = postgres_backup.create_backup(first_url, self.root, keep=1)
+        second = postgres_backup.create_backup(second_url, self.root, keep=1)
+        self.assertNotEqual(first.name.split("-")[-2], second.name.split("-")[-2])
+        self.assertTrue(first.is_file())
+        self.assertTrue(Path(str(first) + ".sha256").is_file())
+        self.assertTrue(second.is_file())
+        self.assertTrue(Path(str(second) + ".sha256").is_file())
+
+    @patch("postgres_backup.shutil.which", return_value="/usr/bin/fake")
+    @patch("postgres_backup.subprocess.run")
     def test_restore_requires_exact_database_confirmation_and_verified_archive(self, run, _which):
         run.side_effect = self._fake_run
         backup = postgres_backup.create_backup(self.url, self.root)
