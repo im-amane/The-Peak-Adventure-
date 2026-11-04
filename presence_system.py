@@ -77,6 +77,8 @@ async def count_online_players(db, window_minutes: int = 5):
 
 
 async def list_online_friends(db, user_id: int, window_minutes: int = 5):
+    if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+        raise ValueError("Invalid player account.")
     if not isinstance(window_minutes, int) or isinstance(window_minutes, bool) or not 1 <= window_minutes <= 60:
         raise ValueError("Presence window must be between 1 and 60 minutes.")
     cutoff = (
