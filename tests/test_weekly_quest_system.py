@@ -3,7 +3,7 @@ import aiosqlite
 
 from weekly_quest_system import (
     WeeklyQuestError, claim_weekly_reward, get_weekly_quests,
-    init_weekly_tables, record_weekly_progress,
+    current_week_key, init_weekly_tables, record_weekly_progress,
 )
 
 
