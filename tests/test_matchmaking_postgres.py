@@ -212,12 +212,12 @@ class PostgresMatchmakingConcurrencyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(queue["total"], 8)
         self.assertEqual(queue["players"], 8)
         cursor = await self.db_one.execute(
-            "SELECT COUNT(*) AS total,COUNT(DISTINCT player_one_id) + "
-            "COUNT(DISTINCT player_two_id) AS participant_slots FROM matchmaking_matches"
+            "SELECT COUNT(*) AS participants FROM ("
+            "SELECT player_one_id AS user_id FROM matchmaking_matches UNION "
+            "SELECT player_two_id AS user_id FROM matchmaking_matches) AS matched_players"
         )
         matches = await cursor.fetchone()
-        self.assertEqual(matches["total"], 4)
-        self.assertEqual(matches["participant_slots"], 8)
+        self.assertEqual(matches["participants"], 8)
         cursor = await self.db_one.execute("SELECT COUNT(*) AS total FROM matchmaking_battles")
         self.assertEqual((await cursor.fetchone())["total"], 4)
 
