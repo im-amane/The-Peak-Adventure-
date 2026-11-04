@@ -13,16 +13,7 @@
     "binding": "ASSETS",
     "run_worker_first": [
       "/api/*",
-      "/healthz",
-      "/",
-      "/style.css",
-      "/game.js",
-      "/pathfinding.js",
-      "/movement.js",
-      "/character_profiles.js",
-      "/character_animation.js",
-      "/monster_animation.js",
-      "/world_layout.js"
+      "/healthz"
     ]
   }
 }
