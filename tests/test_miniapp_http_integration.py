@@ -218,6 +218,21 @@ class MiniAppHttpIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("GET", response.headers.get("Allow", ""))
             self.assertIn("POST", response.headers.get("Allow", ""))
 
+    async def test_engine_and_character_runtime_assets_are_served_by_http_application(self):
+        for route, expected in (
+            ("/movement.js", "PeakMovement"),
+            ("/character_profiles.js", "PeakCharacters"),
+        ):
+            response = await self.client.get(route)
+            self.assertEqual(response.status, 200, route)
+            self.assertIn("javascript", response.headers.get("Content-Type", ""))
+            self.assertIn(expected, await response.text())
+
+        index = await self.client.get("/")
+        html = await index.text()
+        self.assertIn('src="/movement.js"', html)
+        self.assertIn('src="/character_profiles.js"', html)
+
     async def test_miniapp_static_entrypoint_is_served_by_http_application(self):
         response = await self.client.get("/")
         self.assertEqual(response.status, 200)
