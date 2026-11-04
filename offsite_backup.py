@@ -147,7 +147,7 @@ def download_backup(
             sidecar = Path(str(target) + ".sha256")
             sidecar_temp = sidecar.with_name(sidecar.name + ".tmp")
             try:
-                sidecar_temp.write_text(f"{expected}  {target.name}\\n", encoding="ascii")
+                sidecar_temp.write_text(f"{expected}  {target.name}\n", encoding="ascii")
                 os.replace(sidecar_temp, sidecar)
             except Exception:
                 sidecar_temp.unlink(missing_ok=True)
