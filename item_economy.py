@@ -71,7 +71,7 @@ def validate_shop_catalog(items: dict) -> None:
             raise ValueError(f"Unknown rarity for shop item: {item_id}")
         cost, level, bonus = item.get("cost"), item.get("level"), item.get("bonus")
         item_type = item.get("type")
-        if item_type not in {"weapon", "armor", "potion"}:
+        if not isinstance(item_type, str) or item_type not in {"weapon", "armor", "potion"}:
             raise ValueError(f"Shop item {item_id} has an invalid equipment type.")
         if any(type(value) is not int for value in (cost, level, bonus)):
             raise ValueError(f"Shop item {item_id} has non-integer economy values.")
