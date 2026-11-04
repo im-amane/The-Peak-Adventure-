@@ -65,7 +65,7 @@ class CloudflareAssetSyncTests(unittest.TestCase):
         payload = {"/game.js": {"body": "current game bundle", "type": "application/javascript"}}
         self.worker.write_text(
             "const STATIC_ASSETS = " + json.dumps(payload)
-            + ";\\n\\nconst STATIC_SECURITY_HEADERS = {};\\n\\nconst STATIC_PATHS = new Set([]);\\n",
+            + ";\n\nconst STATIC_SECURITY_HEADERS = {};\n\nconst STATIC_PATHS = new Set([]);\n",
             encoding="utf-8",
         )
         with patch("sys.argv", ["sync_cloudflare_assets.py", "--check"]):
