@@ -1,4 +1,5 @@
 """Abuse telemetry for suspicious game actions; never auto-bans players."""
+import re
 
 MAX_SECURITY_EVENTS = 50_000
 RETENTION_DAYS = 30
@@ -42,6 +43,23 @@ def classify_security_risk(event_count, risk_score, max_severity, economy_abuse_
     if max_severity >= 3 or economy_abuse_count >= 2 or rate_limit_count >= 3 or risk_score >= 8 or burst_event_count >= 5:
         return {"risk_level": "medium", "recommended_action": "monitor"}
     return {"risk_level": "low", "recommended_action": "log_only"}
+
+
+def _redact_event_details(details):
+    """Keep useful abuse context without persisting common credential formats."""
+    value = str(details or "")
+    value = re.sub(r"(://[^:/\s]+:)[^@/\s]+@", r"\1[redacted]@", value)
+    value = re.sub(
+        r"(?i)(\b(?:password|passwd|token|secret|api[_-]?key)=)[^&\s]+",
+        r"\1[redacted]",
+        value,
+    )
+    value = re.sub(
+        r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/-]+=*",
+        r"\1[redacted]",
+        value,
+    )
+    return " ".join(value.split())[:240]
 
 
 def _is_postgres(db):
@@ -109,7 +127,7 @@ async def record_security_event(db, user_id, event_type, details="", severity=1)
         raise SecurityEventError("Unknown security event type.")
     if not isinstance(severity, int) or isinstance(severity, bool) or not 1 <= severity <= 5:
         raise SecurityEventError("Security severity must be between 1 and 5.")
-    clean = " ".join(str(details or "").split())[:240]
+    clean = _redact_event_details(details)
     savepoint = "record_security_event"
     nested = await _begin_transaction(db, savepoint)
     try:
