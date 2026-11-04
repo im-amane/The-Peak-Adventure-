@@ -1274,10 +1274,11 @@
       ];
       const monsterColor=[0x79b88b,0xc99a57,0x8ba9b7,0x8b7b9e,0xc66b3e,0x91c4d2,0x7262a5,0x8e9bc9,0x5b547b,0xc49a58][idx];
       const roster=Array.isArray(gameState.nearby_monsters)&&gameState.nearby_monsters.length?gameState.nearby_monsters:[gameState.monster];
-      const positions=roster.length===1?[0.77]:roster.length===2?[0.65,0.84]:[0.57,0.73,0.89];
+      const monsterSpawns=layout.monsterPositions(Math.min(roster.length,3));
       this.monsters=roster.map((monster,index)=>{
-        const x=w*positions[Math.min(index,positions.length-1)];
-        const y=h*(index%2===0?0.68:0.76);
+        const spawn=monsterSpawns[Math.min(index,monsterSpawns.length-1)];
+        const x=spawn.x;
+        const y=spawn.y;
         const sprite=makeMonster(this,x,y,monster.level,monsterColor);
         const label=this.add.text(x,y-48,(monster.boss?"👑 ":"")+monster.name,{fontFamily:"Georgia",fontSize:"12px",color:"#fff4d6",stroke:"#1b1b24",strokeThickness:3}).setOrigin(0.5);
         return {
