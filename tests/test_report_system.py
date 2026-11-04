@@ -36,6 +36,11 @@ class PlayerReportTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ReportError):
             await submit_player_report(self.db, 1, 99, "This is a sufficiently long reason")
 
+    async def test_missing_reporter_account_is_rejected(self):
+        with self.assertRaisesRegex(ReportError, "Reporter account not found"):
+            await submit_player_report(self.db, 99, 2, "Repeatedly abusing other players", now=1000)
+        self.assertEqual(await list_open_reports(self.db), [])
+
     async def test_reason_length_validated(self):
         with self.assertRaises(ReportError):
             await submit_player_report(self.db, 1, 2, "short")
