@@ -1165,9 +1165,11 @@
     constructor(){super("adventure");}
     create(){
       sceneRef=this;
-      const w=this.scale.width*2.6,h=this.scale.height*1.5;
-      this.worldWidth=w;this.worldHeight=h;
       const idx=Math.max(0,Math.min(9,gameState ? (gameState.world_id||1)-1:0));
+      const layout=window.PeakWorldLayout.createLayout(this.scale.width,this.scale.height,idx+1);
+      const w=layout.width,h=layout.height;
+      this.worldLayout=layout;
+      this.worldWidth=w;this.worldHeight=h;
       const palette=worldPalettes[idx];
       this.cameras.main.setBackgroundColor(palette.sky);
       const ground=this.add.graphics();
