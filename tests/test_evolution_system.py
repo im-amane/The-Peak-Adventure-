@@ -83,6 +83,11 @@ class MonsterEvolutionTests(unittest.IsolatedAsyncioTestCase):
         cur = await self.db.execute("SELECT COUNT(*) AS total FROM player_monster_mastery WHERE user_id=999")
         self.assertEqual((await cur.fetchone())["total"], 0)
 
+    async def test_evolved_spawn_requires_boolean_mastery_flag(self):
+        for value in (1, 0, "false", "true", [], {}, None):
+            with self.subTest(mastered=value), self.assertRaises(EvolutionError):
+                is_evolved_spawn(value, 1)
+
     async def test_invalid_mastery_input_is_rejected(self):
         with self.assertRaises(EvolutionError):
             await record_monster_defeat(self.db, 0, 7)
