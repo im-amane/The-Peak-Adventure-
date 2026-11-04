@@ -125,5 +125,18 @@ class StoryTests(unittest.IsolatedAsyncioTestCase):
    await choose_story_path(self.db,1,100,chapter_id,choice_id)
    chapters=await get_story_chapters(self.db,1,100)
    self.assertIn(expected,chapters[next_id-1]["scene"])
+  final_scene=chapters[9]["scene"]
+  for echo in (
+   "The lantern Mira first carried",
+   "The Wanderer lays the compass",
+   "The sealed name remains yours",
+   "Echo's question remains unanswered",
+   "The Ashen King's warning follows you",
+   "Mira stands beside you without demanding an answer",
+   "The silver crack in the rift remains",
+   "The lantern remembers the weight you carried alone",
+   "Your companions refuse to leave you alone"
+  ):
+   self.assertIn(echo,final_scene)
 
 if __name__=="__main__":unittest.main()
