@@ -45,6 +45,14 @@ class DatabaseBackupSchedulerTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "DATABASE_URL is missing"):
             self._run(database)
 
+    def test_verified_backup_is_exported_when_offsite_bucket_is_configured(self):
+        database = type("Database", (), {"dialect": "sqlite"})()
+        expected = self.root / "sqlite-backup.sqlite3"
+        with patch("backup_scheduler.create_sqlite_backup", return_value=expected), \
+             patch("offsite_backup.upload_backup_from_environment", return_value="nightly/backup.sqlite3") as upload:
+            self.assertEqual(self._run(database), expected)
+        upload.assert_called_once_with(expected)
+
     def test_unknown_dialect_is_rejected(self):
         database = type("Database", (), {"dialect": "mysql"})()
         with self.assertRaisesRegex(RuntimeError, "Unsupported database dialect"):
