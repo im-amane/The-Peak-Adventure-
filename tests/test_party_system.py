@@ -147,6 +147,42 @@ class PartySystemTests(unittest.IsolatedAsyncioTestCase):
 
 
 
+    async def test_concurrent_party_battle_starts_create_only_one_active_battle(self):
+        party_id = await create_party(self.db, 101)
+        outcomes = await asyncio.gather(
+            start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100),
+            start_party_battle(self.db, party_id, 101, 11, "Ash Sentinel", 120),
+            return_exceptions=True,
+        )
+        successes = [value for value in outcomes if isinstance(value, int)]
+        failures = [value for value in outcomes if isinstance(value, PartyError)]
+        self.assertEqual(len(successes), 1)
+        self.assertEqual(len(failures), 1)
+        cur = await self.db.execute(
+            "SELECT COUNT(*) AS n FROM party_battles WHERE party_id=? AND status='active'",
+            (party_id,),
+        )
+        self.assertEqual((await cur.fetchone())["n"], 1)
+
+    async def test_concurrent_party_attacks_do_not_lose_damage_updates(self):
+        party_id = await create_party(self.db, 101)
+        invite_id = await invite_to_party(self.db, party_id, 101, 202)
+        await respond_to_party_invite(self.db, invite_id, 202, True)
+        battle_id = await start_party_battle(self.db, party_id, 101, 10, "Root Warden", 100)
+        results = await asyncio.gather(
+            attack_party_battle(self.db, party_id, 101, 40),
+            attack_party_battle(self.db, party_id, 202, 40),
+        )
+        self.assertEqual({result["hp"] for result in results}, {60, 20})
+        battle = await get_party_battle(self.db, party_id)
+        self.assertEqual(battle["battle_id"], battle_id)
+        self.assertEqual(battle["hp"], 20)
+        cur = await self.db.execute(
+            "SELECT SUM(damage) AS total FROM party_battle_contributions WHERE battle_id=?",
+            (battle_id,),
+        )
+        self.assertEqual((await cur.fetchone())["total"], 80)
+
     async def test_party_leader_can_start_coop_battle(self):
         party_id=await create_party(self.db,101)
         battle_id=await start_party_battle(self.db,party_id,101,10,"Root Warden",100)
