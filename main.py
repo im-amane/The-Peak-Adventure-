@@ -2164,7 +2164,7 @@ async def group_command(message: Message):
             if chapter["completed"] and not chapter["claimed"]:
                 lines.append(f"Claim: /group campaign claim {chapter['id']}")
         lines.append("The next chapter unlocks after the current chapter reward is claimed.")
-        await message.answer("\\n".join(lines))
+        await message.answer("\n".join(lines))
         return
     if action=="claim":
         if len(args)<3: await message.answer("Usage: /group claim battles|boss|trades"); return
