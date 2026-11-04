@@ -1,5 +1,6 @@
 """Daily rotating objectives with persistent progress and one-time rewards."""
 from datetime import datetime, timezone
+import math
 import time
 
 DAILY_MISSIONS = (
@@ -42,7 +43,13 @@ async def _rollback_transaction(db, nested, savepoint):
 
 
 def current_day_key(now=None):
-    stamp = datetime.fromtimestamp(time.time() if now is None else now, timezone.utc)
+    value = time.time() if now is None else now
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise DailyMissionError("Invalid daily mission timestamp.")
+    try:
+        stamp = datetime.fromtimestamp(value, timezone.utc)
+    except (OverflowError, OSError, ValueError) as exc:
+        raise DailyMissionError("Invalid daily mission timestamp.") from exc
     return stamp.strftime("%Y-%m-%d")
 
 
@@ -72,7 +79,7 @@ async def _ensure_day(db, user_id, day_key):
 async def record_daily_progress(db, user_id, kind, amount=1, now=None):
     if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
         raise DailyMissionError("Invalid player account.")
-    if kind not in {"wins", "crafts", "landmarks"}:
+    if not isinstance(kind, str) or kind not in {"wins", "crafts", "landmarks"}:
         raise DailyMissionError("Unknown daily mission progress type.")
     if not isinstance(amount, int) or isinstance(amount, bool) or not 1 <= amount <= 100:
         raise DailyMissionError("Invalid daily progress amount.")
