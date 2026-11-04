@@ -2,7 +2,7 @@
 
 Repository: https://github.com/im-amane/The-Peak-Adventure-
 
-`project_manifest.json` is the machine-readable source of truth. This document mirrors its 14 modules and 171 tracked implementation tasks.
+`project_manifest.json` is the machine-readable source of truth for 14 modules and 172 tracked implementation items. This document mirrors that scope as a human-readable checklist.
 
 ## Status legend
 - [x] Implemented in the repository.
@@ -129,7 +129,7 @@ The-Peak-Adventure-/
 - [x] Co-op exploration
 - [x] Co-op PvE battles
 - [x] Team boss raids
-- [~] Matchmaking and anti-abuse limits
+- [x] Matchmaking and anti-abuse limits
 - [x] Party membership management and leader handoff
 
 ### 08. Telegram Group Chat Features
@@ -170,7 +170,7 @@ The-Peak-Adventure-/
 - [x] Safe API response handling and request guard
 - [x] Character customization screen
 - [x] Dedicated inventory/equipment/quest screens
-- [~] Friends, party, guild and trading screens
+- [x] Friends, party, guild and trading screens
 - [~] Polished responsive visual design and accessibility audit
 - [x] Privacy and notification settings screen
 
@@ -207,8 +207,9 @@ The-Peak-Adventure-/
 - [x] Basic application logging
 - [x] Admin dashboard and role permissions
 - [~] Anti-cheat and economy abuse detection
-- [~] Rate limiting and abuse protection audit
-- [x] Database backup and restore automation
+- [x] Rate limiting and abuse protection audit
+- [x] SQLite backup and restore automation
+- [ ] Durable PostgreSQL backup and restore automation
 - [x] Privacy controls and data deletion workflow
 - [~] Production monitoring and alerting
 
@@ -222,16 +223,16 @@ The-Peak-Adventure-/
 - [ ] Live Telegram bot test
 - [~] Multiplayer concurrency testing
 - [~] Security and load testing
-- [~] Docker configuration present; Heroku deployment blocked on PostgreSQL persistence and durable backups
+- [x] Render/Docker deployment configuration
 - [~] Production hosting and HTTPS launch
 - [ ] Persistent production database verification
 
 ## Progress summary
-- Total tracked tasks: **171**
-- Fully implemented: **152**
-- Partially implemented: **17**
-- Pending: **2**
-- Fully implemented coverage: **89%** (152 / 171; partial and pending items are not counted as complete).
+- Total tracked tasks: **172**
+- Fully implemented: **155**
+- Partially implemented: **14**
+- Pending: **3**
+- Fully implemented coverage: **90%** (155 / 172; partial and pending items are not counted as complete).
 
 Coverage is implementation-checklist progress, not proof of live production readiness.
 
@@ -244,10 +245,11 @@ Coverage is implementation-checklist progress, not proof of live production read
 6. Mark a feature fully complete only after the required verification has passed.
 
 ## Latest automated verification
-- GitHub Actions PR run: **#1130 — SUCCESS** on the HTTP integration-test branch.
-- Python suite: **518 tests passed**.
-- Mini App pathfinding Node tests: **10 passed**.
-- Cloudflare Worker Node tests: **35 passed**.
+- GitHub Actions PR run: **#1521 — SUCCESS** on PR #124 at commit `01a33b738ab94078f22406691989624a456e150f`.
+- Python suite: **794 tests passed**.
+- PostgreSQL integration: **158 adapter, 5 matchmaking and 1 Mini App HTTP tests passed**.
+- Mini App pathfinding Node tests: **15 passed**.
+- Cloudflare Worker Node tests: **36 passed**.
 - Python compile and `import main`: passed.
 - Cloudflare embedded asset parity and JavaScript syntax checks: passed.
 - HTTP-level Mini App checks: Telegram initData HMAC auth, unauthenticated rejection, health endpoint, static entrypoint, rate limiting, exploration and persisted active-battle state.

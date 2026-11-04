@@ -1,7 +1,7 @@
 import asyncio
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from pathlib import Path
 import aiosqlite
 from auction_system import *
@@ -18,6 +18,20 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         INSERT INTO players VALUES(2,1000,'Rusty Sword',0,'Dragon Mail',40);
         INSERT INTO players VALUES(3,1000,'Rusty Sword',0,'Traveler Clothes',0);
         CREATE TABLE battles(user_id INTEGER PRIMARY KEY);
+        CREATE TABLE duels(
+          duel_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          challenger_id INTEGER NOT NULL,opponent_id INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+        CREATE TABLE trades(
+          trade_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          initiator_id INTEGER NOT NULL,partner_id INTEGER NOT NULL,
+          status TEXT NOT NULL
+        );
+        CREATE TABLE matchmaking_queue(user_id INTEGER PRIMARY KEY,status TEXT NOT NULL,queued_at INTEGER NOT NULL DEFAULT 0);
+        CREATE TABLE dungeon_runs(user_id INTEGER PRIMARY KEY,status TEXT NOT NULL);
+        CREATE TABLE party_members(party_id INTEGER,user_id INTEGER);
+        CREATE TABLE party_battles(battle_id INTEGER PRIMARY KEY,party_id INTEGER,status TEXT NOT NULL);
         """)
         await init_auction_tables(self.db)
     async def asyncTearDown(self): await self.db.close()
@@ -62,6 +76,12 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         await cancel_listing(self.db,1,listing,now=1001)
         row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
         self.assertEqual(tuple(await row.fetchone()),("Stormblade",25))
+
+    async def test_cancel_listing_takes_cross_mode_player_lock(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        with patch("auction_system._lock_player_for_equipment", new_callable=AsyncMock) as player_lock:
+            await cancel_listing(self.db,1,listing,now=1001)
+        player_lock.assert_awaited_once_with(self.db,1)
     async def test_cannot_cancel_after_bid(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)
         await place_bid(self.db,2,listing,100,now=1001)
@@ -102,6 +122,116 @@ class AuctionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await row.fetchone())["weapon"],"Rusty Sword")
         stash=await list_stash(self.db,2)
         self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_list_or_equip_items_during_active_duel(self):
+        await self.db.execute("INSERT INTO duels(challenger_id,opponent_id,status) VALUES(1,2,'active')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
+
+    async def test_cannot_list_or_equip_items_during_open_trade(self):
+        await self.db.execute("INSERT INTO trades(initiator_id,partner_id,status) VALUES(1,2,'open')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+    async def test_auction_expiry_stashes_gear_if_buyer_is_in_a_duel(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await place_bid(self.db,2,listing,100,now=1001)
+        await self.db.execute("INSERT INTO duels(challenger_id,opponent_id,status) VALUES(2,3,'active')")
+        await self.db.commit()
+        await list_active_auctions(self.db,now=1000+24*3600+1)
+
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=2")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        stash=await list_stash(self.db,2)
+        self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_auction_expiry_returns_seller_item_to_stash_during_duel(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await self.db.execute("INSERT INTO duels(challenger_id,opponent_id,status) VALUES(1,2,'active')")
+        await self.db.commit()
+        await list_active_auctions(self.db,now=1000+24*3600+1)
+
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=1")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        stash=await list_stash(self.db,1)
+        self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_list_or_equip_items_while_queued_for_pvp(self):
+        await self.db.execute("INSERT INTO matchmaking_queue(user_id,status) VALUES(1,'matched')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
+
+    async def test_auction_expiry_stashes_gear_if_buyer_is_queued(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await place_bid(self.db,2,listing,100,now=1001)
+        await self.db.execute("INSERT INTO matchmaking_queue(user_id,status) VALUES(2,'matched')")
+        await self.db.commit()
+        await list_active_auctions(self.db,now=1000+24*3600+1)
+
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=2")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        stash=await list_stash(self.db,2)
+        self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_change_equipment_during_active_dungeon(self):
+        await self.db.execute("INSERT INTO dungeon_runs(user_id,status) VALUES(1,'active')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
+
+    async def test_auction_expiry_stashes_gear_if_buyer_is_in_a_dungeon(self):
+        listing=await create_listing(self.db,1,"weapon",100,now=1000)
+        await place_bid(self.db,2,listing,100,now=1001)
+        await self.db.execute("INSERT INTO dungeon_runs(user_id,status) VALUES(2,'active')")
+        await self.db.commit()
+        await list_active_auctions(self.db,now=1000+24*3600+1)
+
+        row=await self.db.execute("SELECT weapon,weapon_attack FROM players WHERE user_id=2")
+        self.assertEqual(tuple(await row.fetchone()),("Rusty Sword",0))
+        stash=await list_stash(self.db,2)
+        self.assertEqual(stash[0]["item_name"],"Stormblade")
+
+    async def test_cannot_list_or_equip_items_during_active_party_battle(self):
+        await self.db.execute("INSERT INTO party_members(party_id,user_id) VALUES(10,1)")
+        await self.db.execute("INSERT INTO party_battles(battle_id,party_id,status) VALUES(1,10,'active')")
+        await self.db.commit()
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await create_listing(self.db,1,"weapon",100,now=1000)
+
+        await self.db.execute(
+            "INSERT INTO auction_stash(user_id,slot,item_name,item_stat,created_at) VALUES(1,'weapon','Stormblade',25,1000)"
+        )
+        await self.db.commit()
+        stash = await list_stash(self.db,1)
+        with self.assertRaisesRegex(AuctionError,"active duel, trade, PvP queue, dungeon, or party battle"):
+            await equip_stashed_item(self.db,1,stash[0]["stash_id"])
 
     async def test_auction_ids_bids_and_timestamps_reject_invalid_types(self):
         listing=await create_listing(self.db,1,"weapon",100,now=1000)

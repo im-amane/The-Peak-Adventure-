@@ -265,6 +265,35 @@ async def join_matchmaking(
         (stamp, user_id, stamp - MAX_QUEUE_WAIT_SECONDS),
     )
 
+    battle = await db.execute("SELECT 1 FROM battles WHERE user_id=? LIMIT 1", (user_id,))
+    if await battle.fetchone():
+        raise MatchmakingError("Finish your active PvE battle before joining matchmaking.")
+    duel = await db.execute(
+        "SELECT 1 FROM duels WHERE status IN ('pending','active') AND (challenger_id=? OR opponent_id=?) LIMIT 1",
+        (user_id, user_id),
+    )
+    if await duel.fetchone():
+        raise MatchmakingError("Finish or decline your active duel before joining matchmaking.")
+    trade = await db.execute(
+        "SELECT 1 FROM trades WHERE status IN ('pending','open') AND (initiator_id=? OR partner_id=?) LIMIT 1",
+        (user_id, user_id),
+    )
+    if await trade.fetchone():
+        raise MatchmakingError("Finish or cancel your active trade before joining matchmaking.")
+    dungeon = await db.execute(
+        "SELECT 1 FROM dungeon_runs WHERE user_id=? AND status='active' LIMIT 1",
+        (user_id,),
+    )
+    if await dungeon.fetchone():
+        raise MatchmakingError("Finish or abandon your active dungeon before joining matchmaking.")
+    party_battle = await db.execute(
+        """SELECT 1 FROM party_members pm JOIN party_battles pb ON pb.party_id=pm.party_id
+           WHERE pm.user_id=? AND pb.status='active' LIMIT 1""",
+        (user_id,),
+    )
+    if await party_battle.fetchone():
+        raise MatchmakingError("Finish your party's active co-op battle before joining matchmaking.")
+
     cursor = await db.execute(
         "SELECT level,pvp_wins,pvp_losses FROM players WHERE user_id=?",
         (user_id,),

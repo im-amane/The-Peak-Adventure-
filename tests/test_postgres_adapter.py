@@ -126,6 +126,13 @@ class QmarkTranslationTests(unittest.TestCase):
 
         self.assertTrue(_is_write_statement("SELECT * FROM players FOR UPDATE"))
 
+    def test_transaction_advisory_lock_is_classified_as_transactional(self):
+        from postgres_adapter import _is_write_statement
+
+        self.assertTrue(
+            _is_write_statement("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")
+        )
+
     def test_begin_immediate_is_normalized_for_execute_paths(self):
         from postgres_adapter import _prepare_statement
 
@@ -258,6 +265,35 @@ class PsycopgAdapterIntegrationTests(unittest.IsolatedAsyncioTestCase):
             await self.db.release_player_lock(user_id)
             await asyncio.wait_for(waiting, timeout=2)
             await other.release_player_lock(user_id)
+        finally:
+            if other.in_transaction:
+                await other.rollback()
+            await other.close()
+
+    async def test_transaction_advisory_lock_is_held_until_commit(self):
+        other = await PostgresConnection.connect(os.environ["TEST_POSTGRES_URL"])
+        lock_name = "peak-adventure-test-lock:" + uuid.uuid4().hex
+        try:
+            await self.db.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                (lock_name,),
+            )
+            self.assertTrue(self.db.in_transaction)
+
+            async def acquire_from_other_connection():
+                cursor = await other.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                    (lock_name,),
+                )
+                await cursor.fetchone()
+
+            waiting = asyncio.create_task(acquire_from_other_connection())
+            await asyncio.sleep(0.05)
+            self.assertFalse(waiting.done(), "transaction advisory lock was released before commit")
+
+            await self.db.commit()
+            await asyncio.wait_for(waiting, timeout=2)
+            await other.commit()
         finally:
             if other.in_transaction:
                 await other.rollback()
