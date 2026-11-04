@@ -5,6 +5,7 @@ from economy_balance import (
     audit_shop_affordability,
     calculate_battle_coin_reward,
     wins_to_afford,
+    validate_shop_affordability,
 )
 from main import SHOP_ITEMS
 
@@ -32,6 +33,21 @@ class EconomyBalanceTests(unittest.TestCase):
         self.assertTrue(all(row["wins_to_afford"] >= 1 for row in report))
         self.assertTrue(all(row["coins_per_win"] > 0 for row in report))
         self.assertLessEqual(max(row["wins_to_afford"] for row in report), 5)
+
+    def test_live_shop_catalog_stays_within_five_clean_wins(self):
+        report = validate_shop_affordability(SHOP_ITEMS, max_wins=5)
+        self.assertEqual(len(report), len(SHOP_ITEMS))
+
+    def test_shop_affordability_guard_rejects_unreachable_price_spike(self):
+        broken = {key: dict(item) for key, item in SHOP_ITEMS.items()}
+        broken["flame_sword"]["cost"] = 50_000
+        with self.assertRaisesRegex(ValueError, "progression budget"):
+            validate_shop_affordability(broken, max_wins=5)
+
+    def test_shop_affordability_guard_rejects_invalid_budget(self):
+        for value in (True, 0, -1, 1.5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                validate_shop_affordability(SHOP_ITEMS, max_wins=value)
 
     def test_report_exposes_progression_costs_in_unlock_order(self):
         report = audit_shop_affordability(SHOP_ITEMS)
