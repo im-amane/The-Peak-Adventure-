@@ -32,6 +32,8 @@ def validate_story_campaign() -> None:
         for field in ("title", "npc", "scene"):
             if not isinstance(chapter.get(field), str) or not chapter[field].strip():
                 raise ValueError(f"Story chapter {expected_id} is missing {field} content.")
+        if len(chapter["scene"].split()) < 20:
+            raise ValueError(f"Story chapter {expected_id} scene is too short for cinematic presentation.")
         choices = chapter.get("choices")
         if (not isinstance(choices, dict) or len(choices) < 2
                 or any(not isinstance(key, str) or not key.strip()
