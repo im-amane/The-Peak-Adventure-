@@ -1237,8 +1237,11 @@
           divider.lineBetween(zone.startX,h*0.49,zone.startX,h*0.96);
         }
       });
-      this.hero=makeHero(this,layout.spawn.x,layout.spawn.y,gameState.hero_class,gameState.appearance);
-      this.heroBaseScaleX=this.hero.scaleX||1;
+      const heroProfile=window.PeakCharacters.resolveCharacterProfile(gameState.hero_class,gameState.appearance);
+      this.hero=window.PeakCharacterAnimation.createSpriteSheet(
+        this,heroProfile,layout.spawn.x,layout.spawn.y
+      )||makeHero(this,layout.spawn.x,layout.spawn.y,gameState.hero_class,gameState.appearance);
+      this.heroBaseScaleX=this.hero.scaleX||heroProfile.bodyScale||1;
       this.heroFacing=1;
       this.cameras.main.setBounds(0,0,this.worldWidth,this.worldHeight);
       this.cameras.main.startFollow(this.hero,true,0.08,0.08);
@@ -1491,6 +1494,14 @@
       this.heroAnimationState=animationPose.state;
       this.heroFacingDirection=animationPose.facing;
       this.heroAnimationFrame=animationPose.frameIndex;
+      if(this.hero.characterAnimations){
+        const animation=this.hero.characterAnimations.find(entry =>
+          entry.state===animationPose.state && entry.facing===animationPose.facing
+        );
+        if(animation && (!this.hero.anims.currentAnim || this.hero.anims.currentAnim.key!==animation.key)){
+          this.hero.play(animation.key,true);
+        }
+      }
       if(this.hero.limbs){
         this.hero.limbs.leftArm.rotation=animationPose.leftArm;
         this.hero.limbs.rightArm.rotation=animationPose.rightArm;
