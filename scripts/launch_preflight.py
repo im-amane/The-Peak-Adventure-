@@ -32,13 +32,7 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
     else:
         try:
             parsed = urlsplit(webapp_url)
-            valid = (
-                parsed.scheme == "https"
-                and bool(parsed.hostname)
-                and parsed.username is None
-                and parsed.password is None
-                and not parsed.fragment
-            )
+            valid = parsed.scheme == "https" and bool(parsed.hostname) and parsed.username is None and parsed.password is None and not parsed.fragment
         except ValueError:
             valid = False
         if not valid:
@@ -68,12 +62,7 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
     if database_url:
         try:
             parsed_db = urlsplit(database_url)
-            valid_db = (
-                parsed_db.scheme in {"postgres", "postgresql"}
-                and bool(parsed_db.hostname)
-                and bool(parsed_db.username)
-                and bool(parsed_db.path.strip("/"))
-            )
+            valid_db = parsed_db.scheme in {"postgres", "postgresql"} and bool(parsed_db.hostname) and bool(parsed_db.username) and bool(parsed_db.path.strip("/"))
         except ValueError:
             valid_db = False
         if not valid_db:
@@ -92,13 +81,25 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
     except (TypeError, ValueError):
         add("backup_interval_invalid", "error", "BACKUP_INTERVAL_SECONDS must be at least 3600 seconds.")
 
-    # The application writes snapshots to a local directory only. A persistent
-    # disk protects against process restarts, not loss of the host or disk itself.
-    add(
-        "offsite_backup_not_configured",
-        "warning",
-        "Backups are written locally; configure an independent off-site export and rehearse a restore before production use.",
-    )
+    offsite_bucket = str(env.get("OFFSITE_BACKUP_BUCKET", "")).strip()
+    if not offsite_bucket:
+        add("offsite_backup_not_configured", "warning", "Backups remain on local storage; configure OFFSITE_BACKUP_BUCKET and credentials for independent off-site copies.")
+    elif not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", offsite_bucket):
+        add("offsite_backup_bucket_invalid", "error", "OFFSITE_BACKUP_BUCKET must be a valid S3 bucket name.")
+    else:
+        endpoint = str(env.get("OFFSITE_BACKUP_ENDPOINT_URL", "")).strip()
+        if endpoint:
+            try:
+                parsed_endpoint = urlsplit(endpoint)
+                valid_endpoint = parsed_endpoint.scheme in {"https", "http"} and bool(parsed_endpoint.hostname) and parsed_endpoint.username is None and parsed_endpoint.password is None
+            except ValueError:
+                valid_endpoint = False
+            if not valid_endpoint:
+                add("offsite_backup_endpoint_invalid", "error", "OFFSITE_BACKUP_ENDPOINT_URL must be an HTTP(S) endpoint without embedded credentials.")
+        region = str(env.get("OFFSITE_BACKUP_REGION", env.get("AWS_REGION", "us-east-1"))).strip()
+        if not re.fullmatch(r"[a-z]{2}(?:-gov)?-[a-z]+-\\d", region):
+            add("offsite_backup_region_invalid", "error", "OFFSITE_BACKUP_REGION must be a valid AWS-style region identifier.")
+        add("offsite_restore_rehearsal_required", "warning", "Off-site upload is configured, but periodically download an archived object and rehearse a restore before production use.")
 
     backup_retention = str(env.get("BACKUP_RETENTION", "7")).strip()
     try:
