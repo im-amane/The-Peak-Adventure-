@@ -301,39 +301,43 @@
   function renderStory(chapters) {
     if (!ui.storyChapters) return;
     ui.storyChapters.replaceChildren();
-    chapters.forEach(chapter=>{
-      const card=document.createElement("article");card.className="story-chapter";
-      const title=document.createElement("h3");title.textContent=(chapter.completed?"✅ ":chapter.unlocked?"🔓 ":"🔒 ")+chapter.id+". "+chapter.title;card.appendChild(title);
-      const meta=document.createElement("p");meta.textContent=chapter.npc+" · World "+chapter.world+" · Lv."+chapter.level;card.appendChild(meta);
-      if (chapter.unlocked || chapter.completed) {
-        const scene=document.createElement("p");scene.textContent=chapter.scene;card.appendChild(scene);
-      } else {
-        const locked=document.createElement("p");
-        locked.textContent=chapter.requires_party
-          ? "Reach level "+chapter.level+", complete the previous chapter, and join a party."
-          : "Reach level "+chapter.level+" and complete the previous chapter.";
-        card.appendChild(locked);
-      }
+    const rows=Array.isArray(chapters)?chapters:[];
+    const done=rows.filter(chapter=>chapter.completed).length;
+    const progress=document.createElement("div");progress.className="story-progress";
+    const label=document.createElement("p");label.className="story-progress-label";label.textContent=done+" of "+rows.length+" chapters completed";progress.appendChild(label);
+    const track=document.createElement("div");track.className="story-progress-track";track.setAttribute("role","progressbar");track.setAttribute("aria-label","Story chapter completion");track.setAttribute("aria-valuemin","0");track.setAttribute("aria-valuemax",String(rows.length));track.setAttribute("aria-valuenow",String(done));
+    const fill=document.createElement("span");fill.className="story-progress-fill";fill.style.width=(rows.length?done/rows.length*100:0)+"%";track.appendChild(fill);progress.appendChild(track);ui.storyChapters.appendChild(progress);
+    const emblems=["🏮","🧭","🌳","🔔","👑","❄️","🕳️","✨","⏳","🏔️"];
+    rows.forEach(chapter=>{
+      const card=document.createElement("article");card.className="story-chapter"+(chapter.completed?" is-complete":chapter.unlocked?" is-unlocked":" is-locked");
+      const heading=document.createElement("div");heading.className="story-chapter-heading";
+      const emblem=document.createElement("span");emblem.className="story-emblem";emblem.setAttribute("aria-hidden","true");emblem.textContent=emblems[chapter.id-1]||"📖";heading.appendChild(emblem);
+      const copy=document.createElement("div");copy.className="story-heading-copy";
+      const eyebrow=document.createElement("p");eyebrow.className="story-eyebrow";eyebrow.textContent="CHAPTER "+String(chapter.id).padStart(2,"0")+" · WORLD "+String(chapter.world).padStart(2,"0");copy.appendChild(eyebrow);
+      const title=document.createElement("h3");title.textContent=(chapter.completed?"✓ ":chapter.unlocked?"◆ ":"🔒 ")+chapter.title;copy.appendChild(title);heading.appendChild(copy);card.appendChild(heading);
+      const meta=document.createElement("p");meta.className="story-meta";meta.textContent="Featuring "+chapter.npc+" · Recommended level "+chapter.level;card.appendChild(meta);
+      if(chapter.unlocked||chapter.completed){
+        const scene=document.createElement("details");scene.className="story-scene";scene.open=Boolean(chapter.unlocked&&!chapter.completed);
+        const sentences=String(chapter.scene||"").match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[];
+        const summary=document.createElement("summary");summary.textContent=(scene.open?"Scene unfolding":"Read the cinematic scene")+" · "+sentences.length+" moments";scene.appendChild(summary);
+        const body=document.createElement("div");body.className="story-scene-body";
+        const narrator=document.createElement("p");narrator.className="story-narrator";narrator.textContent="A memory from the world of The Peak";body.appendChild(narrator);
+        sentences.forEach((sentence,index)=>{const line=document.createElement("p");line.className="story-line";line.style.setProperty("--scene-index",String(Math.min(index,8)));line.textContent=sentence.trim();body.appendChild(line);});
+        scene.appendChild(body);scene.addEventListener("toggle",()=>{summary.textContent=(scene.open?"Close the scene":"Read the cinematic scene")+" · "+sentences.length+" moments";});card.appendChild(scene);
+      }else{const locked=document.createElement("p");locked.className="story-locked-copy";locked.textContent=chapter.requires_party?"Reach level "+chapter.level+", complete the previous chapter, and join a party.":"Reach level "+chapter.level+" and complete the previous chapter.";card.appendChild(locked);}
       const choices=document.createElement("div");choices.className="story-choices";
-      if (chapter.completed) {
-        const selected=document.createElement("p");selected.textContent="Your choice: "+chapter.choices[chapter.choice];card.appendChild(selected);
-        if (chapter.reward_claimed) {
-          const claimed=document.createElement("p");claimed.textContent="Reward claimed.";card.appendChild(claimed);
-        } else {
-          const claim=document.createElement("button");claim.className="story-choice";claim.textContent="Claim "+chapter.reward+" coins";
-          claim.addEventListener("click",()=>storyAction({action:"claim",chapter_id:chapter.id}));choices.appendChild(claim);
-        }
-      } else if (chapter.unlocked) {
-        Object.entries(chapter.choices).forEach(([choiceId,description])=>{
-          const button=document.createElement("button");button.className="story-choice";button.textContent=description;
-          button.addEventListener("click",()=>storyAction({action:"choose",chapter_id:chapter.id,choice_id:choiceId}));
-          choices.appendChild(button);
-        });
+      if(chapter.completed){
+        const selected=document.createElement("p");selected.className="story-selected-choice";selected.textContent="Your decision · "+(chapter.choices[chapter.choice]||"Recorded");card.appendChild(selected);
+        if(chapter.reward_claimed){const claimed=document.createElement("p");claimed.className="story-reward-claimed";claimed.textContent="✓ "+chapter.reward+" coin reward claimed";choices.appendChild(claimed);}
+        else{const claim=document.createElement("button");claim.className="story-choice story-claim";claim.textContent="Claim chapter reward · "+chapter.reward+" coins";claim.addEventListener("click",()=>storyAction({action:"claim",chapter_id:chapter.id}));choices.appendChild(claim);}
+      }else if(chapter.unlocked){
+        const prompt=document.createElement("p");prompt.className="story-choice-prompt";prompt.textContent="YOUR CHOICE WILL SHAPE WHAT HAPPENS NEXT";choices.appendChild(prompt);
+        Object.entries(chapter.choices||{}).forEach(([choiceId,description])=>{const button=document.createElement("button");button.className="story-choice";button.textContent=description;button.addEventListener("click",()=>storyAction({action:"choose",chapter_id:chapter.id,choice_id:choiceId}));choices.appendChild(button);});
       }
       card.appendChild(choices);ui.storyChapters.appendChild(card);
     });
+    if(!rows.length){const empty=document.createElement("p");empty.className="small";empty.textContent="Your chronicle is waiting to begin.";ui.storyChapters.appendChild(empty);}
   }
-
   async function storyAction(payload) {
     if (requestInFlight) return;
     requestInFlight=true;
