@@ -5831,13 +5831,23 @@ async def fight_group_monster(message: Message):
     )
 
 
-@dp.message(F.chat.type.in_({"group","supergroup"}), F.text)
+@dp.message(F.chat.type.in_({"group","supergroup"}))
 async def count_group_chat_activity(message: Message):
-    """Count ordinary human chat messages; commands and Telegram service updates are excluded."""
+    """Count ordinary human text/media messages; commands and Telegram service updates are excluded."""
     if not message.from_user or message.from_user.is_bot:
         return
-    text_value=(message.text or "").strip()
-    if not text_value or text_value.startswith("/"):
+    command_text=(message.text or message.caption or "").strip()
+    if command_text.startswith("/"):
+        return
+    service_types={
+        "new_chat_members","left_chat_member","new_chat_title","new_chat_photo",
+        "delete_chat_photo","group_chat_created","supergroup_chat_created",
+        "channel_chat_created","migrate_to_chat_id","migrate_from_chat_id",
+        "pinned_message","forum_topic_created","forum_topic_edited",
+        "forum_topic_closed","forum_topic_reopened","video_chat_scheduled",
+        "video_chat_started","video_chat_ended","web_app_data",
+    }
+    if str(getattr(message,"content_type","")) in service_types:
         return
     try:
         event=await record_group_chat_message(db,message.chat.id,message.from_user.id,MONSTERS)
