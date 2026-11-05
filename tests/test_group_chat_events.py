@@ -90,8 +90,9 @@ class GroupChatEventTests(unittest.IsolatedAsyncioTestCase):
 
         victory = await attack_group_chat_event(self.db, -1001, 202, 80, now=1603, rng=self.rng)
         self.assertEqual(victory["status"], "won")
-        self.assertEqual([row["user_id"] for row in victory["participants"]], [101, 202])
-        self.assertEqual([row["damage"] for row in victory["participants"]], [40, 80])
+        # The leaderboard is sorted by damage descending, not by join order.
+        self.assertEqual([row["user_id"] for row in victory["participants"]], [202, 101])
+        self.assertEqual([row["damage"] for row in victory["participants"]], [80, 40])
         self.assertIsNone(await get_active_group_chat_event(self.db, -1001, now=1604))
 
     async def test_event_expires_and_cannot_be_attacked(self):
