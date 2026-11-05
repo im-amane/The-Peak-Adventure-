@@ -5826,8 +5826,8 @@ async def fight_group_monster(message: Message):
         return
     if result["status"]=="won":
         await message.answer(
-            f"🏆 <b>{escape(result['monster_name'])} defeated!</b>\\n"
-            f"Final blow: {escape(message.from_user.full_name)}\\n\\n🎁 <b>Participant rewards</b>\\n"+"\\n".join(rewards)
+            f"🏆 <b>{escape(result['monster_name'])} defeated!</b>\n"
+            f"Final blow: {escape(message.from_user.full_name)}\n\n🎁 <b>Participant rewards</b>\n"+"\n".join(rewards)
         )
         return
     await message.answer(
