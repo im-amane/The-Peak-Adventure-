@@ -41,7 +41,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 ## Setup
 1. Create a Telegram bot with @BotFather.
 2. Copy `.env.example` to `.env`.
-3. Set `BOT_TOKEN`, `WEBAPP_URL`, and `ADMIN_IDS`. `WEBAPP_URL` should be the Cloudflare Worker URL once the Python backend is deployed. For local SQLite development, leave `DATABASE_URL` unset and use `DATABASE_PATH`; PostgreSQL is selected only when `DATABASE_URL` is explicitly configured.
+3. Set `BOT_TOKEN`, `WEBAPP_URL`, and `ADMIN_IDS`. Add co-owner Telegram user IDs to `CO_OWNER_IDS`; co-owners receive the same `/admin`, moderation, operations-metrics, and ban-bypass permissions as IDs in `ADMIN_IDS`. The repository default includes the configured co-owner ID `8891272628`. `WEBAPP_URL` should be the Cloudflare Worker URL once the Python backend is deployed. For local SQLite development, leave `DATABASE_URL` unset and use `DATABASE_PATH`; PostgreSQL is selected only when `DATABASE_URL` is explicitly configured.
 4. Install Python 3.11+.
 5. Install dependencies and start the combined bot + web server:
 
