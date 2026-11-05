@@ -124,6 +124,8 @@ Keep `BOT_TOKEN` private. Never deploy production or provision paid resources wi
 - `/deleteaccount` - Request permanent player-data deletion with an explicit confirmation step
 - `/export` - Download your player data as JSON
 - `/group register|info|members|missions|claim|raid|ban|unban|top` - Telegram group progression and raids
+- `/group event` - View the active shared group monster and its damage leaderboard
+- `/fight` - Attack the active shared monster from inside a registered group
 - `/admin stats|player|coins|announce|security` - Restricted bot administration, audit log and suspicious-activity review
 - `/friend request|accept|decline|list|remove` - Friend requests and friend list (request by replying to a player in a group)
 - `/duel` - Challenge a player by replying to their message in a group
@@ -231,6 +233,18 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 - Public profiles appear in search; friends-only profiles are visible only to accepted friends.
 - Search results show the player ID and level. Friend requests can still be sent by replying to a player's message in a shared group.
 
+
+## Living Telegram group chat events
+
+Registered Telegram groups can trigger ambient monster encounters from ordinary chat activity:
+- The bot counts normal human text and media messages; commands, bot messages and Telegram service updates are ignored.
+- A random target of 150–200 messages and a random 10–20 minute cooldown must both be reached before a monster appears. The next eligible chat message performs the check.
+- Each group has one shared monster with shared HP. Use `/group event` to inspect its health and damage leaderboard, and `/fight` to attack.
+- Attacks have a 10-second per-player cooldown. A monster expires after 20 minutes if it survives.
+- Contributors earn coins on victory, with a bonus for the top damage contributor; the group also receives group XP.
+- The event state and damage contributions persist in the configured database.
+
+**Telegram setup requirement:** disable the bot's Group Privacy Mode in @BotFather so Telegram delivers ordinary group messages to the bot. The feature only counts activity in groups registered with `/group register`.
 
 ## Roaming world events
 - `/event` shows the shared active event for the player's current world.
