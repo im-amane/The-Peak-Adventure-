@@ -2139,7 +2139,8 @@ async def group_command(message: Message):
         await message.answer("Choose a hero class with /class first."); return
     await record_group_player(db,cid,uid,player["username"],player["level"])
     if action=="event":
-        event=await get_active_group_chat_event(db,cid)
+        async with db_lock:
+            event=await get_active_group_chat_event(db,cid)
         if not event:
             await message.answer("🌙 No monster is roaming here right now. Keep chatting; the next encounter needs both the message target and its random cooldown.")
             return
@@ -3228,7 +3229,6 @@ async def help_cmd(message: Message):
         "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 10 stamina)\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|campaign|raid|ban|unban|top - Telegram group features\n"
-        "/group event - View the shared group monster and damage leaderboard\n/fight - Attack the active group monster\n"
         "/group event - View the shared group monster and damage leaderboard\n/fight - Attack the active group monster\n"
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
@@ -5805,24 +5805,29 @@ async def fight_group_monster(message: Message):
     base_damage=max(1,hero["attack"]+player["weapon_attack"]+player["level"]*2)
     damage=random.randint(max(1,base_damage-2),base_damage+3)
     try:
-        result=await attack_group_chat_event(db,chat_id,user_id,damage)
+        # The bot shares one database connection across concurrent Telegram handlers.
+        # Serialize encounter mutations and victory payouts to prevent stale HP updates
+        # and duplicate rewards within this bot process.
+        async with db_lock:
+            result=await attack_group_chat_event(db,chat_id,user_id,damage)
+            if result["status"]=="won":
+                rewards=[]
+                for index,participant in enumerate(result["participants"]):
+                    reward=50+(participant["damage"]//10)+(25 if index==0 else 0)
+                    await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(reward,participant["user_id"]))
+                    rewards.append(f"{escape(participant['username'] or 'Adventurer')}: +{reward} coins")
+                await db.commit()
+                try:
+                    await record_group_activity_reward(db,chat_id,"battle",20)
+                except GroupError:
+                    log.exception("Unable to credit group activity XP after ambient monster victory")
     except GroupChatEventError as exc:
         await message.answer(escape(str(exc)))
         return
     if result["status"]=="won":
-        rewards=[]
-        for index,participant in enumerate(result["participants"]):
-            reward=50+(participant["damage"]//10)+(25 if index==0 else 0)
-            await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(reward,participant["user_id"]))
-            rewards.append(f"{escape(participant['username'] or 'Adventurer')}: +{reward} coins")
-        await db.commit()
-        try:
-            await record_group_activity_reward(db,chat_id,"battle",20)
-        except GroupError:
-            log.exception("Unable to credit group activity XP after ambient monster victory")
         await message.answer(
-            f"🏆 <b>{escape(result['monster_name'])} defeated!</b>\n"
-            f"Final blow: {escape(message.from_user.full_name)}\n\n🎁 <b>Participant rewards</b>\n"+"\n".join(rewards)
+            f"🏆 <b>{escape(result['monster_name'])} defeated!</b>\\n"
+            f"Final blow: {escape(message.from_user.full_name)}\\n\\n🎁 <b>Participant rewards</b>\\n"+"\\n".join(rewards)
         )
         return
     await message.answer(
@@ -5852,7 +5857,8 @@ async def count_group_chat_activity(message: Message):
     if str(content_type) in service_types:
         return
     try:
-        event=await record_group_chat_message(db,message.chat.id,message.from_user.id,MONSTERS)
+        async with db_lock:
+            event=await record_group_chat_message(db,message.chat.id,message.from_user.id,MONSTERS)
     except GroupChatEventError:
         log.exception("Could not process ambient group chat activity")
         return
