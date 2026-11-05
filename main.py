@@ -47,6 +47,7 @@ from report_system import ReportError, init_report_tables, list_open_reports, re
 from weekly_quest_system import WeeklyQuestError, claim_weekly_reward, get_weekly_quests, init_weekly_tables, record_weekly_progress
 from daily_mission_system import DailyMissionError, claim_daily_mission, get_daily_missions, init_daily_mission_tables, record_daily_progress
 from roaming_event_system import RoamingEventError, attack_roaming_event, claim_roaming_event_reward, get_or_create_roaming_event, init_roaming_event_tables
+from group_chat_event_system import GroupChatEventError, attack_group_chat_event, get_active_group_chat_event, init_group_chat_event_tables, record_group_chat_message
 from moderation_system import ModerationError, ban_player, get_active_ban, init_moderation_tables, unban_player
 from mana_system import ManaError, SKILL_MANA_COST, TURN_MANA_REGEN, consume_mana, get_mana, init_mana_tables, restore_mana
 from elite_system import is_elite_spawn, scale_elite_monster
@@ -418,6 +419,7 @@ async def init_game_schema(connection) -> None:
     await init_party_tables(connection)
     await init_matchmaking_tables(connection)
     await init_group_tables(connection)
+    await init_group_chat_event_tables(connection)
     await init_character_tables(connection)
     await init_account_tables(connection)
     await init_admin_tables(connection)
@@ -2136,6 +2138,16 @@ async def group_command(message: Message):
     if not player["class_selected"]:
         await message.answer("Choose a hero class with /class first."); return
     await record_group_player(db,cid,uid,player["username"],player["level"])
+    if action=="event":
+        event=await get_active_group_chat_event(db,cid)
+        if not event:
+            await message.answer("🌙 No monster is roaming here right now. Keep chatting; the next encounter needs both the message target and its random cooldown.")
+            return
+        lines=[f"👹 <b>{escape(event['monster_name'])}</b> · Lv.{event['monster_level']}",f"❤️ HP: {event['hp']}/{event['max_hp']}","Use /fight to attack."]
+        if event["participants"]:
+            lines.append("\n⚔️ <b>Damage leaderboard</b>")
+            lines.extend(f"{i}. {escape(row['username'] or 'Adventurer')} · {row['damage']} dmg" for i,row in enumerate(event["participants"][:5],1))
+        await message.answer("\n".join(lines)); return
     if action=="info":
         await message.answer(f"🏰 <b>{escape(profile['title'])}</b>\nLevel {profile['group_level']} · XP {profile['group_xp']}/{profile['group_level']*500}\nPlayers: {profile['player_count']} · Verified admins: {profile['admin_count']}\nOwner ID: <code>{profile['owner_id']}</code>"); return
     if action=="members":
@@ -5770,6 +5782,73 @@ async def start_web_server():
     await site.start()
     log.info("Mini App web server listening on %s:%s", WEB_HOST, WEB_PORT)
     return runner
+
+@dp.message(Command("fight"))
+async def fight_group_monster(message: Message):
+    if message.chat.type not in {"group","supergroup"}:
+        await message.answer("Use /fight inside a registered Telegram group.")
+        return
+    if not message.from_user or message.from_user.is_bot:
+        return
+    chat_id=message.chat.id
+    user_id=message.from_user.id
+    if await is_group_banned(db,chat_id,user_id):
+        await message.answer("⛔ You are blocked from this group's game features.")
+        return
+    player=await get_player(user_id,message.from_user.username or message.from_user.full_name)
+    if not player["class_selected"]:
+        await message.answer("Choose your hero class in DM with /class before fighting.")
+        return
+    hero=HERO_CLASSES.get(player["hero_class"],HERO_CLASSES["Knight"])
+    base_damage=max(1,hero["attack"]+player["weapon_attack"]+player["level"]*2)
+    damage=random.randint(max(1,base_damage-2),base_damage+3)
+    try:
+        result=await attack_group_chat_event(db,chat_id,user_id,damage)
+    except GroupChatEventError as exc:
+        await message.answer(escape(str(exc)))
+        return
+    if result["status"]=="won":
+        rewards=[]
+        for index,participant in enumerate(result["participants"]):
+            reward=50+(participant["damage"]//10)+(25 if index==0 else 0)
+            await db.execute("UPDATE players SET coins=coins+? WHERE user_id=?",(reward,participant["user_id"]))
+            rewards.append(f"{escape(participant['username'] or 'Adventurer')}: +{reward} coins")
+        await db.commit()
+        try:
+            await record_group_activity_reward(db,chat_id,"battle",20)
+        except GroupError:
+            log.exception("Unable to credit group activity XP after ambient monster victory")
+        await message.answer(
+            f"🏆 <b>{escape(result['monster_name'])} defeated!</b>\n"
+            f"Final blow: {escape(message.from_user.full_name)}\n\n🎁 <b>Participant rewards</b>\n"+"\n".join(rewards)
+        )
+        return
+    await message.answer(
+        f"⚔️ {escape(message.from_user.full_name)} hits <b>{escape(result['monster_name'])}</b> for {result['damage']} damage!\n"
+        f"❤️ Monster HP: {result['hp']}/{result['max_hp']}\nUse /group event to view the damage leaderboard."
+    )
+
+
+@dp.message(F.chat.type.in_({"group","supergroup"}), F.text)
+async def count_group_chat_activity(message: Message):
+    """Count ordinary human chat messages; commands and Telegram service updates are excluded."""
+    if not message.from_user or message.from_user.is_bot:
+        return
+    text_value=(message.text or "").strip()
+    if not text_value or text_value.startswith("/"):
+        return
+    try:
+        event=await record_group_chat_message(db,message.chat.id,message.from_user.id,MONSTERS)
+    except GroupChatEventError:
+        log.exception("Could not process ambient group chat activity")
+        return
+    if event:
+        await message.answer(
+            f"⚠️ <b>A monster has appeared!</b>\n\n👹 <b>{escape(event['monster_name'])}</b> · Lv.{event['monster_level']}\n"
+            f"❤️ HP: {event['hp']}/{event['max_hp']}\n\nAll heroes in this group can attack with /fight.\nUse /group event to check its status.",
+            disable_notification=False,
+        )
+
 
 async def main():
     if not TOKEN:
