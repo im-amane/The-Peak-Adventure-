@@ -61,7 +61,9 @@ from economy_balance import calculate_battle_coin_reward, validate_shop_affordab
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN", "").strip()
 PREMIUM_PAYMENTS_ENABLED = os.getenv("ENABLE_TELEGRAM_STARS", "false").strip().lower() in {"1", "true", "yes", "on"}
-ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", ""))
+# Co-owners receive the exact same bot-admin permissions as ADMIN_IDS.
+CO_OWNER_IDS = parse_admin_ids(os.getenv("CO_OWNER_IDS") or "8891272628")
+ADMIN_IDS = parse_admin_ids(os.getenv("ADMIN_IDS", "")) | CO_OWNER_IDS
 # PostgreSQL is opt-in; an invalid URL must fail startup rather than silently falling back.
 DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_PATH = os.getenv("DATABASE_PATH", "peak_adventure.db")
