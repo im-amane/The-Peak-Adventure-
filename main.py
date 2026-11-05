@@ -5847,7 +5847,9 @@ async def count_group_chat_activity(message: Message):
         "forum_topic_closed","forum_topic_reopened","video_chat_scheduled",
         "video_chat_started","video_chat_ended","web_app_data",
     }
-    if str(getattr(message,"content_type","")) in service_types:
+    content_type=getattr(message,"content_type","")
+    content_type=getattr(content_type,"value",content_type)
+    if str(content_type) in service_types:
         return
     try:
         event=await record_group_chat_message(db,message.chat.id,message.from_user.id,MONSTERS)
