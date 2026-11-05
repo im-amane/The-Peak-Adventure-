@@ -76,10 +76,13 @@ class GroupChatEventTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(active["participants"], [])
 
     async def test_shared_hp_cooldown_leaderboard_and_victory(self):
-        for _ in range(150):
+        for _ in range(149):
             await record_group_chat_message(
-                self.db, -1001, 101, self.monsters, now=1600, rng=self.rng
+                self.db, -1001, 101, self.monsters, now=1000, rng=self.rng
             )
+        await record_group_chat_message(
+            self.db, -1001, 101, self.monsters, now=1600, rng=self.rng
+        )
         first = await attack_group_chat_event(self.db, -1001, 101, 40, now=1601, rng=self.rng)
         self.assertEqual(first["hp"], 80)
         with self.assertRaisesRegex(GroupChatEventError, "cooldown"):
@@ -92,10 +95,13 @@ class GroupChatEventTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(await get_active_group_chat_event(self.db, -1001, now=1604))
 
     async def test_event_expires_and_cannot_be_attacked(self):
-        for _ in range(150):
+        for _ in range(149):
             await record_group_chat_message(
-                self.db, -1001, 101, self.monsters, now=1600, rng=self.rng
+                self.db, -1001, 101, self.monsters, now=1000, rng=self.rng
             )
+        await record_group_chat_message(
+            self.db, -1001, 101, self.monsters, now=1600, rng=self.rng
+        )
         with self.assertRaisesRegex(GroupChatEventError, "escaped"):
             await attack_group_chat_event(self.db, -1001, 101, 10, now=1600 + 20 * 60, rng=self.rng)
         self.assertIsNone(await get_active_group_chat_event(self.db, -1001, now=1600 + 20 * 60))
