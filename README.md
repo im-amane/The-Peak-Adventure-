@@ -237,7 +237,7 @@ Authenticated Mini App API requests use a per-Telegram-player sliding-window lim
 ## Living Telegram group chat events
 
 Registered Telegram groups can trigger ambient monster encounters from ordinary chat activity:
-- The bot counts normal human text messages only; commands, bot messages and service updates are ignored.
+- The bot counts normal human text and media messages; commands, bot messages and Telegram service updates are ignored.
 - A random target of 150–200 messages and a random 10–20 minute cooldown must both be reached before a monster appears. The next eligible chat message performs the check.
 - Each group has one shared monster with shared HP. Use `/group event` to inspect its health and damage leaderboard, and `/fight` to attack.
 - Attacks have a 10-second per-player cooldown. A monster expires after 20 minutes if it survives.
