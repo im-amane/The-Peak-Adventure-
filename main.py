@@ -3228,6 +3228,7 @@ async def help_cmd(message: Message):
         "/party create|invite|accept|decline|info|leave|disband - Party management\n/party battle start|status|attack - Co-op boss fights (start costs 10 stamina)\n"
         "/guild create|join|leave|info|top|disband|chat|history - Guild management\n"
         "/group register|info|members|missions|claim|campaign|raid|ban|unban|top - Telegram group features\n"
+        "/group event - View the shared group monster and damage leaderboard\n/fight - Attack the active group monster\n"
         "/report player_id reason - Report a player\n/admin - Bot administration (authorized IDs only; includes report review)\n/export - Download your account data\n"
         "/trade - Start a trade by replying to a player\n/offer, /confirmtrade, /canceltrade - Manage trades\n"
                 "/auction - Browse; /auction sell weapon|armor price [hours]\n/auction cancel ID; /bid ID amount\n/auction stash; /auction equip ID\n"
