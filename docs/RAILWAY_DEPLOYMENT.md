@@ -1,35 +1,69 @@
 # Railway Deployment Runbook
 
-This guide deploys the current single-process Telegram bot + HTTP API prototype to Railway.
+This repository is prepared for Railway's current Infrastructure as Code workflow and its existing root Dockerfile.
 
-## Current deployment shape
+## What the repository defines
 
-- Source: `im-amane/The-Peak-Adventure-`, branch `main`.
-- Runtime: existing `Dockerfile` (Python 3.11, PostgreSQL client tools, `python main.py`).
-- HTTP listener: binds to `0.0.0.0` and reads Railway's injected `PORT`.
-- Health check: `/healthz`.
-- Telegram updates: long polling in the same process as the HTTP API.
-- Database for the first Railway deployment: SQLite on a Railway Volume mounted at `/data`.
-- Keep exactly **one replica**. Multiple replicas would compete for Telegram polling and are not supported by this SQLite prototype.
+- GitHub source: `im-amane/The-Peak-Adventure-`, branch `main`.
+- Docker build: root `Dockerfile` (Python 3.11, PostgreSQL client tools, `python main.py`).
+- One Singapore replica only: Telegram long polling and SQLite currently run in one process.
+- Persistent Railway volume: 1 GB mounted at `/data`.
+- SQLite database: `/data/peak_adventure.db`.
+- Health check: `/healthz`, with a 300-second startup timeout.
+- Cloudflare Worker remains the public Mini App edge.
 
-## Create the Railway service
+The Railway project definition is `.railway/railway.ts`. It is applied explicitly through the Railway CLI. Railway does not execute this file as part of each Docker build.
 
-1. Open [Railway](https://railway.com/) and create a project.
-2. Choose **Deploy from GitHub Repo** and connect `im-amane/The-Peak-Adventure-`.
-3. Select branch `main`. Railway will detect the repository's root `Dockerfile`; do not replace its start command.
-4. In the service settings, set the health check path to `/healthz` and allow up to 300 seconds for startup.
-5. Keep the service at one replica. Do not enable horizontal scaling.
-6. In **Volumes**, create a persistent volume and mount it at `/data`. Do not deploy this SQLite setup without the volume: Railway's container filesystem is not a durable database location.
-7. In **Networking**, generate a public domain after the first successful deployment.
+## Create and apply the Railway project
 
-## Service variables
+1. Create or sign in to your account at [Railway](https://railway.com/).
+2. Install the Railway CLI using Railway's current installation instructions.
+3. From the repository root, install the IaC SDK:
 
-Add these in the Railway service's **Variables** tab. Put secret values directly into Railway; never commit them to GitHub or paste them into source files.
+   ```bash
+   npm install --prefix .railway
+   ```
+
+4. Authenticate and link the local repository to the Railway project/environment you intend to use:
+
+   ```bash
+   railway login
+   railway link
+   ```
+
+   If the project does not exist yet, create it in the Railway dashboard first. Select the intended environment when linking.
+
+5. Preview the infrastructure changes:
+
+   ```bash
+   railway config plan
+   ```
+
+   Confirm the plan creates one service named `peak-adventure`, one volume named `peak-adventure-data`, and exactly one replica in `asia-southeast1`. Review any proposed deletion or replacement carefully. Do not apply a plan that would destroy an existing volume containing player data.
+
+6. Apply only after reviewing the plan:
+
+   ```bash
+   railway config apply
+   ```
+
+This creates or manages the service and volume described by `.railway/railway.ts`. It does not create secrets or a public domain.
+
+## Required secret variables
+
+In the Railway service's **Variables** tab, add:
 
 | Variable | Value |
 | --- | --- |
-| `BOT_TOKEN` | Telegram bot token from BotFather |
+| `BOT_TOKEN` | Real Telegram bot token from BotFather |
 | `ADMIN_IDS` | Owner's numeric Telegram user ID; comma-separated for multiple admins |
+
+Never place either value in GitHub, this config file, source code, or chat. Do not add `DATABASE_URL` for the initial SQLite deployment.
+
+The IaC file already sets the non-secret runtime values:
+
+| Variable | Value |
+| --- | --- |
 | `WEBAPP_URL` | `https://peak-adventure-edge.thepeakadventure.workers.dev` |
 | `DATABASE_PATH` | `/data/peak_adventure.db` |
 | `BACKUP_DIR` | `/data/backups` |
@@ -41,38 +75,39 @@ Add these in the Railway service's **Variables** tab. Put secret values directly
 | `ENABLE_TELEGRAM_STARS` | `false` |
 | `LOG_LEVEL` | `INFO` |
 
-The app already reads Railway's injected `PORT`; do not hard-code a port or override `PORT` unless Railway specifically requires it.
+Railway injects `PORT`; the application reads it automatically. Do not set a fixed `PORT` unless Railway support specifically requires it. The configured co-owner default is retained in the application; change `CO_OWNER_IDS` only if needed.
 
-For this initial SQLite prototype, **leave `DATABASE_URL` unset**. The application treats a configured `DATABASE_URL` as an explicit PostgreSQL selection and will fail startup if that database is unavailable. Do not attach PostgreSQL or run the SQLite-to-PostgreSQL migration as part of a normal deploy. That migration has a separate guarded runbook and requires a verified backup and explicit maintenance approval.
+## Connect the Cloudflare Mini App gateway
 
-`CO_OWNER_IDS` currently has a code default. Set it in Railway only if the co-owner list needs to be changed.
+1. In Railway, open the service's **Networking** settings and generate a public domain.
+2. Copy the exact HTTPS origin Railway assigns, without a path or trailing route.
+3. In Cloudflare, open Worker `peak-adventure-edge` → **Settings** → **Variables and Secrets**.
+4. Set `BACKEND_ORIGIN` as a secret to that exact Railway origin.
+5. Keep `WEBAPP_URL` set to the existing Worker URL and confirm its hostname is registered with BotFather as the Telegram Mini App domain.
 
-## Connect the Mini App edge
-
-After Railway generates the service domain:
-
-1. Copy the exact HTTPS origin, for example `https://your-service.up.railway.app` (use the real domain Railway assigns).
-2. In Cloudflare, open Worker `peak-adventure-edge` → **Settings** → **Variables and Secrets**.
-3. Set `BACKEND_ORIGIN` as a secret to the exact Railway origin, with no trailing path.
-4. Keep the Mini App's public URL in `WEBAPP_URL` and ensure its hostname is registered with BotFather as the Telegram Mini App domain.
-
-Do not put a placeholder Railway domain into Cloudflare.
+Do not use a placeholder Railway domain. Do not put `BOT_TOKEN` in Cloudflare.
 
 ## Deploy and verify
 
-1. Trigger the first deployment from Railway.
-2. Check the deployment build and runtime logs. Startup must complete without a missing-token, database, or schema error.
-3. Open `https://YOUR-REAL-RAILWAY-DOMAIN/healthz`. Expected response: HTTP 200 with `{"ok":true,"service":"peak-adventure","database":"ok"}`.
-4. In Telegram, send `/start`, register a test player, and select a class.
-5. Open the Mini App and verify the profile, map, encounter, battle result, rewards, and saved progress.
-6. Restart/redeploy the service and confirm the same player progress remains. Confirm backups are written under `/data`.
+1. Trigger the initial deployment from the Railway service after variables are set.
+2. Confirm the build uses the repository's root `Dockerfile`.
+3. Inspect runtime logs. The bot must initialize the database, start the HTTP listener on Railway's injected port, and begin Telegram polling.
+4. Open `https://YOUR-REAL-RAILWAY-DOMAIN/healthz`. Expected response is HTTP 200 with `{"ok":true,"service":"peak-adventure","database":"ok"}`.
+5. In Telegram, send `/start`, register a test player, and select a class.
+6. Open the Mini App and verify the player profile, map, encounter, battle result, rewards, and saved progress.
+7. Restart/redeploy once and confirm the same player progress remains. Confirm backup files appear under `/data/backups`.
 
-Do not describe the game as live-tested until these checks have passed against the real Telegram bot and Android Telegram client.
+Do not describe the game as live-tested until these checks pass against the real Telegram bot and Android Telegram client.
 
-## Important prototype limits
+## Important operating limits
 
-- This is a controlled, single-instance prototype, not production certification.
-- Railway's persistent volume is required for SQLite durability. Keep one replica and do not run a second copy of the bot against the same bot token.
-- Local backups on the same volume are not off-site disaster recovery. Configure and test an independent backup destination before storing valuable player progress.
-- Telegram Stars remain disabled. Do not enable payments or invite public players until security, restore, concurrency, restart, and load checks are complete.
-- Railway resources may incur charges. Review the current Railway plan, resource usage, and volume pricing before creating or scaling paid resources.
+- Keep exactly one replica and do not run another process with the same bot token. Multiple Telegram polling instances compete for updates; the current SQLite setup is single-instance only.
+- The persistent volume is essential. Without it, player progress stored in SQLite is not durable across replacement deployments.
+- Railway health checks gate deployment activation; they are not continuous uptime monitoring.
+- Backups on the same volume are not disaster recovery. Configure and test an independent off-site backup destination before storing valuable player progress.
+- Keep Telegram Stars disabled. Do not enable payments or announce a public launch until restore, security, concurrency, restart, and load checks are complete.
+- Railway resources and volume storage may incur charges. Review the current plan and usage before applying paid resources.
+
+## Why this uses Railway IaC
+
+Railway has deprecated legacy `railway.json` / `railway.toml` Config as Code for new services. This repository uses the supported TypeScript Infrastructure as Code file at `.railway/railway.ts`. Use `railway config plan` before every `railway config apply`; the CLI shows the proposed changes and waits for confirmation.
