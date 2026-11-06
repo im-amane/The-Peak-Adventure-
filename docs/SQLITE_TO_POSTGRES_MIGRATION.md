@@ -91,7 +91,7 @@ python scripts/migrate_sqlite_to_postgres.py \
 
 The tool refuses a non-empty target. If the copy fails, it rolls back the PostgreSQL data transaction. A successful migration populates the target and a second apply attempt will be refused.
 
-Do not run this command as part of ordinary app startup or a Heroku release command.
+Do not run this command as part of ordinary application startup or a hosting-provider release command.
 
 ## 5. Verify the result
 
@@ -132,4 +132,4 @@ No Railway database resource, paid plan, or production cutover is selected or pr
 - Data type conversion edge cases require a representative dry-run/copy.
 - SQLite triggers, views and custom indexes are not copied by the tool.
 - Foreign-key dependency cycles are rejected rather than guessed.
-- Heroku provisioning and deployment remain separate, unauthorized actions.
+- Railway PostgreSQL provisioning and deployment remain separate actions requiring explicit approval.
