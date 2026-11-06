@@ -11,3 +11,13 @@ backups/
 postgres_backups/
 *.dump
 .railway
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+dist
+build
+*.log
+test-results
+playwright-report
