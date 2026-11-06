@@ -72,7 +72,7 @@ def inspect_environment(environ: dict[str, str] | None = None) -> list[dict[str,
         if not database_path:
             add("database_path_missing", "error", "Set DATABASE_PATH for persistent SQLite storage or configure DATABASE_URL for PostgreSQL.")
         elif not Path(database_path).is_absolute():
-            add("database_path_not_absolute", "warning", "DATABASE_PATH is relative; use a persistent mounted path for hosted deployments (Render prototype: /data/peak_adventure.db).")
+            add("database_path_not_absolute", "warning", "DATABASE_PATH is relative; use an absolute path on a persistent mounted volume for hosted deployments (for example: /data/peak_adventure.db).")
 
     backup_interval = str(env.get("BACKUP_INTERVAL_SECONDS", "21600")).strip()
     try:
