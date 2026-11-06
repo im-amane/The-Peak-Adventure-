@@ -115,24 +115,13 @@ Then perform a full application smoke test against a disposable copy of the migr
 - Before any production cutover, verify PostgreSQL backup retention and complete a restore rehearsal to a separate database.
 - The app still defaults to SQLite; this tool does not change that behavior.
 
-## Heroku PostgreSQL backup plan after an approved cutover
+## Railway PostgreSQL operations after an approved cutover
 
-Once a Heroku Postgres database has been provisioned and the runtime cutover is separately approved, configure and verify backups outside the application process:
+The current Railway prototype uses SQLite on a persistent volume. Do not attach a PostgreSQL database or set `DATABASE_URL` as part of an ordinary deployment. A PostgreSQL cutover is a separate migration with a verified SQLite backup, an empty target database, a successful compatibility audit, and explicit maintenance approval.
 
-- Capture a manual logical backup with `heroku pg:backups:capture --app <app>`.
-- Schedule daily logical backups with `heroku pg:backups:schedule DATABASE_URL --at '02:00 UTC' --app <app>`.
-- Inspect backup status and history with the Heroku PGBackups commands before relying on the schedule.
-- Scheduled backup failures do not generate notifications, so verification must be part of operations.
-- Backup schedules are associated with database attachment names and can be lost when the database is swapped or attachments change.
-- Heroku recommends PGBackups for moderately loaded databases up to 20 GB; PGBackups is not supported on Heroku Postgres Advanced.
-- A restore replaces the contents of the target database. Rehearse restores against a separate disposable database, never the active production database.
+If PostgreSQL is selected later, the application container includes `pg_dump` and `pg_restore` through the root Dockerfile. Configure the application's PostgreSQL backup settings and an independent off-site destination, then rehearse downloading and restoring a backup into a disposable database. Railway volume backups and local logical dumps should not be treated as a substitute for an independently tested recovery copy.
 
-Heroku's Standard tier and higher include continuous protection for disaster recovery. Logical PGBackups provide portable backups for testing and migration. Essential plans have fewer recovery capabilities, so plan selection must account for the required recovery objective. No plan or add-on is selected by this runbook.
-
-Official references:
-- [Heroku PGBackups](https://devcenter.heroku.com/articles/heroku-postgres-backups)
-- [Heroku Postgres data safety and continuous protection](https://devcenter.heroku.com/articles/heroku-postgres-data-safety-and-continuous-protection)
-- [Heroku Postgres logical backups](https://devcenter.heroku.com/articles/heroku-postgres-logical-backups)
+No Railway database resource, paid plan, or production cutover is selected or provisioned by this runbook.
 
 ## Current limitations
 
