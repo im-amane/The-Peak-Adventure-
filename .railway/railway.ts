@@ -8,14 +8,14 @@ import { defineRailway, github, project, service, volume } from "railway/iac";
  */
 export default defineRailway(() => {
   const data = volume("peak-adventure-data", {
-    region: "asia-southeast1",
+    region: "asia-southeast1-eqsg3a",
     sizeMB: 1024,
   });
 
   const bot = service("peak-adventure", {
     source: github("im-amane/The-Peak-Adventure-", { branch: "main" }),
     // Telegram long polling and SQLite currently require exactly one replica.
-    replicas: { "asia-southeast1": 1 },
+    replicas: { "asia-southeast1-eqsg3a": 1 },
     healthcheck: "/healthz",
     healthcheckTimeout: 300,
     volumeMounts: {
