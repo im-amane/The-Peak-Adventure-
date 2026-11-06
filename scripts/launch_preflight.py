@@ -1,6 +1,6 @@
 """Read-only preflight checks for a controlled Telegram Mini App launch.
 
-This utility never connects to Telegram, Cloudflare, Render, or a database. It
+This utility never connects to Telegram, Cloudflare, a hosting provider, or a database. It
 validates local environment configuration without printing secret values.
 """
 from __future__ import annotations
