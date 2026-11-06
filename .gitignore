@@ -10,3 +10,13 @@ backups/
 postgres_backups/
 node_modules/
 .railway/node_modules/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.log
+test-results/
+playwright-report/
