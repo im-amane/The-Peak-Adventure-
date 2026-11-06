@@ -34,7 +34,7 @@ A Telegram turn-based dark-fantasy RPG with a Phaser 3 Mini App. The game is mai
 - aiohttp
 - aiosqlite / SQLite for local development and current prototype persistence
 
-**Database and launch status:** SQLite is used by the controlled Render prototype. PostgreSQL support, scheduled logical backups, optional S3-compatible off-site export, and CI restore tests are implemented. Production certification still requires full migration coverage, a real off-site restore drill, process separation, and live Telegram/device/load testing. Setting `DATABASE_URL` explicitly selects PostgreSQL; failures do not silently fall back to SQLite.
+**Database and launch status:** SQLite is used by the controlled Railway prototype. PostgreSQL support, scheduled logical backups, optional S3-compatible off-site export, and CI restore tests are implemented. Production certification still requires full migration coverage, a real off-site restore drill, process separation, and live Telegram/device/load testing. Setting `DATABASE_URL` explicitly selects PostgreSQL; failures do not silently fall back to SQLite.
 - python-dotenv
 - Phaser 3 (loaded by the Mini App)
 
@@ -177,7 +177,7 @@ Telegram Stars purchases are disabled by default. Enable them only after setting
 
 The PR #204 regression run completed successfully: both the standard `test` job and the PostgreSQL 16 `postgres-adapter` job passed. The workflow also checks Python compilation/imports, JavaScript syntax, Cloudflare embedded-asset parity, Mini App tests, Worker tests and PostgreSQL backup/restore integration. The new PR adds a mobile Chromium smoke job for touch controls and generated sprite sheets. Automated checks do not replace physical Android/iOS WebView, live Telegram, production database or production off-site restore validation. See `docs/PROTOTYPE_ACCEPTANCE.md` for the first playable prototype scope and acceptance gates.
 
-The current hosting configuration is the single-instance Render prototype in `render.yaml`. No production launch or live end-to-end Telegram verification has been certified. Do not provision paid resources or deploy until the owner explicitly authorizes it.
+The current hosting configuration is the single-instance Railway prototype defined in `.railway/railway.ts`, with a persistent `/data` volume and `/healthz` health check. No production launch or live end-to-end Telegram verification has been certified. Review the Railway infrastructure plan and any charges before applying it.
 
 The default SQLite database is stored in `peak_adventure.db`. Use a persistent disk on hosts with ephemeral filesystems, or move to PostgreSQL before a larger public launch.
 
