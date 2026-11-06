@@ -8,3 +8,5 @@ venv/
 .DS_Store
 backups/
 postgres_backups/
+node_modules/
+.railway/node_modules/
