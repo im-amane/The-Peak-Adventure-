@@ -39,7 +39,7 @@ The Railway project definition is `.railway/railway.ts`. It is applied explicitl
    railway config plan
    ```
 
-   Confirm the plan creates one service named `peak-adventure`, one volume named `peak-adventure-data`, and exactly one replica in `asia-southeast1`. Review any proposed deletion or replacement carefully. Do not apply a plan that would destroy an existing volume containing player data.
+   Confirm the plan creates one service named `peak-adventure`, one volume named `peak-adventure-data`, and exactly one replica in `asia-southeast1-eqsg3a`. Review any proposed deletion or replacement carefully. Do not apply a plan that would destroy an existing volume containing player data.
 
 6. Apply only after reviewing the plan:
 
