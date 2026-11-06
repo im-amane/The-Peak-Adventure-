@@ -9,7 +9,7 @@ This is an engineering status report. Passing PostgreSQL tests does not mean the
 
 The repository has a PostgreSQL 16 adapter, dialect-aware game schema initialization, SQLite/PostgreSQL schema-parity checks, service-level PostgreSQL integration tests, a guarded SQLite-to-PostgreSQL migration utility, and database-aware scheduled backups. `DATABASE_URL` explicitly selects PostgreSQL; SQLite remains the default when it is unset. PostgreSQL connection or schema initialization failures stop startup rather than silently falling back.
 
-**PostgreSQL support is implemented and CI-tested, but is not production-approved or production-verified.** The documented prototype target remains a single Render service using SQLite on a persistent disk. No live database migration, runtime database switch, or deployment has occurred.
+**PostgreSQL support is implemented and CI-tested, but is not production-approved or production-verified.** The documented prototype target remains a single Railway service using SQLite on a persistent disk. No live database migration, runtime database switch, or deployment has occurred.
 
 ## Verified progress
 
@@ -24,7 +24,7 @@ The repository has a PostgreSQL 16 adapter, dialect-aware game schema initializa
 | PostgreSQL backups | `backup_scheduler.py` dispatches to logical `pg_dump` custom-format archives; checksums, archive readability verification, and local retention are implemented |
 | PostgreSQL restore | Guarded `pg_restore` command verifies checksum/archive and requires exact target database-name confirmation; a real restore rehearsal is still outstanding |
 | Runtime selection | `DATABASE_URL` selects PostgreSQL; otherwise SQLite is selected. No live environment has been switched |
-| Hosting | `render.yaml` describes a single-instance Render prototype with persistent disk; no live deployment or Telegram/device acceptance test has been performed |
+| Hosting | `.railway/railway.ts` describes a single-instance Railway prototype with persistent disk; no live deployment or Telegram/device acceptance test has been performed |
 
 ## Remaining compatibility and release blockers
 
@@ -34,14 +34,14 @@ The repository has a PostgreSQL 16 adapter, dialect-aware game schema initializa
 - CI exercises PostgreSQL 16 adapter and selected service integration paths. This is not full production workload certification.
 - The application currently combines Telegram polling and the HTTP API in one process. Keep the prototype to one instance; multiple instances could create competing Telegram polling loops.
 - Player-scoped PostgreSQL actions use session advisory locks on dedicated lock connections. Group, guild, party, multi-account and other cross-entity workflows still need a complete cross-process locking and concurrency review before splitting processes or horizontal scaling.
-- PostgreSQL is not the documented default for the initial Render prototype. Do not switch the runtime merely because CI is green.
+- PostgreSQL is not the documented default for the initial Railway prototype. Do not switch the runtime merely because CI is green.
 
 ### 2. Backup, restore and disaster recovery
 
 - The scheduled backup loop dispatches according to the active database dialect: SQLite snapshots use `db_backup.py`; PostgreSQL uses `postgres_backup.py`.
 - PostgreSQL backups are custom-format logical archives. The backup utility writes SHA-256 sidecars, verifies archive readability with `pg_restore --list` before publication, and rotates local archives according to `POSTGRES_BACKUP_RETENTION`.
 - The restore utility checks the archive and checksum, requires an exact database-name confirmation, and uses a single transaction. Restore replaces objects in the target database; it must only be rehearsed against a separate disposable database.
-- The current Render prototype configuration stores backups on the same persistent disk as the service. **This is local backup protection, not off-site disaster recovery.** Disk loss or account-level failure could affect both the database and its backups.
+- The current Railway prototype configuration stores backups on the same persistent disk as the service. **This is local backup protection, not off-site disaster recovery.** Disk loss or account-level failure could affect both the database and its backups.
 - Still required: choose an off-site storage provider, define encryption/key handling and access controls, export backups off the service disk, alert on failed/missed backups, and complete a documented restore rehearsal with measured recovery time.
 - Do not migrate or accept production data until an independently stored backup has been restored successfully.
 
@@ -67,11 +67,11 @@ It is a one-way data-copy tool, not live replication or zero-downtime migration.
 
 ### 5. Prototype and production release gates
 
-- The current prototype runbook targets one Render Docker web service, one persistent disk, SQLite, and the Cloudflare Worker as the public Mini App edge.
+- The current prototype runbook targets one Railway Docker web service, one persistent disk, SQLite, and the Cloudflare Worker as the public Mini App edge.
 - Keep one instance while Telegram polling and HTTP serving share a process.
 - Complete real Telegram bot and Android Telegram WebView smoke tests, including registration, Mini App authentication, movement, battle rewards, persistence after restart, and health checks.
 - Before production: complete off-site backup/restore, PostgreSQL migration rehearsal, full cross-process concurrency/security review, monitoring/alerting, load tests, and a separate bot-worker/web-process architecture.
-- No live Render deployment, PostgreSQL cutover, Telegram Stars payment enablement, or public production launch is authorized by this document.
+- No live Railway deployment, PostgreSQL cutover, Telegram Stars payment enablement, or public production launch is authorized by this document.
 
 ## Recommended next sequence
 
@@ -89,5 +89,5 @@ It is a one-way data-copy tool, not live replication or zero-downtime migration.
 - No live SQLite data has been migrated.
 - No production runtime has been switched to PostgreSQL.
 - Local scheduled backups exist, but off-site recovery and a real restore drill are not complete.
-- The Render prototype has not been deployed or live-tested.
+- The Railway prototype has not been deployed or live-tested.
 - Telegram Stars purchases remain disabled.
